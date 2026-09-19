@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +14,15 @@ import (
 )
 
 func main() {
+	if len(os.Args) != 1 {
+		if len(os.Args) != 3 || os.Args[1] != "doctor" || os.Args[2] != "oauth" {
+			log.Fatal("usage: signalspace [doctor oauth]")
+		}
+		if err := runOAuthDoctor(context.Background(), os.Stdout); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	const port = 7676
 	var (
 		handler http.Handler
@@ -51,4 +62,33 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+}
+
+// runOAuthDoctor verifica os metadados sem solicitar login ou iniciar o servidor MCP.
+func runOAuthDoctor(ctx context.Context, out io.Writer) error {
+	resource := os.Getenv("SIGNALSPACE_RESOURCE_URL")
+	issuer := os.Getenv("SIGNALSPACE_OAUTH_ISSUER")
+	jwksURL := os.Getenv("SIGNALSPACE_JWKS_URL")
+	owner := os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT")
+	verifier, err := mcp.NewJWKSVerifier(jwksURL)
+	if err != nil {
+		return err
+	}
+	if _, err := mcp.NewOAuthHandler(mcp.OAuthConfig{
+		ResourceURL:  resource,
+		Issuer:       issuer,
+		OwnerSubject: owner,
+	}, verifier); err != nil {
+		return err
+	}
+	report, err := mcp.CheckOAuthProvider(ctx, issuer, jwksURL, nil)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "OAuth metadata: verified (%s)\n", report.MetadataURL)
+	fmt.Fprintf(out, "PKCE S256 and authorization code: advertised\n")
+	fmt.Fprintf(out, "JWKS: reachable and parseable (%s)\n", report.JWKSURL)
+	fmt.Fprintf(out, "Client registration: %s\n", report.Registration)
+	fmt.Fprintln(out, "NOT VERIFIED: resource parameter propagation, owner login/consent, client registration, HTTPS tunnel and ChatGPT Web invocation.")
+	return nil
 }
