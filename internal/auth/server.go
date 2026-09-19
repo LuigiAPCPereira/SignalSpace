@@ -47,6 +47,8 @@ type Config struct {
 	Scope       string
 	StateDir    string
 	OnRequest   func(RequestInfo)
+	// OnRegistrationFailure recebe somente categorias fixas, nunca metadados do cliente.
+	OnRegistrationFailure func(string)
 }
 
 type RequestInfo struct{ ID, Client, Redirect string }
@@ -122,6 +124,43 @@ func jsonReply(w http.ResponseWriter, status int, v any) {
 }
 func bad(w http.ResponseWriter, status int, kind string) {
 	jsonReply(w, status, map[string]string{"error": kind})
+}
+
+// rejectRegistration publica apenas o motivo enumerado, sem repetir campos não confiáveis.
+func (s *Server) rejectRegistration(w http.ResponseWriter, kind, reason string) {
+	if s.config.OnRegistrationFailure != nil {
+		s.config.OnRegistrationFailure(reason)
+	}
+	jsonReply(w, http.StatusBadRequest, map[string]string{"error": kind, "error_description": reason})
+}
+
+// supportedRegistrationGrants negocia refresh_token para fora: não emitir nem
+// anunciar uma concessão que o servidor de tokens ainda não implementa.
+func supportedRegistrationGrants(grants []string) bool {
+	if len(grants) == 0 {
+		return true
+	}
+	if len(grants) > 2 {
+		return false
+	}
+	authorizationCode, refresh := false, false
+	for _, grant := range grants {
+		switch grant {
+		case "authorization_code":
+			if authorizationCode {
+				return false
+			}
+			authorizationCode = true
+		case "refresh_token":
+			if refresh {
+				return false
+			}
+			refresh = true
+		default:
+			return false
+		}
+	}
+	return authorizationCode
 }
 func hasContentType(r *http.Request, expected string) bool {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -228,7 +267,7 @@ func (s *Server) jwks(w http.ResponseWriter, r *http.Request) {
 		b = append([]byte{byte(e)}, b...)
 		e >>= 8
 	}
-	jsonReply(w, 200, map[string]any{"keys": []any{map[string]string{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": s.keyID, "n": base64.RawURLEncoding.EncodeToString(s.key.PublicKey.N.Bytes()), "e": base64.RawURLEncoding.EncodeToString(b)}}})
+	jsonReply(w, 200, map[string]any{"keys": []any{map[string]string{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": s.keyID, "n": base64.RawURLEncoding.EncodeToString(s.key.PublicKey.N.Bytes()), "e": base64.RawURLEncoding.EncodeToString(b)}})
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -254,21 +293,41 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRegistrationBytes))
 	// Metadados opcionais DCR podem ser enviados pelo cliente; validar os campos usados.
 	if dec.Decode(&req) != nil {
-		bad(w, 400, "invalid_client_metadata")
+		s.rejectRegistration(w, "invalid_client_metadata", "malformed_json")
 		return
 	}
 	var extra any
 	if dec.Decode(&extra) != io.EOF {
-		bad(w, 400, "invalid_client_metadata")
+		s.rejectRegistration(w, "invalid_client_metadata", "multiple_json_values")
 		return
 	}
-	if req.Name == "" || len(req.Name) > 100 || strings.TrimSpace(req.Name) != req.Name || strings.IndexFunc(req.Name, unicode.IsControl) >= 0 || len(req.Redirects) < 1 || len(req.Redirects) > 5 || (req.AuthMethod != "" && req.AuthMethod != "none") || (len(req.GrantTypes) > 0 && (len(req.GrantTypes) != 1 || req.GrantTypes[0] != "authorization_code")) || (len(req.ResponseTypes) > 0 && (len(req.ResponseTypes) != 1 || req.ResponseTypes[0] != "code")) {
-		bad(w, 400, "invalid_client_metadata")
+	// RFC 7591 torna client_name opcional; nunca atribuir o nome ChatGPT por conta própria.
+	if req.Name == "" {
+		req.Name = "Cliente sem nome informado"
+	}
+	if len(req.Name) > 100 || strings.TrimSpace(req.Name) != req.Name || strings.IndexFunc(req.Name, unicode.IsControl) >= 0 {
+		s.rejectRegistration(w, "invalid_client_metadata", "invalid_client_name")
+		return
+	}
+	if len(req.Redirects) < 1 || len(req.Redirects) > 5 {
+		s.rejectRegistration(w, "invalid_client_metadata", "invalid_redirect_uris")
+		return
+	}
+	if req.AuthMethod != "" && req.AuthMethod != "none" {
+		s.rejectRegistration(w, "invalid_client_metadata", "unsupported_token_auth_method")
+		return
+	}
+	if !supportedRegistrationGrants(req.GrantTypes) {
+		s.rejectRegistration(w, "invalid_client_metadata", "unsupported_grant_types")
+		return
+	}
+	if len(req.ResponseTypes) > 0 && (len(req.ResponseTypes) != 1 || req.ResponseTypes[0] != "code") {
+		s.rejectRegistration(w, "invalid_client_metadata", "unsupported_response_types")
 		return
 	}
 	for _, u := range req.Redirects {
 		if len(u) > 2048 || !allowedRedirect(u) {
-			bad(w, 400, "invalid_redirect_uri")
+			s.rejectRegistration(w, "invalid_redirect_uri", "redirect_uri_not_allowed")
 			return
 		}
 	}
