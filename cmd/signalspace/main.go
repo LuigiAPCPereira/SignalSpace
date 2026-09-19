@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -8,8 +9,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/LuigiAPCPereira/SignalSpace/internal/auth"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
 )
 
@@ -28,7 +31,51 @@ func main() {
 		handler http.Handler
 		err     error
 	)
-	if resource := os.Getenv("SIGNALSPACE_RESOURCE_URL"); resource != "" {
+	if resource := os.Getenv("SIGNALSPACE_RESOURCE_URL"); os.Getenv("SIGNALSPACE_AUTH_MODE") == "embedded" {
+		// Nunca reutilizar credenciais de um provedor externo no modo integrado.
+		if resource == "" || os.Getenv("SIGNALSPACE_JWKS_URL") != "" || os.Getenv("SIGNALSPACE_OAUTH_ISSUER") != "" || os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT") != "" || os.Getenv("SIGNALSPACE_LOCAL_TOKEN") != "" {
+			log.Fatal("embedded OAuth requires only SIGNALSPACE_RESOURCE_URL and SIGNALSPACE_AUTH_MODE=embedded")
+		}
+		issuer := strings.TrimSuffix(resource, "/mcp")
+		authorization, authErr := auth.New(auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", OnRequest: func(info auth.RequestInfo) {
+			log.Printf("Authorization requested: %s; client: %s; redirect: %s; type approve %s or deny %s", info.ID, info.Client, info.Redirect, info.ID, info.ID)
+		}})
+		if authErr != nil {
+			log.Fatal(authErr)
+		}
+		verifier, verifierErr := mcp.NewStaticJWTVerifier(authorization.PublicKey(), authorization.KeyID())
+		if verifierErr != nil {
+			log.Fatal(verifierErr)
+		}
+		protected, protectErr := mcp.NewOAuthHandler(mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject()}, verifier)
+		if protectErr != nil {
+			log.Fatal(protectErr)
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/mcp", protected)
+		mux.Handle("/.well-known/oauth-protected-resource", protected)
+		mux.Handle("/.well-known/oauth-protected-resource/mcp", protected)
+		for _, path := range []string{"/.well-known/oauth-authorization-server", "/oauth/jwks", "/register", "/authorize", "/authorize/complete", "/token"} {
+			mux.Handle(path, authorization.Handler())
+		}
+		handler = mux
+		// O único canal que decide aprovações é o terminal do proprietário.
+		go func() {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				fields := strings.Fields(scanner.Text())
+				if len(fields) != 2 || (fields[0] != "approve" && fields[0] != "deny") {
+					log.Print("use approve <id> or deny <id>")
+					continue
+				}
+				if err := authorization.Approve(fields[1], fields[0] == "approve"); err != nil {
+					log.Print(err)
+				} else {
+					log.Print("authorization decision recorded")
+				}
+			}
+		}()
+	} else if resource != "" {
 		verifier, verifierErr := mcp.NewJWKSVerifier(os.Getenv("SIGNALSPACE_JWKS_URL"))
 		if verifierErr != nil {
 			log.Fatal(verifierErr)
@@ -40,7 +87,7 @@ func main() {
 		}, verifier)
 	} else {
 		// Configuração OAuth parcial nunca ativa um fallback de autenticação local.
-		if os.Getenv("SIGNALSPACE_JWKS_URL") != "" || os.Getenv("SIGNALSPACE_OAUTH_ISSUER") != "" || os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT") != "" {
+		if os.Getenv("SIGNALSPACE_AUTH_MODE") != "" || os.Getenv("SIGNALSPACE_JWKS_URL") != "" || os.Getenv("SIGNALSPACE_OAUTH_ISSUER") != "" || os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT") != "" {
 			log.Fatal("SIGNALSPACE_RESOURCE_URL is required for OAuth mode")
 		}
 		handler, err = mcp.NewLocalHandler(os.Getenv("SIGNALSPACE_LOCAL_TOKEN"), port)
