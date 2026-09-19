@@ -54,3 +54,13 @@ Pressione **Ctrl+C**. O SignalSpace fecha o servidor, encerra e aguarda o proces
 Uma nova execução gera outra URL, chave e registro de cliente. **Será necessário atualizar ou recriar a conexão no ChatGPT**; Quick Tunnel não oferece URL estável. A expiração dos tokens de 15 minutos, a ausência de refresh/revogação e a compatibilidade real com o fluxo OAuth do ChatGPT seguem limitações não resolvidas. A aprovação no `doctor transport` não demonstra que o ChatGPT invocou uma ferramenta.
 
 **Proibido neste modo experimental:** compartilhar chaves OAuth; ativar ferramentas de shell, Git ou arquivos; tratar esta conexão como uma implantação de produção ou sem riscos. Esta documentação descreve um teste autorizado pelo usuário, não uma garantia de segurança para exposição contínua.
+
+## Diagnóstico seguro de conexão do cloudflared
+
+Quando o DNS ou o HTTPS falha, `connect quick` apresenta contadores derivados das mensagens de conexão do filho: `registrations`, `registered`, `disconnections`, `connection_errors` e `log_read_errors`. **A URL impressa não comprova registro de conexão.** Esses sinais são observações dos logs, não uma confirmação da Cloudflare nem prova de que o ChatGPT conectou. Os logs brutos, cabeçalhos e segredos não são exibidos nem persistidos pelo SignalSpace.
+
+- `registrations=0`: não apareceu o marcador conhecido de conexão registrada; não conclui que nunca houve conexão se o formato dos logs mudou.
+- `registrations>0` e DNS ainda indisponível: o processo anunciou pelo menos uma conexão, mas a publicação/resolução do endereço ainda precisa de investigação independente.
+- `connection_errors>0`, `disconnections>0` ou `log_read_errors>0`: existe evidência adicional do processo, sem revelar o conteúdo completo dos logs.
+
+Não aumente a janela de DNS repetidamente nem desabilite a verificação TLS. A causa do `no such host` no ambiente real ainda não foi estabelecida.
