@@ -31,6 +31,22 @@ O SignalSpace explica que o túnel publicará um endereço acessível pela inter
 
 Quando o ChatGPT solicitar autorização, confira o nome declarado pelo cliente e a URL de retorno exibidos. Digite `approve IDENTIFICADOR` ou `deny IDENTIFICADOR` **no terminal que executa o SignalSpace**. O consentimento só prossegue após a decisão local. Não divulgue a URL a terceiros: a descoberta e a autorização são públicas e a identidade do proprietário depende de quem controla esse terminal.
 
+## DNS temporariamente indisponível
+
+Após o `cloudflared` anunciar uma URL, um resolvedor pode inicialmente responder `no such host`/NXDOMAIN. O SignalSpace espera **até 60 segundos** e repete apenas falhas DNS antes de encerrar a sessão. Erros de TLS, metadados e autenticação continuam interrompendo imediatamente. A espera não altera DNS do sistema, não desliga a verificação TLS e não gera outro túnel automaticamente. Se a falha persistir, a URL não será apresentada como pronta.
+
+Para inspecionar o resolvedor no Linux, use o hostname citado no erro anterior (sem `https://` e sem `/mcp`):
+
+```bash
+getent ahosts HOSTNAME.trycloudflare.com
+```
+
+Se não houver resposta, verifique se o DNS e a rede local conseguem resolver outros domínios. Não altere globalmente o DNS ou cole tokens para contornar uma falha não diagnosticada. No shell **fish**, se houver variáveis SignalSpace antigas, apague-as com `set -e`, por exemplo:
+
+```fish
+set -e SIGNALSPACE_AUTH_MODE SIGNALSPACE_RESOURCE_URL SIGNALSPACE_OAUTH_ISSUER SIGNALSPACE_JWKS_URL SIGNALSPACE_OAUTH_OWNER_SUBJECT SIGNALSPACE_LOCAL_TOKEN SIGNALSPACE_STATE_DIR
+```
+
 ## Encerrar e limitações
 
 Pressione **Ctrl+C**. O SignalSpace fecha o servidor, encerra e aguarda o processo `cloudflared`, libera o bloqueio da identidade e remove a pasta temporária numa saída normal. Um desligamento abrupto pode deixar arquivos temporários privados em disco; investigue antes de excluí-los. Não apaga dados de outros túneis.

@@ -84,37 +84,11 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 	}()
 
 	// A publicação não é declarada pronta apenas porque cloudflared imprimiu uma URL.
-	var lastErr error
-	ready := false
-	for attempt := 0; attempt < 3; attempt++ {
-		select {
-		case <-ctx.Done():
+	if err := awaitQuickTransport(ctx, resource, quick.Done(), serveDone, verify, 60*time.Second, 2*time.Second); err != nil {
+		if ctx.Err() != nil {
 			return nil
-		case <-quick.Done():
-			return errors.New("cloudflared stopped during HTTPS verification")
-		case err := <-serveDone:
-			return fmt.Errorf("loopback MCP stopped during HTTPS verification: %w", err)
-		default:
 		}
-		checkCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
-		_, lastErr = verify(checkCtx, resource)
-		cancel()
-		if lastErr == nil {
-			ready = true
-			break
-		}
-		if attempt != 2 {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-quick.Done():
-				return errors.New("cloudflared stopped during HTTPS verification")
-			case <-time.After(time.Second):
-			}
-		}
-	}
-	if !ready {
-		return fmt.Errorf("public HTTPS verification failed, tunnel closed: %w", lastErr)
+		return err
 	}
 	select {
 	case <-quick.Done():
@@ -134,5 +108,52 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 			return nil
 		}
 		return fmt.Errorf("local MCP server stopped: %w", err)
+	}
+}
+
+// awaitQuickTransport aguarda apenas erros DNS transitórios; uma falha de
+// certificado, contrato OAuth ou desafio MCP continua encerrando a sessão.
+func awaitQuickTransport(ctx context.Context, resource string, tunnelDone <-chan struct{}, serverDone <-chan error, verify quickVerifier, window, interval time.Duration) error {
+	readyCtx, stop := context.WithTimeout(ctx, window)
+	defer stop()
+	var lastErr error
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tunnelDone:
+			return errors.New("cloudflared stopped during HTTPS verification")
+		case err := <-serverDone:
+			return fmt.Errorf("loopback MCP stopped during HTTPS verification: %w", err)
+		default:
+		}
+		checkCtx, cancel := context.WithTimeout(readyCtx, 25*time.Second)
+		_, lastErr = verify(checkCtx, resource)
+		cancel()
+		if lastErr == nil {
+			return nil
+		}
+		var dnsErr *net.DNSError
+		if !errors.As(lastErr, &dnsErr) || !(dnsErr.IsNotFound || dnsErr.IsTemporary || dnsErr.IsTimeout) {
+			return fmt.Errorf("public HTTPS verification failed, tunnel closed: %w", lastErr)
+		}
+		// A resposta NXDOMAIN de um hostname recém-criado pode ficar em cache.
+		// Nunca alterar o resolvedor do usuário nem desabilitar a validação TLS.
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-tunnelDone:
+			timer.Stop()
+			return errors.New("cloudflared stopped during HTTPS verification")
+		case err := <-serverDone:
+			timer.Stop()
+			return fmt.Errorf("loopback MCP stopped during HTTPS verification: %w", err)
+		case <-readyCtx.Done():
+			timer.Stop()
+			return fmt.Errorf("public HTTPS verification failed after DNS retry window, tunnel closed: %w", lastErr)
+		case <-timer.C:
+		}
 	}
 }
