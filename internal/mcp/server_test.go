@@ -120,9 +120,9 @@ func TestHostOriginAndInputBoundary(t *testing.T) {
 	s := startTestServer(t)
 	base := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
 	cases := []struct {
-		body   string
+		body    string
 		headers map[string]string
-		status int
+		status  int
 	}{
 		{base, map[string]string{"Host": "attacker.example"}, 403},
 		{base, map[string]string{"Origin": "https://attacker.example"}, 403},
