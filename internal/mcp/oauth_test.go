@@ -160,11 +160,11 @@ func TestOAuthJWTClaimsAndTool(t *testing.T) {
 		t.Fatalf("diagnostic rejected: %d %v", res.StatusCode, result)
 	}
 	for name, mutate := range map[string]func(map[string]any){
-		"issuer":          func(c map[string]any) { c["iss"] = "https://attacker.example/" },
-		"audience":        func(c map[string]any) { c["aud"] = "https://other.example/mcp" },
-		"expired":         func(c map[string]any) { c["exp"] = time.Now().Add(-time.Minute).Unix() },
-		"not_yet_valid":   func(c map[string]any) { c["nbf"] = time.Now().Add(time.Hour).Unix() },
-		"subject":         func(c map[string]any) { c["sub"] = "" },
+		"issuer":        func(c map[string]any) { c["iss"] = "https://attacker.example/" },
+		"audience":      func(c map[string]any) { c["aud"] = "https://other.example/mcp" },
+		"expired":       func(c map[string]any) { c["exp"] = time.Now().Add(-time.Minute).Unix() },
+		"not_yet_valid": func(c map[string]any) { c["nbf"] = time.Now().Add(time.Hour).Unix() },
+		"subject":       func(c map[string]any) { c["sub"] = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			claims := defaultClaims()
