@@ -48,7 +48,7 @@ func NewJWKSVerifier(rawURL string) (*JWKSVerifier, error) {
 	}, nil
 }
 
-func (v *JWKSVerifier) Verify(ctx context.Context, token, issuer, audience, scope string) error {
+func (v *JWKSVerifier) Verify(ctx context.Context, token, issuer, audience, scope, ownerSubject string) error {
 	if len(token) == 0 || len(token) > maxTokenBytes {
 		return errInvalidToken
 	}
@@ -99,7 +99,7 @@ func (v *JWKSVerifier) Verify(ctx context.Context, token, issuer, audience, scop
 		Scope     string          `json:"scope"`
 		Scopes    []string        `json:"scp"`
 	}
-	if json.Unmarshal(payload, &claims) != nil || claims.Issuer != issuer || claims.Subject == "" || !hasAudience(claims.Audience, audience) {
+	if json.Unmarshal(payload, &claims) != nil || claims.Issuer != issuer || claims.Subject != ownerSubject || ownerSubject == "" || !hasAudience(claims.Audience, audience) {
 		return errInvalidToken
 	}
 	now := time.Now().Unix()

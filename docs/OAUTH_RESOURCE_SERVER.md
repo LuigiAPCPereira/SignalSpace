@@ -1,43 +1,46 @@
 # OAuth no SignalSpace: servidor de recursos (fatia M1)
 
-**Status:** código implementado e testado com emissor/JWKS simulado local. Nenhum provedor OAuth real, túnel HTTPS ou conta do ChatGPT Web foi validado. Este documento **não** é um guia de instalação completa do conector.
+**Status:** código implementado e testado com emissor/JWKS simulado local. Nenhum provedor OAuth real, túnel HTTPS ou conta do ChatGPT Web foi validado. Este documento NÃO é um guia de instalação completa do conector.
 
-## Comportamento implementado
+## O que a implementação faz
 
-O SignalSpace permanece escutando exclusivamente em `127.0.0.1:7676`. Ao configurar `SIGNALSPACE_RESOURCE_URL`, ele ativa um handler separado do diagnóstico com token local:
+O SignalSpace permanece escutando exclusivamente em `127.0.0.1:7676`. Ao configurar `SIGNALSPACE_RESOURCE_URL`, ele ativa um handler separado do modo local:
 
 - `GET /.well-known/oauth-protected-resource` e `GET /.well-known/oauth-protected-resource/mcp`: metadados com recurso canônico, emissor e escopo `signalspace:diagnostic`.
 - `POST /mcp` sem token: `401` e desafio `WWW-Authenticate` com URL dos metadados.
-- Tokens JWT RS256: assinatura verificada com JWKS HTTPS configurado; emissor (`iss`), destinatário (`aud`), expiração (`exp`), validade inicial (`nbf`, se presente), sujeito não vazio (`sub`) e escopo verificados em cada requisição MCP. Falta de escopo recebe `403`.
-- Busca JWKS limitada a 64 KiB e 3 segundos, sem redirecionamentos; cache de cinco minutos que não é usado após expirar quando a atualização falha.
-- A ferramenta `connection_diagnostic` declara `securitySchemes` OAuth; não há operações de arquivos, shell ou Git.
+- Tokens JWT RS256: assinatura verificada com JWKS HTTPS configurado; emissor (`iss`), destinatário (`aud`), expiração (`exp`), validade inicial (`nbf`, quando presente), sujeito (`sub`) comparado ao proprietário configurado e escopo verificados em toda requisição MCP. Falha de escopo recebe `403`.
+- Busca JWKS limitada a 64 KiB e 3 s, sem redirecionamentos; cache de 5 minutos que não é usado após expirar se a atualização falhar.
+- A ferramenta `connection_diagnostic` declara `securitySchemes` OAuth; nenhuma operação de arquivos, shell ou Git é disponibilizada.
 
-O token do diagnóstico local não funciona no modo OAuth. Configuração OAuth parcial não permite fallback para o modo local.
+O token de diagnóstico local não é aceito no modo OAuth, e configuração OAuth parcial não causa fallback para o modo local.
 
-## Configuração ilustrativa
+## Configuração do modo OAuth
 
-Este exemplo **não funciona sem um provedor real compatível**:
+Exemplo ilustrativo, NÃO funcional sem um emissor real compatível:
 
 ```bash
 export SIGNALSPACE_RESOURCE_URL='https://signalspace.example.com/mcp'
 export SIGNALSPACE_OAUTH_ISSUER='https://identity.example.com/'
 export SIGNALSPACE_JWKS_URL='https://identity.example.com/.well-known/jwks.json'
+export SIGNALSPACE_OAUTH_OWNER_SUBJECT='subject-exato-obtido-do-provedor'
 go run ./cmd/signalspace
 ```
 
-A URL do recurso deve terminar exatamente em `/mcp`. O proxy deve preservar o `Host` público e usar HTTPS para a conexão externa. Cabeçalhos `X-Forwarded-*` vindos do cliente não determinam a identidade do recurso. O processo local nunca escuta em `0.0.0.0`.
+A URL do recurso deve terminar exatamente em `/mcp`. O hostname público deve chegar preservado como cabeçalho `Host`; cabeçalhos `X-Forwarded-*` não são fontes de autoridade. O processo local nunca escuta em `0.0.0.0`.
 
-**O emissor OAuth é externo e ainda não está configurado.** Ele precisa oferecer metadados de autorização padronizados, autorização por código com PKCE S256, identificação/registro do cliente compatível com ChatGPT, suporte ao parâmetro `resource` e JWTs RS256 cujo `aud` é exatamente a URL do SignalSpace, além dos demais campos exigidos. O SignalSpace não implementa login, consentimento ou emissão de tokens. A emissão de token com o escopo não constitui, por si só, prova de autorização exclusiva do proprietário; a configuração do provedor e a vinculação ao proprietário precisam ser validadas antes de permitir ferramentas locais.
+**O emissor OAuth é um componente externo ainda não configurado.** Ele precisa disponibilizar metadados de autorização padronizados, código de autorização com PKCE S256, identificação/registro do cliente (CIMD, DCR ou cliente predefinido), preservar o parâmetro `resource` e emitir JWTs RS256 com o `aud` exato do recurso, escopo e demais campos exigidos. O SignalSpace não implementa login, consentimento ou endpoint de emissão de tokens nesta fatia.
 
-O JWKS deve pertencer ao provedor confiável configurado. O nome do host, o emissor e o recurso são configuração estática do proprietário, não derivados da requisição. Tokens não são registrados.
+O `SIGNALSPACE_OAUTH_OWNER_SUBJECT` é o valor **exato e estável do `sub` emitido pelo provedor para o proprietário**, não seu nome ou email presumido. Sem ele, o modo OAuth falha na inicialização. Um token válido do mesmo emissor, com o mesmo escopo, mas de outro `sub`, é rejeitado. Não inserir um valor fictício em produção.
 
-## Gates antes de disponibilizar acesso externo
+O JWKS informado deve pertencer ao provedor confiável. O nome do host, o emissor e o recurso são configuração estática do proprietário; não são determinados pela requisição. Tokens não são registrados.
 
-1. Configurar um emissor OAuth confiável; validar descoberta, registro do cliente, PKCE, identidade/autorização do proprietário e emissão de token com destinatário correto.
-2. Testar túnel HTTPS com `Host` preservado e chamadas negativas/positivas em ambiente controlado.
-3. Conectar pelo ChatGPT Web e observar uma chamada real da ferramenta com os recursos efetivamente disponíveis na conta/modelo.
-4. Implementar autorização de workspaces antes de disponibilizar leitura, edição, Git ou shell. O shell executará como usuário local e não será sandbox.
+## O que falta comprovar antes de expor o serviço
 
-**Não exponha esta versão publicamente ainda.** O resultado `chatgptVerified: false` é intencional.
+1. Selecionar/configurar um emissor OAuth confiável que atenda aos requisitos acima e testar a descoberta, registro do cliente, PKCE e emissão de tokens destinados ao SignalSpace.
+2. Validar um túnel HTTPS cujo encaminhamento preserve o `Host`, com autorização negativa e positiva em ambiente controlado.
+3. Conectar o ChatGPT Web e observar uma chamada REAL da ferramenta; conferir disponibilidade na configuração da conta/modelo.
+4. Acrescentar autorização dos workspaces antes de disponibilizar leitura, edição, Git e shell. O shell rodará com os privilégios do usuário, sem sandbox neste MVP.
 
-Referências: [autenticação de plug-ins da OpenAI](https://developers.openai.com/pt-BR/plugins/build/auth) e [autorização MCP 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
+Não apresentar esta fatia como conexão de ChatGPT pronta. O resultado `chatgptVerified: false` da ferramenta permanece intencional.
+
+Referências: [autenticação de plug-ins da OpenAI](https://developers.openai.com/pt-BR/plugins/build/auth) e [autorização do MCP](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).

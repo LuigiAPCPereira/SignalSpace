@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode"
 )
 
 const diagnosticScope = "signalspace:diagnostic"
@@ -16,12 +17,13 @@ const metadataPath = "/.well-known/oauth-protected-resource"
 var ErrInsufficientScope = errors.New("insufficient OAuth scope")
 
 type TokenVerifier interface {
-	Verify(context.Context, string, string, string, string) error
+	Verify(context.Context, string, string, string, string, string) error
 }
 
 type OAuthConfig struct {
-	ResourceURL string
-	Issuer      string
+	ResourceURL  string
+	Issuer       string
+	OwnerSubject string
 }
 
 // NewOAuthHandler separa a descoberta pública da autorização obrigatória no MCP.
@@ -29,6 +31,10 @@ type OAuthConfig struct {
 func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, error) {
 	if verifier == nil {
 		return nil, errors.New("OAuth token verifier is required")
+	}
+	// O proprietário deve ser identificado por sub exato emitido pelo provedor confiável.
+	if len(config.OwnerSubject) == 0 || len(config.OwnerSubject) > 512 || strings.TrimSpace(config.OwnerSubject) != config.OwnerSubject || strings.IndexFunc(config.OwnerSubject, unicode.IsControl) >= 0 {
+		return nil, errors.New("OAuth owner subject must be configured explicitly")
 	}
 	resource, err := parseSecureURL(config.ResourceURL)
 	if err != nil || resource.Path != "/mcp" || resource.RawPath != "" || resource.String() != config.ResourceURL {
@@ -73,7 +79,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			unauthorized(w, http.StatusUnauthorized, challenge)
 			return
 		}
-		if err := verifier.Verify(r.Context(), strings.TrimPrefix(bearer, "Bearer "), config.Issuer, config.ResourceURL, diagnosticScope); err != nil {
+		if err := verifier.Verify(r.Context(), strings.TrimPrefix(bearer, "Bearer "), config.Issuer, config.ResourceURL, diagnosticScope, config.OwnerSubject); err != nil {
 			if errors.Is(err, ErrInsufficientScope) {
 				unauthorized(w, http.StatusForbidden, challenge+`, error="insufficient_scope"`)
 			} else {

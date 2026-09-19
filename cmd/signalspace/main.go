@@ -23,12 +23,13 @@ func main() {
 			log.Fatal(verifierErr)
 		}
 		handler, err = mcp.NewOAuthHandler(mcp.OAuthConfig{
-			ResourceURL: resource,
-			Issuer:      os.Getenv("SIGNALSPACE_OAUTH_ISSUER"),
+			ResourceURL:  resource,
+			Issuer:       os.Getenv("SIGNALSPACE_OAUTH_ISSUER"),
+			OwnerSubject: os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT"),
 		}, verifier)
 	} else {
 		// Configuração OAuth parcial nunca ativa um fallback de autenticação local.
-		if os.Getenv("SIGNALSPACE_JWKS_URL") != "" || os.Getenv("SIGNALSPACE_OAUTH_ISSUER") != "" {
+		if os.Getenv("SIGNALSPACE_JWKS_URL") != "" || os.Getenv("SIGNALSPACE_OAUTH_ISSUER") != "" || os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT") != "" {
 			log.Fatal("SIGNALSPACE_RESOURCE_URL is required for OAuth mode")
 		}
 		handler, err = mcp.NewLocalHandler(os.Getenv("SIGNALSPACE_LOCAL_TOKEN"), port)

@@ -62,7 +62,7 @@ func setupOAuth(t *testing.T) (*rsa.PrivateKey, *JWKSVerifier, *httptest.Server,
 	verifier.client = jwks.Client()
 	verifier.client.Timeout = 3 * time.Second
 	verifier.client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	handler, err := NewOAuthHandler(OAuthConfig{ResourceURL: testResource, Issuer: testIssuer}, verifier)
+	handler, err := NewOAuthHandler(OAuthConfig{ResourceURL: testResource, Issuer: testIssuer, OwnerSubject: "owner-test"}, verifier)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,6 +165,7 @@ func TestOAuthJWTClaimsAndTool(t *testing.T) {
 		"expired":       func(c map[string]any) { c["exp"] = time.Now().Add(-time.Minute).Unix() },
 		"not_yet_valid": func(c map[string]any) { c["nbf"] = time.Now().Add(time.Hour).Unix() },
 		"subject":       func(c map[string]any) { c["sub"] = "" },
+		"other_owner":   func(c map[string]any) { c["sub"] = "other-user" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			claims := defaultClaims()
@@ -216,17 +217,22 @@ func TestOAuthJWKSUnavailableFailsClosed(t *testing.T) {
 
 func TestOAuthConfigRejectsUnsafeSetup(t *testing.T) {
 	for _, cfg := range []OAuthConfig{
-		{ResourceURL: "http://signalspace.example/mcp", Issuer: testIssuer},
-		{ResourceURL: "https://signalspace.example/mcp?x=1", Issuer: testIssuer},
-		{ResourceURL: "https://signalspace.example/other", Issuer: testIssuer},
-		{ResourceURL: testResource, Issuer: "http://identity.example"},
-		{ResourceURL: testResource, Issuer: "https://identity.example/#evil"},
+		{ResourceURL: "http://signalspace.example/mcp", Issuer: testIssuer, OwnerSubject: "owner-test"},
+		{ResourceURL: "https://signalspace.example/mcp?x=1", Issuer: testIssuer, OwnerSubject: "owner-test"},
+		{ResourceURL: "https://signalspace.example/other", Issuer: testIssuer, OwnerSubject: "owner-test"},
+		{ResourceURL: testResource, Issuer: "http://identity.example", OwnerSubject: "owner-test"},
+		{ResourceURL: testResource, Issuer: "https://identity.example/#evil", OwnerSubject: "owner-test"},
 	} {
 		if _, err := NewOAuthHandler(cfg, fakeVerifier{}); err == nil {
 			t.Errorf("accepted invalid OAuth config: %+v", cfg)
 		}
 	}
-	if _, err := NewOAuthHandler(OAuthConfig{ResourceURL: testResource, Issuer: testIssuer}, nil); err == nil {
+	for _, owner := range []string{"", " owner-test", "owner-test ", "owner\nother"} {
+		if _, err := NewOAuthHandler(OAuthConfig{ResourceURL: testResource, Issuer: testIssuer, OwnerSubject: owner}, fakeVerifier{}); err == nil {
+			t.Errorf("accepted invalid owner subject %q", owner)
+		}
+	}
+	if _, err := NewOAuthHandler(OAuthConfig{ResourceURL: testResource, Issuer: testIssuer, OwnerSubject: "owner-test"}, nil); err == nil {
 		t.Fatal("accepted nil OAuth verifier")
 	}
 	if _, err := NewJWKSVerifier("http://identity.example/jwks"); err == nil {
@@ -242,4 +248,4 @@ func TestOAuthConfigRejectsUnsafeSetup(t *testing.T) {
 
 type fakeVerifier struct{}
 
-func (fakeVerifier) Verify(_ context.Context, _, _, _, _ string) error { return nil }
+func (fakeVerifier) Verify(_ context.Context, _, _, _, _, _ string) error { return nil }
