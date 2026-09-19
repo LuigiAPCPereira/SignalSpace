@@ -1,6 +1,8 @@
 # Transporte HTTPS: preparação e diagnóstico (M1)
 
-**Estado:** o comando de diagnóstico está implementado e testado com um servidor HTTPS de teste. **Não há túnel configurado na máquina do proprietário nem chamada real observada no ChatGPT Web. Não publique o serviço nesta versão experimental.** O único método MCP existente continua sendo `connection_diagnostic`; não existem ferramentas de arquivos, Git ou terminal.
+**Estado:** o comando de diagnóstico está implementado e testado com um servidor HTTPS de teste. O comando `connect quick` gerencia um Quick Tunnel experimental **somente após confirmação explícita**, usa estado OAuth temporário e verifica o HTTPS antes de apresentar a URL. **Não há túnel configurado na máquina do proprietário nem chamada real observada no ChatGPT Web.** O único método MCP continua sendo `connection_diagnostic`; não existem ferramentas de arquivos, Git ou terminal. A exposição pública é permitida somente na sessão experimental confirmada; não publicar o modo persistente como serviço de produção.
+
+Para experimentar gratuitamente **sem conta Cloudflare ou domínio**, veja [Quick Tunnel automatizado](QUICK_TUNNEL.md). Essa é a modalidade inicial; o túnel nomeado abaixo é uma alternativa de URL estável e ainda depende de configuração manual.
 
 ## Contrato que o diagnóstico verifica
 
@@ -20,7 +22,7 @@ O comando exige modo integrado e URL HTTPS canônica e rejeita variáveis de con
 
 ## Exemplo de transporte nomeado Cloudflare (configuração manual; não provisionada)
 
-Essa é **uma opção**, não uma dependência obrigatória. O Cloudflare Tunnel precisa de conta Cloudflare, domínio sob gerenciamento do serviço, instalação de `cloudflared` e uma rota DNS para um hostname estável. Quick Tunnels em `trycloudflare.com` recebem uma URL aleatória e não são apropriados para a identidade OAuth persistente. Consulte a [documentação oficial do Tunnel](https://developers.cloudflare.com/tunnel/get-started/) e do [túnel gerenciado localmente](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/create-local-tunnel/).
+Essa é **uma opção**, não uma dependência obrigatória. O túnel **nomeado** precisa de conta Cloudflare, domínio sob gerenciamento do serviço, instalação de `cloudflared` e uma rota DNS para um hostname estável. Quick Tunnels em `trycloudflare.com` recebem uma URL aleatória e são suportados no comando separado `connect quick`, com estado isolado, nunca como identidade OAuth persistente. Consulte a [documentação oficial do Tunnel](https://developers.cloudflare.com/tunnel/get-started/) e do [túnel gerenciado localmente](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/create-local-tunnel/).
 
 Depois que você tiver um túnel **nomeado** e um domínio, um exemplo de `config.yml` do `cloudflared` é:
 
@@ -37,7 +39,7 @@ ingress:
 
 Substitua os marcadores pelo UUID e pelo arquivo de credenciais gerados na sua máquina. Não versionar `config.yml` com caminhos privados ou arquivos de credenciais; nunca copiar a chave de túnel para o repositório ou para a conversa. O campo `httpHostHeader` deve corresponder **exatamente** ao hostname de `SIGNALSPACE_RESOURCE_URL`; o servidor rejeita cabeçalhos `Host` inesperados. Não habilite cache na rota OAuth/MCP nem aplique autenticação intermediária que impeça o ChatGPT de alcançar a descoberta e o navegador de chegar à aprovação. Não confie em cabeçalhos `X-Forwarded-*` como identidade.
 
-A documentação da Cloudflare descreve `cloudflared tunnel login`, criação do túnel nomeado, roteamento DNS, `cloudflared tunnel ingress validate` e execução do túnel. **Estes passos publicam um serviço acessível na internet; não execute a criação da rota pública nem a inicialização do túnel até a revisão de segurança do modo experimental.** O SignalSpace não instala nem executa `cloudflared` automaticamente e não abre portas de entrada.
+A documentação da Cloudflare descreve `cloudflared tunnel login`, criação do túnel nomeado, roteamento DNS, `cloudflared tunnel ingress validate` e execução do túnel. **Estes passos publicam um serviço acessível na internet; não execute a criação da rota pública nem a inicialização do túnel nomeado até a revisão de segurança do modo persistente.** O SignalSpace não instala `cloudflared` nem abre portas de entrada; somente `connect quick` inicia e encerra seu próprio processo de túnel temporário após consentimento.
 
 ## O que falta para marcar a conexão real como validada
 
