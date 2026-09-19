@@ -1,0 +1,35 @@
+# Credenciais e configuração local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.auth/
+.signalspace/
+signalspace.local.*
+
+# Arquivos e estado gerados
+node_modules/
+dist/
+build/
+coverage/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+.tmp/
+tmp/
+
+# Outputs locais de ferramentas
+.graphify/
+graphify-out/
+
+# Ambiente de desenvolvimento
+.DS_Store
+.idea/
+.vscode/
