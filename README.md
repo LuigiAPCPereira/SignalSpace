@@ -2,9 +2,9 @@
 
 **Give ChatGPT a secure connection to your own machine and turn ChatGPT into Codex.**
 
-SignalSpace é um projeto independente em **Go** para oferecer ao **ChatGPT Web** ferramentas de desenvolvimento executadas na máquina do usuário. A conversa permanece no ChatGPT; um serviço local disponibilizará MCP por uma conexão HTTPS autenticada.
+SignalSpace é um projeto independente em **Go** para oferecer ao **ChatGPT Web** ferramentas de desenvolvimento executadas na máquina do usuário. A conversa permanecerá no ChatGPT; um serviço local disponibilizará MCP por uma conexão HTTPS autenticada.
 
-> **Estado:** há um diagnóstico MCP local e uma fronteira de **servidor de recursos OAuth** com validação JWT/JWKS, ambos em Go. OAuth com provedor real, autorização exclusiva do proprietário, túnel HTTPS, ferramentas de arquivos/terminal/Git e integração observada no ChatGPT Web **ainda não foram concluídos**. Não exponha esta versão publicamente.
+> **Estado:** diagnóstico MCP local e servidor de recursos OAuth com validação de JWT/JWKS implementados. Há também um **servidor de autorização OAuth integrado experimental**, com registro de cliente, PKCE e aprovação pelo terminal, testado apenas com um cliente simulado. **Nenhum túnel HTTPS ou chamada real no ChatGPT Web foi validado. Não exponha esta versão publicamente.** Arquivos, Git e terminal ainda não foram implementados.
 
 ## Diagnóstico local
 
@@ -19,7 +19,11 @@ go run ./cmd/signalspace
 
 O endpoint `http://127.0.0.1:7676/mcp` oferece apenas `connection_diagnostic` com bearer local. Não equivale a OAuth nem a uma integração funcional com ChatGPT. Consulte [diagnóstico local](docs/LOCAL_DIAGNOSTIC.md).
 
-A alternativa OAuth é selecionada por configuração explícita do recurso, emissor e JWKS HTTPS, sem fallback para o bearer local. Ela oferece descoberta pública de recurso e validação de tokens antes de qualquer chamada MCP. **Ainda não é um conector instalável:** depende de um provedor externo compatível e de validação do proprietário, transporte e ChatGPT Web. Veja [servidor de recursos OAuth](docs/OAUTH_RESOURCE_SERVER.md).
+## OAuth integrado (experimental)
+
+O SignalSpace pode emitir os próprios tokens, sem conta obrigatória no Auth0. Para desenvolvimento, ative explicitamente `SIGNALSPACE_AUTH_MODE=embedded` e configure `SIGNALSPACE_RESOURCE_URL` com a URL HTTPS canônica do recurso; a autorização só é aprovada por comando digitado no terminal do proprietário. **Sem persistência:** o registro de clientes e a chave são perdidos quando o processo reinicia. Não publique o endpoint antes de fechar o transporte, a proteção contra abuso e o teste no ChatGPT Web. Veja [autorização integrada e limites](docs/EMBEDDED_OAUTH.md).
+
+O modo alternativo com emissor externo e JWKS HTTPS continua opcional e separado, sem fallback para bearer local. Veja [servidor de recursos OAuth](docs/OAUTH_RESOURCE_SERVER.md), [diagnóstico do provedor](docs/OAUTH_PREFLIGHT.md) e [roteiro Auth0 opcional](docs/AUTH0_INTEGRATION.md).
 
 ## Produto
 
@@ -31,7 +35,7 @@ Fluxo desejado: iniciar serviço → configurar túnel HTTPS → conectar pelo C
 
 ## Segurança assumida
 
-Conexões remotas exigem autenticação e autorização efetivas antes de ferramentas de desenvolvimento. O proprietário seleciona as raízes permitidas; ferramentas de arquivos precisarão impedir escapes. **O shell poderá executar com os privilégios normais do usuário: não é sandbox.** A allowlist de arquivos não confina o terminal.
+Conexões remotas exigem autenticação e autorização efetivas antes de ferramentas de desenvolvimento. O proprietário selecionará as raízes permitidas; ferramentas de arquivos precisarão impedir escapes. **O shell poderá executar com os privilégios normais do usuário: não é sandbox.** A allowlist de arquivos não confina o terminal.
 
 O processo escuta apenas em loopback. Compatibilidade com plano/modelo do ChatGPT requer chamada de ferramenta realmente observada, não apenas uma integração exibida na interface.
 
@@ -40,7 +44,8 @@ O processo escuta apenas em loopback. Compatibilidade com plano/modelo do ChatGP
 - [Produto](docs/PRODUCT.md)
 - [MVP](docs/MVP.md)
 - [Diagnóstico local](docs/LOCAL_DIAGNOSTIC.md)
-- [Servidor de recursos OAuth](docs/OAUTH_RESOURCE_SERVER.md)
+- [Autorização OAuth integrada](docs/EMBEDDED_OAUTH.md)
+- [Servidor de recursos OAuth externo](docs/OAUTH_RESOURCE_SERVER.md)
 - [Instruções para agentes](AGENTS.md)
 
 Projeto original; apenas aprendizados conceituais de [DevSpace](https://github.com/Waishnav/devspace) e [Graphify](https://github.com/Graphify-Labs/graphify), sem incorporar código desses projetos.
