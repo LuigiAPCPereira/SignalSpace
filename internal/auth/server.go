@@ -228,7 +228,7 @@ func (s *Server) jwks(w http.ResponseWriter, r *http.Request) {
 		b = append([]byte{byte(e)}, b...)
 		e >>= 8
 	}
-	jsonReply(w, 200, map[string]any{"keys": []any{map[string]string{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": s.keyID, "n": base64.RawURLEncoding.EncodeToString(s.key.PublicKey.N.Bytes()), "e": base64.RawURLEncoding.EncodeToString(b)}})
+	jsonReply(w, 200, map[string]any{"keys": []any{map[string]string{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": s.keyID, "n": base64.RawURLEncoding.EncodeToString(s.key.PublicKey.N.Bytes()), "e": base64.RawURLEncoding.EncodeToString(b)}}})
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
