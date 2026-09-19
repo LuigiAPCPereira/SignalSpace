@@ -19,10 +19,19 @@ import (
 
 func main() {
 	if len(os.Args) != 1 {
-		if len(os.Args) != 3 || os.Args[1] != "doctor" || os.Args[2] != "oauth" {
-			log.Fatal("usage: signalspace [doctor oauth]")
+		if len(os.Args) != 3 || os.Args[1] != "doctor" {
+			log.Fatal("usage: signalspace [doctor oauth|transport]")
 		}
-		if err := runOAuthDoctor(context.Background(), os.Stdout); err != nil {
+		var err error
+		switch os.Args[2] {
+		case "oauth":
+			err = runOAuthDoctor(context.Background(), os.Stdout)
+		case "transport":
+			err = runTransportDoctor(context.Background(), os.Stdout)
+		default:
+			log.Fatal("usage: signalspace [doctor oauth|transport]")
+		}
+		if err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -163,5 +172,23 @@ func runOAuthDoctor(ctx context.Context, out io.Writer) error {
 	fmt.Fprintf(out, "JWKS: reachable and parseable (%s)\n", report.JWKSURL)
 	fmt.Fprintf(out, "Client registration: %s\n", report.Registration)
 	fmt.Fprintln(out, "NOT VERIFIED: resource parameter propagation, owner login/consent, client registration, HTTPS tunnel and ChatGPT Web invocation.")
+	return nil
+}
+
+// runTransportDoctor consulta a URL pública configurada sem abrir o servidor nem enviar segredos.
+func runTransportDoctor(ctx context.Context, out io.Writer) error {
+	if os.Getenv("SIGNALSPACE_AUTH_MODE") != "embedded" || os.Getenv("SIGNALSPACE_RESOURCE_URL") == "" ||
+		os.Getenv("SIGNALSPACE_JWKS_URL") != "" || os.Getenv("SIGNALSPACE_OAUTH_ISSUER") != "" ||
+		os.Getenv("SIGNALSPACE_OAUTH_OWNER_SUBJECT") != "" || os.Getenv("SIGNALSPACE_LOCAL_TOKEN") != "" {
+		return errors.New("transport doctor requires only SIGNALSPACE_AUTH_MODE=embedded and SIGNALSPACE_RESOURCE_URL")
+	}
+	report, err := mcp.CheckEmbeddedTransport(ctx, os.Getenv("SIGNALSPACE_RESOURCE_URL"), nil)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Public HTTPS resource: reachable (%s)\n", report.ResourceURL)
+	fmt.Fprintf(out, "OAuth issuer and metadata: consistent (%s)\n", report.Issuer)
+	fmt.Fprintln(out, "JWKS and unauthenticated MCP challenges: verified")
+	fmt.Fprintln(out, "NOT VERIFIED: owner login/consent, real ChatGPT OAuth callback, token exchange and ChatGPT Web invocation.")
 	return nil
 }
