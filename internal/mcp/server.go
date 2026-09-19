@@ -132,56 +132,61 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		if mediaType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])); mediaType != "application/json" {
-			fail(w, http.StatusUnsupportedMediaType, nil, -32600, "Unsupported media type")
-			return
-		}
-		if r.ContentLength > maxBodyBytes {
+		serveMCP(w, r, "local_diagnostic")
+	}), nil
+}
+
+// serveMCP processa o protocolo somente após a fronteira de autenticação.
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if mediaType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])); mediaType != "application/json" {
+		fail(w, http.StatusUnsupportedMediaType, nil, -32600, "Unsupported media type")
+		return
+	}
+	if r.ContentLength > maxBodyBytes {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	var msg request
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	if err := decoder.Decode(&msg); err != nil {
+		if isOversized(err) {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
 			return
 		}
-
-		var msg request
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
-		if err := decoder.Decode(&msg); err != nil {
-			if isOversized(err) {
-				w.WriteHeader(http.StatusRequestEntityTooLarge)
-				return
-			}
-			fail(w, http.StatusBadRequest, nil, -32700, "Parse error")
+		fail(w, http.StatusBadRequest, nil, -32700, "Parse error")
+		return
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if isOversized(err) {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
 			return
 		}
-		var extra any
-		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-			if isOversized(err) {
-				w.WriteHeader(http.StatusRequestEntityTooLarge)
-				return
-			}
-			fail(w, http.StatusBadRequest, nil, -32600, "Invalid Request")
-			return
-		}
-		id, ok := validID(msg.ID)
-		if !ok || msg.JSONRPC != "2.0" || msg.Method == "" {
-			fail(w, http.StatusBadRequest, nil, -32600, "Invalid Request")
-			return
-		}
-		if version := r.Header.Get("MCP-Protocol-Version"); (msg.Method != "initialize" && version != protocolVersion) ||
-			(version != "" && version != protocolVersion) {
-			fail(w, http.StatusBadRequest, nil, -32600, "Unsupported MCP protocol version")
-			return
-		}
-		if len(msg.ID) == 0 {
-			// Notificações nunca geram resposta JSON-RPC.
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-		handle(w, msg, id)
-	}), nil
+		fail(w, http.StatusBadRequest, nil, -32600, "Invalid Request")
+		return
+	}
+	id, ok := validID(msg.ID)
+	if !ok || msg.JSONRPC != "2.0" || msg.Method == "" {
+		fail(w, http.StatusBadRequest, nil, -32600, "Invalid Request")
+		return
+	}
+	if version := r.Header.Get("MCP-Protocol-Version"); (msg.Method != "initialize" && version != protocolVersion) ||
+		(version != "" && version != protocolVersion) {
+		fail(w, http.StatusBadRequest, nil, -32600, "Unsupported MCP protocol version")
+		return
+	}
+	if len(msg.ID) == 0 {
+		// Notificações nunca geram resposta JSON-RPC.
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	handle(w, msg, id, mode)
 }
 
 func isOversized(err error) bool {
@@ -189,7 +194,7 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, msg request, id any) {
+func handle(w http.ResponseWriter, msg request, id any, mode string) {
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -202,19 +207,23 @@ func handle(w http.ResponseWriter, msg request, id any) {
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":     map[string]any{"name": "signalspace", "version": "0.1.0"},
-			"instructions":   "Local diagnostic only; no OAuth or development tools.",
+			"serverInfo":      map[string]any{"name": "signalspace", "version": "0.1.0"},
+			"instructions":    "Diagnostic only; no development tools are available.",
 		}})
 	case "ping":
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{}})
 	case "tools/list":
+		tool := map[string]any{
+			"name":        toolName,
+			"description": "Check MCP connectivity without accessing files or running commands.",
+			"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false},
+		}
+		if mode == "oauth_diagnostic" {
+			tool["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{diagnosticScope}}}
+		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
-			"tools": []any{map[string]any{
-				"name":        toolName,
-				"description": "Check local MCP connectivity without accessing files or running commands.",
-				"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-				"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false},
-			}},
+			"tools": []any{tool},
 		}})
 	case "tools/call":
 		var params struct {
@@ -231,7 +240,7 @@ func handle(w http.ResponseWriter, msg request, id any) {
 			fail(w, http.StatusOK, id, -32602, "Invalid params")
 			return
 		}
-		text, _ := json.Marshal(map[string]any{"connected": true, "mode": "local_diagnostic", "chatgptVerified": false})
+		text, _ := json.Marshal(map[string]any{"connected": true, "mode": mode, "chatgptVerified": false})
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"content": []any{map[string]any{"type": "text", "text": string(text)}},
 			"isError": false,
