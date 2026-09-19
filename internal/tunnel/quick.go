@@ -25,7 +25,41 @@ type Quick struct {
 	done     chan struct{}
 	mu       sync.Mutex
 	waitErr  error
+	signals  Signals
 	stopOnce sync.Once
+}
+
+// Signals reúne somente eventos de conexão; linhas completas nunca são retidas.
+type Signals struct {
+	Registered       bool
+	Registrations    int
+	Disconnections   int
+	ConnectionErrors int
+	LogReadErrors    int
+}
+
+// Diagnostics devolve uma cópia dos eventos observados, sem dados dos logs.
+func (q *Quick) Diagnostics() Signals {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.signals
+}
+
+// observe reconhece apenas marcadores estáticos do cloudflared.
+func (q *Quick) observe(line string) {
+	lower := strings.ToLower(line)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	switch {
+	case strings.Contains(lower, "registered tunnel connection") && !strings.Contains(lower, "unregistered tunnel connection"):
+		q.signals.Registered = true
+		q.signals.Registrations++
+	case strings.Contains(lower, "unregistered tunnel connection") || strings.Contains(lower, "connection terminated"):
+		q.signals.Registered = false
+		q.signals.Disconnections++
+	case strings.Contains(lower, "failed to serve quic connection") || strings.Contains(lower, "serve tunnel error") || strings.Contains(lower, "failed to register tunnel connection") || strings.Contains(lower, "failed to connect to edge"):
+		q.signals.ConnectionErrors++
+	}
 }
 
 // Start inicia um Quick Tunnel e espera por uma URL estritamente trycloudflare.com.
@@ -62,12 +96,19 @@ func start(ctx context.Context, binary string, timeout time.Duration) (*Quick, e
 			// Saídas extensas ou binárias não podem consumir memória sem limite.
 			scanner.Buffer(make([]byte, 4096), 64<<10)
 			for scanner.Scan() {
-				if host := extractQuickURL(scanner.Text()); host != "" {
+				line := scanner.Text()
+				q.observe(line)
+				if host := extractQuickURL(line); host != "" {
 					select {
 					case found <- host:
 					default:
 					}
 				}
+			}
+			if scanner.Err() != nil {
+				q.mu.Lock()
+				q.signals.LogReadErrors++
+				q.mu.Unlock()
 			}
 		}(stream)
 	}

@@ -88,7 +88,8 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 		if ctx.Err() != nil {
 			return nil
 		}
-		return err
+		status := quick.Diagnostics()
+		return fmt.Errorf("%w; cloudflared signals: registrations=%d, registered=%t, disconnections=%d, connection_errors=%d, log_read_errors=%d (raw logs omitted)", err, status.Registrations, status.Registered, status.Disconnections, status.ConnectionErrors, status.LogReadErrors)
 	}
 	select {
 	case <-quick.Done():
