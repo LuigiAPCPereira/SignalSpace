@@ -177,7 +177,7 @@ func TestCompleteOAuthFlowAndSingleUse(t *testing.T) {
 	r.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"connected":true`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `\"connected\":true`) {
 		t.Fatalf("token not accepted by MCP: %d %s", w.Code, w.Body.String())
 	}
 	if w := redeem(h, id, code, testVerifier, resourceURL); w.Code != 400 {
