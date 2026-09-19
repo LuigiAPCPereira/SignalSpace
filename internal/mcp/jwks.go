@@ -207,3 +207,12 @@ func (v *JWKSVerifier) publicKeys(ctx context.Context) (map[string]*rsa.PublicKe
 	v.expires = time.Now().Add(keyCacheTTL)
 	return keys, nil
 }
+
+// NewStaticJWTVerifier reutiliza a validação JWT sem buscar a chave privada local pela rede.
+// A chave só vive na memória do processo; reiniciar invalida os tokens emitidos anteriormente.
+func NewStaticJWTVerifier(key *rsa.PublicKey, keyID string) (*JWKSVerifier, error) {
+	if key == nil || key.N == nil || key.N.BitLen() < 2048 || key.E < 3 || keyID == "" || len(keyID) > 128 {
+		return nil, errors.New("invalid embedded signing key")
+	}
+	return &JWKSVerifier{keys: map[string]*rsa.PublicKey{keyID: key}, expires: time.Now().Add(3650 * 24 * time.Hour)}, nil
+}
