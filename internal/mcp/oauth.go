@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -76,19 +77,59 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 		bearer := r.Header.Get("Authorization")
 		if !strings.HasPrefix(bearer, "Bearer ") || len(bearer) <= len("Bearer ") {
-			unauthorized(w, http.StatusUnauthorized, challenge)
+			if !toolAuthChallenge(w, r, challenge+`, error="invalid_token", error_description="Authentication required to use this tool"`) {
+				unauthorized(w, http.StatusUnauthorized, challenge)
+			}
 			return
 		}
 		if err := verifier.Verify(r.Context(), strings.TrimPrefix(bearer, "Bearer "), config.Issuer, config.ResourceURL, diagnosticScope, config.OwnerSubject); err != nil {
 			if errors.Is(err, ErrInsufficientScope) {
-				unauthorized(w, http.StatusForbidden, challenge+`, error="insufficient_scope"`)
+				withError := challenge + `, error="insufficient_scope", error_description="Diagnostic scope is required"`
+				if !toolAuthChallenge(w, r, withError) {
+					unauthorized(w, http.StatusForbidden, withError)
+				}
 			} else {
-				unauthorized(w, http.StatusUnauthorized, challenge+`, error="invalid_token"`)
+				withError := challenge + `, error="invalid_token", error_description="Invalid access token"`
+				if !toolAuthChallenge(w, r, withError) {
+					unauthorized(w, http.StatusUnauthorized, withError)
+				}
 			}
 			return
 		}
 		serveMCP(w, r, "oauth_diagnostic")
 	}), nil
+}
+
+// toolAuthChallenge devolve o desafio MCP apenas para chamadas reconhecidas da ferramenta.
+// Nenhum argumento é executado ou considerado confiável antes da autorização.
+func toolAuthChallenge(w http.ResponseWriter, r *http.Request, challenge string) bool {
+	if r.Method != http.MethodPost || strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])) != "application/json" || r.ContentLength > maxBodyBytes {
+		return false
+	}
+	data, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
+	if err != nil || len(data) > maxBodyBytes {
+		return false
+	}
+	var msg request
+	if json.Unmarshal(data, &msg) != nil || msg.JSONRPC != "2.0" || msg.Method != "tools/call" || len(msg.ID) == 0 || !validObject(msg.Params) {
+		return false
+	}
+	id, ok := validID(msg.ID)
+	if !ok {
+		return false
+	}
+	var params struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(msg.Params, &params) != nil || params.Name != toolName {
+		return false
+	}
+	reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
+		"content": []any{map[string]any{"type": "text", "text": "Authentication required to use this tool."}},
+		"_meta":   map[string]any{"mcp/www_authenticate": []string{challenge}},
+		"isError": true,
+	}})
+	return true
 }
 
 func parseSecureURL(raw string) (*url.URL, error) {
