@@ -13,6 +13,10 @@ go test ./...
 go run ./cmd/signalspace
 ```
 
+O estado integrado é criado por padrão em `$XDG_STATE_HOME/signalspace` ou, se essa variável não existir, em `~/.local/state/signalspace`. É possível configurar `SIGNALSPACE_STATE_DIR` com um caminho absoluto fora do repositório. O diretório deve pertencer ao usuário e ter permissões `0700`; `identity.json` e `.lock` exigem `0600`. **O arquivo `identity.json` contém a chave RSA privada em texto codificado, não criptografado**: nunca publique, sincronize em repositórios ou compartilhe essa pasta. Proteger o diretório e os backups é responsabilidade do sistema operacional e do proprietário.
+
+O processo recusa symlinks, dados corrompidos, permissões inseguras e uma segunda instância usando a mesma pasta. Se a URL HTTPS pública mudar, o estado anterior é rejeitado, não migrado nem substituído automaticamente. Não apague `identity.json` para contornar erros sem compreender que isso invalida os tokens existentes e obriga a registrar os clientes novamente.
+
 A URL acima é **fictícia**: não conecta o ChatGPT. Ela deve ser substituída por uma URL HTTPS real quando houver um transporte aprovado e testado. O serviço permanece escutando somente em `127.0.0.1:7676`; o proxy/túnel deverá preservar o cabeçalho `Host`. Não definir `SIGNALSPACE_OAUTH_ISSUER`, `SIGNALSPACE_JWKS_URL`, `SIGNALSPACE_OAUTH_OWNER_SUBJECT` nem `SIGNALSPACE_LOCAL_TOKEN` neste modo. Configuração misturada falha na inicialização.
 
 A descoberta é publicada em `/.well-known/oauth-protected-resource` e `/.well-known/oauth-authorization-server`. O servidor oferece **DCR** em `/register`, código de autorização com PKCE S256 em `/authorize`, troca em `/token` e chave pública em `/oauth/jwks`. O único escopo é `signalspace:diagnostic`.
@@ -28,8 +32,8 @@ O registro aceita apenas URIs de retorno HTTPS cujo host seja exatamente `chatgp
 
 ## Limites ainda abertos
 
-- Clientes registrados, códigos e a **chave de assinatura** ficam somente em memória. Reiniciar o processo invalida tokens e o registro DCR; a vinculação do ChatGPT precisaria ser refeita. Persistência segura, revogação e atualização de tokens ainda não estão implementadas.
-- O registro dinâmico está limitado a 128 clientes por processo, mas ainda precisa de proteção contra abuso para exposição pública. A aprovação depende de um terminal interativo em primeiro plano; não suporta serviço de fundo ou máquinas sem terminal.
+- **Persistem entre reinicializações:** chave de assinatura RSA e clientes DCR, vinculados à mesma URL pública. Tokens existentes podem continuar válidos até expirar (15 minutos). **Não persistem:** autorizações pendentes, códigos de uso único ou decisões ainda não concluídas. Não existe refresh token, revogação nem rotação de chave; depois de expirar o access token será necessária nova autorização. A reconexão automática do ChatGPT ainda não foi testada.
+- Há cotas globais por janela de um minuto: 16 registros, 64 solicitações `/authorize`, 128 conclusões e 128 trocas em `/token`. Requisições excedentes retornam `429` e `Retry-After`. O IP de origem do túnel não é utilizado como identidade. Essas cotas reduzem abuso, mas também permitem negação de serviço temporária e **não são suficientes para publicar o serviço na internet**. O máximo é 128 clientes por estado; não há interface de limpeza ou revogação. A aprovação depende de um terminal interativo em primeiro plano, sem suporte a serviço de fundo.
 - Metadados OAuth e testes locais **não comprovam** compatibilidade de cadastro e consentimento com o ChatGPT, transporte HTTPS, nem suporte no plano/workspace do proprietário. Não foram implementadas ferramentas de arquivos, Git ou shell.
 - A primeira chamada real ao ChatGPT exige um meio de transporte compatível. A opção de [Túnel MCP Seguro da OpenAI](https://developers.openai.com/pt-BR/api/docs/guides/secure-mcp-tunnels) requer configuração e credenciais da Plataforma. Ela não instala ou configura o serviço automaticamente.
 

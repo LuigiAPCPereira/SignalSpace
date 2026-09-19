@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -37,12 +38,17 @@ func main() {
 			log.Fatal("embedded OAuth requires only SIGNALSPACE_RESOURCE_URL and SIGNALSPACE_AUTH_MODE=embedded")
 		}
 		issuer := strings.TrimSuffix(resource, "/mcp")
-		authorization, authErr := auth.New(auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", OnRequest: func(info auth.RequestInfo) {
+		stateDir, stateErr := embeddedStateDir()
+		if stateErr != nil {
+			log.Fatal(stateErr)
+		}
+		authorization, authErr := auth.New(auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
 			log.Printf("Authorization requested: %s; client: %s; redirect: %s; type approve %s or deny %s", info.ID, info.Client, info.Redirect, info.ID, info.ID)
 		}})
 		if authErr != nil {
 			log.Fatal(authErr)
 		}
+		defer authorization.Close()
 		verifier, verifierErr := mcp.NewStaticJWTVerifier(authorization.PublicKey(), authorization.KeyID())
 		if verifierErr != nil {
 			log.Fatal(verifierErr)
@@ -109,6 +115,26 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+}
+
+// embeddedStateDir concentra a configuração do armazenamento privado no entrypoint.
+func embeddedStateDir() (string, error) {
+	dir := os.Getenv("SIGNALSPACE_STATE_DIR")
+	if dir == "" {
+		base := os.Getenv("XDG_STATE_HOME")
+		if base == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			base = filepath.Join(home, ".local", "state")
+		}
+		dir = filepath.Join(base, "signalspace")
+	}
+	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
+		return "", errors.New("SIGNALSPACE_STATE_DIR must be a canonical absolute path")
+	}
+	return dir, nil
 }
 
 // runOAuthDoctor verifica os metadados sem solicitar login ou iniciar o servidor MCP.

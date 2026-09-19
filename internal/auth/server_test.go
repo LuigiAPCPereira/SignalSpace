@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -24,10 +25,12 @@ const testVerifier = "valid-verifier-with-enough-length-to-meet-pkce-requirement
 func startAuth(t *testing.T) (*Server, http.Handler, <-chan RequestInfo) {
 	t.Helper()
 	events := make(chan RequestInfo, 5)
-	s, err := New(Config{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, OnRequest: func(event RequestInfo) { events <- event }})
+	dir := filepath.Join(t.TempDir(), "state")
+	s, err := New(Config{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, StateDir: dir, OnRequest: func(event RequestInfo) { events <- event }})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = s.Close() })
 	verifier, err := mcp.NewStaticJWTVerifier(s.PublicKey(), s.KeyID())
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +177,7 @@ func TestCompleteOAuthFlowAndSingleUse(t *testing.T) {
 	r.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `\"connected\":true`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"connected":true`) {
 		t.Fatalf("token not accepted by MCP: %d %s", w.Code, w.Body.String())
 	}
 	if w := redeem(h, id, code, testVerifier, resourceURL); w.Code != 400 {

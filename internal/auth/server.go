@@ -31,6 +31,7 @@ const (
 	codeTTL              = time.Minute
 	tokenTTL             = 15 * time.Minute
 	ownerSubject         = "local-owner"
+	quotaWindow          = time.Minute
 )
 
 var (
@@ -44,6 +45,7 @@ type Config struct {
 	ResourceURL string
 	Issuer      string
 	Scope       string
+	StateDir    string
 	OnRequest   func(RequestInfo)
 }
 
@@ -65,14 +67,21 @@ type grant struct {
 	Expires                                 time.Time
 }
 
+type requestQuota struct {
+	Started time.Time
+	Count   int
+}
+
 type Server struct {
 	config  Config
 	key     *rsa.PrivateKey
 	keyID   string
+	store   *identityStore
 	mu      sync.Mutex
 	clients map[string]client
 	pending map[string]pending
 	codes   map[string]grant
+	quotas  map[string]requestQuota
 }
 
 func New(config Config) (*Server, error) {
@@ -83,16 +92,15 @@ func New(config Config) (*Server, error) {
 	if config.Issuer != "https://"+resource.Host || config.Scope == "" {
 		return nil, errors.New("embedded issuer must equal resource HTTPS origin and scope must be set")
 	}
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	store, key, kid, clients, err := openIdentity(config.StateDir, config)
 	if err != nil {
 		return nil, err
 	}
-	kid, err := randomID(16)
-	if err != nil {
-		return nil, err
-	}
-	return &Server{config: config, key: key, keyID: kid, clients: make(map[string]client), pending: make(map[string]pending), codes: make(map[string]grant)}, nil
+	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, pending: make(map[string]pending), codes: make(map[string]grant), quotas: make(map[string]requestQuota)}, nil
 }
+
+// Close libera a trava do estado; não preserva códigos e aprovações temporárias.
+func (s *Server) Close() error { return s.store.Close() }
 
 func (s *Server) PublicKey() *rsa.PublicKey { return &s.key.PublicKey }
 func (s *Server) KeyID() string             { return s.keyID }
@@ -165,8 +173,41 @@ func (s *Server) Handler() http.Handler {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
+		// O IP do proxy pode ser compartilhado: cotas globais não confiam em Forwarded.
+		if !s.allowPublicRequest(r.URL.Path, time.Now()) {
+			w.Header().Set("Retry-After", "60")
+			bad(w, http.StatusTooManyRequests, "slow_down")
+			return
+		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// allowPublicRequest usa um mapa fixo: nenhuma chave vem de IP ou entrada remota.
+func (s *Server) allowPublicRequest(path string, now time.Time) bool {
+	limit := 0
+	switch path {
+	case "/register":
+		limit = 16
+	case "/authorize":
+		limit = 64
+	case "/authorize/complete", "/token":
+		limit = 128
+	default:
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	quota := s.quotas[path]
+	if quota.Started.IsZero() || now.Sub(quota.Started) >= quotaWindow {
+		quota = requestQuota{Started: now}
+	}
+	if quota.Count >= limit {
+		return false
+	}
+	quota.Count++
+	s.quotas[path] = quota
+	return true
 }
 func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -187,7 +228,7 @@ func (s *Server) jwks(w http.ResponseWriter, r *http.Request) {
 		b = append([]byte{byte(e)}, b...)
 		e >>= 8
 	}
-	jsonReply(w, 200, map[string]any{"keys": []any{map[string]string{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": s.keyID, "n": base64.RawURLEncoding.EncodeToString(s.key.PublicKey.N.Bytes()), "e": base64.RawURLEncoding.EncodeToString(b)}}})
+	jsonReply(w, 200, map[string]any{"keys": []any{map[string]string{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": s.keyID, "n": base64.RawURLEncoding.EncodeToString(s.key.PublicKey.N.Bytes()), "e": base64.RawURLEncoding.EncodeToString(b)}})
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +267,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, u := range req.Redirects {
-		if !allowedRedirect(u) {
+		if len(u) > 2048 || !allowedRedirect(u) {
 			bad(w, 400, "invalid_redirect_uri")
 			return
 		}
@@ -242,7 +283,18 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		bad(w, 503, "temporarily_unavailable")
 		return
 	}
-	s.clients[id] = client{Name: req.Name, Redirects: append([]string(nil), req.Redirects...)}
+	// Persistir antes de disponibilizar um ID; falha de disco nunca concede registro.
+	clients := make(map[string]client, len(s.clients)+1)
+	for key, existing := range s.clients {
+		clients[key] = existing
+	}
+	clients[id] = client{Name: req.Name, Redirects: append([]string(nil), req.Redirects...)}
+	if err := s.store.save(s.config, s.key, s.keyID, clients); err != nil {
+		s.mu.Unlock()
+		bad(w, 503, "temporarily_unavailable")
+		return
+	}
+	s.clients = clients
 	s.mu.Unlock()
 	jsonReply(w, 201, map[string]any{"client_id": id, "client_id_issued_at": time.Now().Unix(), "client_name": req.Name, "redirect_uris": req.Redirects, "grant_types": []string{"authorization_code"}, "response_types": []string{"code"}, "token_endpoint_auth_method": "none"})
 }
