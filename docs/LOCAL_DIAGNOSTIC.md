@@ -1,36 +1,34 @@
-# Diagnóstico MCP local — primeira fatia
+# Diagnóstico MCP local — primeira fatia em Go
 
-**Status:** implementação experimental local. O teste de integração com ChatGPT Web não foi executado; este documento não descreve um conector ChatGPT utilizável.
+**Status:** diagnóstico experimental local em Go. Não houve teste do ChatGPT Web e não existe conector remoto utilizável nesta etapa.
 
 ## Executar
 
-Requisito: Node.js 22 ou superior. Nenhuma dependência de terceiros é instalada nesta fatia.
+Requisito mínimo: Go 1.23. A implementação usa somente a biblioteca padrão, sem dependências externas.
 
 ```bash
-export SIGNALSPACE_LOCAL_TOKEN="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
-npm run check
-npm test
-npm start
+export SIGNALSPACE_LOCAL_TOKEN="$(openssl rand -hex 32)"
+go test ./...
+go vet ./...
+go run ./cmd/signalspace
 ```
 
-O serviço escuta **somente `127.0.0.1:7676`**. O segredo é lido da variável `SIGNALSPACE_LOCAL_TOKEN` e deve ter pelo menos 32 caracteres, sem espaços. Não copie o token para arquivos versionados ou logs. O servidor não inicia sem token válido.
+O serviço escuta **somente `127.0.0.1:7676`**. O segredo vem da variável `SIGNALSPACE_LOCAL_TOKEN`, deve ter pelo menos 32 caracteres sem espaços e não deve ser colocado em arquivos versionados nem em logs. O processo não inicia com token ausente ou fraco.
 
-## Contrato implementado
+## Contrato atual
 
-- `POST /mcp` com JSON-RPC 2.0 e protocolo MCP `2025-06-18`.
-- `initialize`, `ping`, `tools/list`, `tools/call` para a ferramenta `connection_diagnostic`.
-- `Authorization: Bearer` obrigatório antes do processamento de ferramentas, com comparação de bytes em tempo constante quando o comprimento coincide.
-- Host e Origin limitados ao serviço local, corpo de requisição limitado a 64 KiB e tempo de requisição limitado.
-- Nenhuma ferramenta de arquivo, edição, Git ou shell; nenhuma UI ou processo persistente.
+- `POST /mcp` com subconjunto de JSON-RPC 2.0 / MCP `2025-06-18`.
+- `initialize`, `ping`, `tools/list` e `tools/call` para `connection_diagnostic`.
+- Bearer local obrigatório antes de processar ferramentas; comparação em tempo constante dos hashes do token.
+- Host e Origin limitados ao endpoint local, corpo de requisição limitado a 64 KiB, timeouts HTTP.
+- Sem operações de arquivo, edição, Git, shell, processos persistentes ou frontend.
 
-O resultado `connected: true` prova somente que a chamada local autenticada foi concluída. O campo `chatgptVerified: false` é intencional.
+`connected: true` comprova apenas a chamada local autenticada; `chatgptVerified: false` é intencional.
 
-## O que não fazer
+## Limite de segurança
 
-**Não exponha esta versão por Cloudflare Tunnel, ngrok, Funnel ou qualquer proxy público.** Ainda não existem fluxo OAuth, descoberta de recurso protegido, aprovação do proprietário nem validação de compatibilidade com o ChatGPT Web. O bearer de diagnóstico local não substitui OAuth e não deve ser configurado como uma autorização remota de produção.
+**Não exponha esta versão via Cloudflare Tunnel, ngrok, Tailscale Funnel ou proxy público.** O bearer local não substitui OAuth, descoberta de recurso protegido, autorização do proprietário e validação do cliente ChatGPT. Estas capacidades ainda não estão implementadas.
 
 ## Próxima fatia
 
-Escolher e integrar um provedor/fluxo OAuth compatível com a especificação MCP e com o ChatGPT; fornecer metadados de descoberta, consentimento, verificação de tokens por emissor/destinatário/expiração/escopo e somente então admitir Host público configurado com túnel HTTPS. Provar localmente a negação sem autorização e obter uma chamada real no ChatGPT Web antes de afirmar que a conexão externa funciona.
-
-A documentação oficial indica que clientes ChatGPT usam OAuth 2.1 e descoberta de recurso protegido: https://developers.openai.com/plugins/build/auth . Os recursos efetivos de cada configuração de ChatGPT continuam sujeitos a verificação prática.
+Implementar autenticação/autorização remota compatível com MCP e ChatGPT, descoberta de metadados, consentimento e validação de tokens. Só então permitir um endpoint HTTPS público e testar uma chamada real no ChatGPT Web. Não afirmar suporte a plano/modelo apenas pela exibição da integração na interface.
