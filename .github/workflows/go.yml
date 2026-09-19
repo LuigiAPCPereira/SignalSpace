@@ -15,8 +15,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
       - name: Format
-        run: test -z "$(gofmt -l cmd internal)"
+        run: |
+          files="$(gofmt -l cmd internal)"
+          if [ -n "$files" ]; then
+            printf 'Unformatted Go files:\n%s\n' "$files"
+            exit 1
+          fi
       - name: Test
         run: go test ./...
       - name: Vet
