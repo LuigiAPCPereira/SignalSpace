@@ -273,7 +273,7 @@ func runTransportDoctor(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Public HTTPS resource: reachable (%s\n", report.ResourceURL)
+	fmt.Fprintf(out, "Public HTTPS resource: reachable (%s)\n", report.ResourceURL)
 	fmt.Fprintf(out, "OAuth issuer and metadata: consistent (%s)\n", report.Issuer)
 	fmt.Fprintln(out, "JWKS and unauthenticated MCP challenges: verified")
 	fmt.Fprintln(out, "NOT VERIFIED: owner login/consent, real ChatGPT OAuth callback, token exchange and ChatGPT Web invocation.")
