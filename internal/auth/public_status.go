@@ -72,9 +72,9 @@ func (s *Server) PublicStatusHandler() http.Handler {
 		expires := p.Expires
 		s.mu.Unlock()
 		jsonReply(w, http.StatusOK, map[string]string{
-			"status": status,
+			"status":      status,
 			"server_time": now.UTC().Format(time.RFC3339Nano),
-			"expires_at": expires.UTC().Format(time.RFC3339Nano),
+			"expires_at":  expires.UTC().Format(time.RFC3339Nano),
 		})
 	})
 }
