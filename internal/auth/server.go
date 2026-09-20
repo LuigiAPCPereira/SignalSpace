@@ -39,20 +39,24 @@ var (
 	pkceChallenge = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 	pkceVerifier  = regexp.MustCompile(`^[A-Za-z0-9._~-]{43,128}$`)
 	requestID     = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
-	consentPage   = template.Must(template.New("consent").Parse(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar SignalSpace</title></head><body style="font:16px system-ui;max-width:38rem;margin:10vh auto;padding:1rem;line-height:1.5"><main><h1>Autorizar conexão</h1><p>Solicitação de <strong>{{.Client}}</strong> para acessar apenas o diagnóstico do SignalSpace.</p><p>Destino do retorno: <code>{{.Redirect}}</code></p><p>Confirme na janela do terminal em que o SignalSpace está em execução:</p><pre>approve {{.ID}}</pre><p>Depois clique em Continuar. Para recusar, digite <code>deny {{.ID}}</code> no terminal.</p><form method="post" action="/authorize/complete"><input type="hidden" name="request" value="{{.ID}}"><input type="hidden" name="csrf" value="{{.CSRF}}"><button type="submit">Continuar</button></form><p>Esta solicitação expira em cinco minutos. Nenhum acesso é concedido antes da aprovação local.</p></main></body></html>`))
+	consentPage   = template.Must(template.New("consent").Parse(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar SignalSpace</title></head><body style="font:16px system-ui;max-width:38rem;margin:10vh auto;padding:1rem;line-height:1.5"><main><h1>Autorizar conexão</h1><p>Solicitação de <strong>{{.Client}}</strong>.</p><p>Registro OAuth: <code>{{.ClientID}}</code></p>{{if .Read}}<p><strong>Permissão adicional:</strong> ler arquivos de texto da pasta autorizada separadamente no terminal. Esta permissão não dá acesso a outras pastas, edição ou shell.</p>{{else}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}<p>Escopos solicitados: <code>{{.Scope}}</code></p><p>Destino do retorno: <code>{{.Redirect}}</code></p><p>Confirme na janela do terminal em que o SignalSpace está em execução:</p><pre>approve {{.ID}}</pre><p>Depois clique em Continuar. Para recusar, digite <code>deny {{.ID}}</code> no terminal.</p><form method="post" action="/authorize/complete"><input type="hidden" name="request" value="{{.ID}}"><input type="hidden" name="csrf" value="{{.CSRF}}"><button type="submit">Continuar</button></form><p>Esta solicitação expira em cinco minutos. Nenhum acesso é concedido antes da aprovação local.</p></main></body></html>`))
 )
 
 type Config struct {
 	ResourceURL string
 	Issuer      string
 	Scope       string
-	StateDir    string
-	OnRequest   func(RequestInfo)
+	// ReadScope é opcional e só pode ser oferecido junto de um verificador de
+	// concessões locais. A configuração padrão permanece somente diagnóstico.
+	ReadScope    string
+	CanIssueRead func(clientID string) bool
+	StateDir     string
+	OnRequest    func(RequestInfo)
 	// OnRegistrationFailure recebe somente categorias fixas, nunca metadados do cliente.
 	OnRegistrationFailure func(string)
 }
 
-type RequestInfo struct{ ID, Client, Redirect string }
+type RequestInfo struct{ ID, Client, ClientID, Redirect, Scope string }
 
 // ClientInfo contém apenas metadados já registrados, exibidos somente no terminal.
 type ClientInfo struct {
@@ -64,16 +68,16 @@ type client struct {
 	Redirects []string
 }
 type pending struct {
-	ClientID, Redirect, Challenge, State, Resource string
-	SessionHash                                    [32]byte
-	CSRF                                           string
-	Expires                                        time.Time
-	Approved                                       bool
-	Denied                                         bool
+	ClientID, Redirect, Challenge, State, Resource, Scope string
+	SessionHash                                           [32]byte
+	CSRF                                                  string
+	Expires                                               time.Time
+	Approved                                              bool
+	Denied                                                bool
 }
 type grant struct {
-	ClientID, Redirect, Challenge, Resource string
-	Expires                                 time.Time
+	ClientID, Redirect, Challenge, Resource, Scope string
+	Expires                                        time.Time
 }
 
 type requestQuota struct {
@@ -101,6 +105,9 @@ func New(config Config) (*Server, error) {
 	}
 	if config.Issuer != "https://"+resource.Host || config.Scope == "" {
 		return nil, errors.New("embedded issuer must equal resource HTTPS origin and scope must be set")
+	}
+	if (config.ReadScope != "" && (config.Scope != "signalspace:diagnostic" || config.ReadScope != "signalspace:workspace.read" || config.CanIssueRead == nil || config.OnRequest == nil)) || (config.ReadScope == "" && config.CanIssueRead != nil) {
+		return nil, errors.New("workspace read scope requires an explicit local grant validator")
 	}
 	store, key, kid, clients, err := openIdentity(config.StateDir, config)
 	if err != nil {
@@ -278,7 +285,21 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	i := s.config.Issuer
-	jsonReply(w, 200, map[string]any{"issuer": i, "authorization_endpoint": i + "/authorize", "token_endpoint": i + "/token", "registration_endpoint": i + "/register", "jwks_uri": i + "/oauth/jwks", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{s.config.Scope}, "authorization_response_iss_parameter_supported": true})
+	scopes := []string{s.config.Scope}
+	if s.config.ReadScope != "" {
+		scopes = append(scopes, s.config.ReadScope)
+	}
+	jsonReply(w, 200, map[string]any{"issuer": i, "authorization_endpoint": i + "/authorize", "token_endpoint": i + "/token", "registration_endpoint": i + "/register", "jwks_uri": i + "/oauth/jwks", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": scopes, "authorization_response_iss_parameter_supported": true})
+}
+
+// readRequested exige a combinação exata: não há elevação por escopo ausente,
+// duplicado ou enviado numa ordem alternativa.
+func (s *Server) readRequested(scope string) bool {
+	return s.config.ReadScope != "" && scope == s.config.Scope+" "+s.config.ReadScope
+}
+
+func (s *Server) readAllowed(clientID string) bool {
+	return s.config.CanIssueRead != nil && s.config.CanIssueRead(clientID)
 }
 func (s *Server) jwks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -394,7 +415,9 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if len(r.URL.RawQuery) > maxFormBytes || q.Get("response_type") != "code" || q.Get("scope") != s.config.Scope || q.Get("resource") != s.config.ResourceURL || !pkceChallenge.MatchString(q.Get("code_challenge")) || q.Get("code_challenge_method") != "S256" || len(q.Get("state")) < 16 || len(q.Get("state")) > 512 {
+	requestedScope := q.Get("scope")
+	read := s.readRequested(requestedScope)
+	if len(r.URL.RawQuery) > maxFormBytes || q.Get("response_type") != "code" || (requestedScope != s.config.Scope && !read) || q.Get("resource") != s.config.ResourceURL || !pkceChallenge.MatchString(q.Get("code_challenge")) || q.Get("code_challenge_method") != "S256" || len(q.Get("state")) < 16 || len(q.Get("state")) > 512 {
 		bad(w, 400, "invalid_request")
 		return
 	}
@@ -418,6 +441,10 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_redirect_uri")
 		return
 	}
+	if read && !s.readAllowed(id) {
+		bad(w, 403, "access_denied")
+		return
+	}
 	pendingID, err := randomID(16)
 	if err != nil {
 		bad(w, 503, "server_error")
@@ -433,7 +460,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 503, "server_error")
 		return
 	}
-	p := pending{ClientID: id, Redirect: redirect, Challenge: q.Get("code_challenge"), State: q.Get("state"), Resource: s.config.ResourceURL, SessionHash: sha256.Sum256([]byte(session)), CSRF: csrf, Expires: time.Now().Add(pendingTTL)}
+	p := pending{ClientID: id, Redirect: redirect, Challenge: q.Get("code_challenge"), State: q.Get("state"), Resource: s.config.ResourceURL, Scope: requestedScope, SessionHash: sha256.Sum256([]byte(session)), CSRF: csrf, Expires: time.Now().Add(pendingTTL)}
 	s.mu.Lock()
 	s.clean(time.Now())
 	if len(s.pending) >= maxPending {
@@ -450,9 +477,12 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if s.config.OnRequest != nil {
-		s.config.OnRequest(RequestInfo{ID: pendingID, Client: c.Name, Redirect: redirect})
+		s.config.OnRequest(RequestInfo{ID: pendingID, Client: c.Name, ClientID: id, Redirect: redirect, Scope: requestedScope})
 	}
-	_ = consentPage.Execute(w, struct{ ID, Client, Redirect, CSRF string }{pendingID, c.Name, redirect, csrf})
+	_ = consentPage.Execute(w, struct {
+		ID, Client, ClientID, Redirect, CSRF, Scope string
+		Read                                        bool
+	}{pendingID, c.Name, id, redirect, csrf, requestedScope, read})
 }
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -489,6 +519,11 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		bad(w, 403, "access_denied")
 		return
 	}
+	if s.readRequested(p.Scope) && !s.readAllowed(p.ClientID) {
+		s.mu.Unlock()
+		bad(w, 403, "access_denied")
+		return
+	}
 	if len(s.codes) >= maxCodes {
 		s.mu.Unlock()
 		bad(w, 503, "temporarily_unavailable")
@@ -500,7 +535,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		bad(w, 503, "server_error")
 		return
 	}
-	s.codes[code] = grant{ClientID: p.ClientID, Redirect: p.Redirect, Challenge: p.Challenge, Resource: p.Resource, Expires: time.Now().Add(codeTTL)}
+	s.codes[code] = grant{ClientID: p.ClientID, Redirect: p.Redirect, Challenge: p.Challenge, Resource: p.Resource, Scope: p.Scope, Expires: time.Now().Add(codeTTL)}
 	s.mu.Unlock()
 	redirect, err := url.Parse(p.Redirect)
 	if err != nil {
@@ -564,6 +599,10 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_grant")
 		return
 	}
+	if s.readRequested(g.Scope) && !s.readAllowed(g.ClientID) {
+		bad(w, 400, "invalid_grant")
+		return
+	}
 	now := time.Now()
 	jti, err := randomID(16)
 	if err != nil {
@@ -573,7 +612,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": s.keyID})
 	// Vincular o token ao cliente registrado que recebeu o código OAuth.
 	// O identificador não é uma atestação de que o aplicativo é o ChatGPT.
-	payload, _ := json.Marshal(map[string]any{"iss": s.config.Issuer, "sub": ownerSubject, "aud": s.config.ResourceURL, "exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "nbf": now.Unix(), "scope": s.config.Scope, "client_id": g.ClientID, "jti": jti})
+	payload, _ := json.Marshal(map[string]any{"iss": s.config.Issuer, "sub": ownerSubject, "aud": s.config.ResourceURL, "exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "nbf": now.Unix(), "scope": g.Scope, "client_id": g.ClientID, "jti": jti})
 	signed := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
 	h := sha256.Sum256([]byte(signed))
 	sig, err := rsa.SignPKCS1v15(rand.Reader, s.key, crypto.SHA256, h[:])
@@ -585,5 +624,5 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.issued[g.ClientID] = true
 	s.mu.Unlock()
-	jsonReply(w, 200, map[string]any{"access_token": jwt, "token_type": "Bearer", "expires_in": int(tokenTTL.Seconds()), "scope": s.config.Scope})
+	jsonReply(w, 200, map[string]any{"access_token": jwt, "token_type": "Bearer", "expires_in": int(tokenTTL.Seconds()), "scope": g.Scope})
 }

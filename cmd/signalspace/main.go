@@ -100,7 +100,7 @@ func main() {
 func embeddedHandler(resource, stateDir string) (http.Handler, *auth.Server, error) {
 	issuer := strings.TrimSuffix(resource, "/mcp")
 	authorization, err := auth.New(auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
-		log.Printf("Authorization requested: %s; client: %s; redirect: %s; type approve %s or deny %s", info.ID, info.Client, info.Redirect, info.ID, info.ID)
+		log.Printf("Authorization requested: %s; client: %s; client_id: %s; redirect: %s; scope: %s; type approve %s or deny %s", info.ID, info.Client, info.ClientID, info.Redirect, info.Scope, info.ID, info.ID)
 	}, OnRegistrationFailure: func(reason string) {
 		// Categoria fixa; nunca registrar o corpo da requisição ou credenciais OAuth.
 		log.Printf("OAuth client registration rejected: %s (client metadata omitted)", reason)
