@@ -68,7 +68,7 @@ func TestPublicOAuthStatusHTTPHeadersAndRequestIsolation(t *testing.T) {
 	query := url.Values{
 		"client_id": {oauthClient.ID}, "redirect_uri": {readTestCallback}, "response_type": {"code"},
 		"scope": {"signalspace:diagnostic"}, "resource": {readTestResource},
-		"code_challenge": {base64.RawURLEncoding.EncodeToString(challenge[:])},
+		"code_challenge":        {base64.RawURLEncoding.EncodeToString(challenge[:])},
 		"code_challenge_method": {"S256"}, "state": {"first-random-state-for-public-status"},
 	}
 	consentPath := "/authorize?" + query.Encode()
@@ -101,8 +101,8 @@ func TestPublicOAuthStatusHTTPHeadersAndRequestIsolation(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, method, path, host, origin string
-		cookie                         *http.Cookie
-		want                           int
+		cookie                           *http.Cookie
+		want                             int
 	}{
 		{"anonymous", "GET", statusPath, host, "", nil, 403},
 		{"other_cookie", "GET", statusPath, host, "", other.Cookies()[0], 403},
