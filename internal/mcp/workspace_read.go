@@ -40,9 +40,9 @@ func workspaceToolSchema() map[string]any {
 
 func readToolDefinition() map[string]any {
 	return map[string]any{
-		"name":        readToolName,
-		"description": "Read UTF-8 text (up to 32 KiB) from an explicitly approved workspace. Provide the active session ID and a relative path; no edits or commands.",
-		"inputSchema": workspaceToolSchema(),
+		"name":            readToolName,
+		"description":     "Read UTF-8 text (up to 32 KiB) from an explicitly approved workspace. Provide the active session ID and a relative path; no edits or commands.",
+		"inputSchema":     workspaceToolSchema(),
 		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false},
 	}
@@ -50,9 +50,9 @@ func readToolDefinition() map[string]any {
 
 func listDirectoryToolDefinition() map[string]any {
 	return map[string]any{
-		"name":        listDirectoryToolName,
-		"description": "List up to 128 UTF-8 entry names in an approved directory. Provide the active session ID and a relative directory path, or '.' for the approved root. No file contents, types or absolute paths are returned.",
-		"inputSchema": workspaceToolSchema(),
+		"name":            listDirectoryToolName,
+		"description":     "List up to 128 UTF-8 entry names in an approved directory. Provide the active session ID and a relative directory path, or '.' for the approved root. No file contents, types or absolute paths are returned.",
+		"inputSchema":     workspaceToolSchema(),
 		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false},
 	}
