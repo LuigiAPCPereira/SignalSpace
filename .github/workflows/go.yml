@@ -27,7 +27,7 @@ jobs:
       - name: Test
         run: go test ./...
       - name: Race
-        run: go test -race -count=1 ./internal/workspace ./internal/mcp ./cmd/signalspace
+        run: go test -race -count=1 ./internal/admin ./internal/auth ./internal/workspace ./internal/mcp ./cmd/signalspace
       - name: Vet
         run: go vet ./...
       - name: Build
