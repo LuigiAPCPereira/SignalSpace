@@ -22,11 +22,16 @@ type Listeners struct {
 }
 
 func ReserveListeners() (*Listeners, error) {
-	public, err := net.Listen("tcp4", PublicAddress)
+	return reserveListeners(PublicAddress, AdminAddress)
+}
+
+// reserveListeners recebe endereços alternativos somente para testes isolados.
+func reserveListeners(publicAddress, adminAddress string) (*Listeners, error) {
+	public, err := net.Listen("tcp4", publicAddress)
 	if err != nil {
 		return nil, err
 	}
-	admin, err := net.Listen("tcp4", AdminAddress)
+	admin, err := net.Listen("tcp4", adminAddress)
 	if err != nil {
 		_ = public.Close()
 		return nil, err
