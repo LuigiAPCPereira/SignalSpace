@@ -30,8 +30,17 @@ func (s *Server) decideLocked(id string, expectedVersion int, decision string, n
 		return ErrOAuthRequestNotFound
 	}
 	if !now.Before(p.Expires) {
-		s.terminalizeLocked(id, p, "EXPIRED", now)
+		// A negativa já gravada é terminal e não se transforma em expiração
+		// só porque outra decisão chegou depois do prazo.
+		status := "EXPIRED"
+		if p.Denied {
+			status = "DENIED"
+		}
+		s.terminalizeLocked(id, p, status, now)
 		delete(s.pending, id)
+		if status == "DENIED" {
+			return ErrOAuthAlreadyDecided
+		}
 		return ErrOAuthRequestExpired
 	}
 	if p.Approved || p.Denied {
