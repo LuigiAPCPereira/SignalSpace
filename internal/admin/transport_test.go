@@ -55,12 +55,18 @@ func TestAdminTransportRejectsUnexpectedOriginsAndPaths(t *testing.T) {
 }
 
 func TestReserveListenersFailsClosedWithoutLeakingPublicPort(t *testing.T) {
-	occupied, err := net.Listen("tcp4", AdminAddress)
+	probe, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		t.Skipf("admin port unavailable on test host: %v", err)
+		t.Fatal(err)
+	}
+	publicAddress := probe.Addr().String()
+	_ = probe.Close()
+	occupied, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer occupied.Close()
-	listeners, err := ReserveListeners()
+	listeners, err := reserveListeners(publicAddress, occupied.Addr().String())
 	if err == nil || listeners != nil {
 		if listeners != nil {
 			_ = listeners.Close()
@@ -68,7 +74,7 @@ func TestReserveListenersFailsClosedWithoutLeakingPublicPort(t *testing.T) {
 		t.Fatal("reserved public port despite admin port failure")
 	}
 	// Verifica se a reserva pública anterior foi liberada para não publicar um serviço incompleto.
-	public, err := net.Listen("tcp4", PublicAddress)
+	public, err := net.Listen("tcp4", publicAddress)
 	if err != nil {
 		t.Fatalf("public port leaked after failure: %v", err)
 	}
