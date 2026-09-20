@@ -21,16 +21,27 @@ func (s *Server) decideLocked(id string, expectedVersion int, decision string, n
 	}
 	p, exists := s.pending[id]
 	if !exists {
+		if record, ok := s.terminal[id]; ok && now.Before(record.retainUntil) {
+			if record.snapshot.Status == "EXPIRED" {
+				return ErrOAuthRequestExpired
+			}
+			return ErrOAuthAlreadyDecided
+		}
 		return ErrOAuthRequestNotFound
 	}
 	if !now.Before(p.Expires) {
+		s.terminalizeLocked(id, p, "EXPIRED", now)
+		delete(s.pending, id)
 		return ErrOAuthRequestExpired
 	}
 	if p.Approved || p.Denied {
 		return ErrOAuthAlreadyDecided
 	}
-	// O registro existente possui uma única transição de decisão: 1 -> 2.
-	if expectedVersion != 1 {
+	version := p.Version
+	if version == 0 {
+		version = 1 // compatibilidade com fixtures legados de teste.
+	}
+	if expectedVersion != version {
 		return ErrOAuthStaleRequest
 	}
 	if decision == "approve" && s.readRequested(p.Scope) && !s.readAllowed(p.ClientID) {
@@ -38,11 +49,13 @@ func (s *Server) decideLocked(id string, expectedVersion int, decision string, n
 	}
 	p.Approved = decision == "approve"
 	p.Denied = decision == "deny"
+	p.DecidedAt = now
+	p.Version = version + 1
 	s.pending[id] = p
 	return nil
 }
 
-// DecideVersioned compartilha a operação de domínio com o terminal e o OAuth público.
+// DecideVersioned compartilha a operação de domínio com terminal e painel.
 func (s *Server) DecideVersioned(id string, expectedVersion int, decision string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
