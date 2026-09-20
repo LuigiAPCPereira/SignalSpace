@@ -39,10 +39,17 @@ func TestAdminOAuthDecisionReconcilesAfterSocketDisconnect(t *testing.T) {
 	disconnected := make(chan bool, 1)
 	release := make(chan struct{})
 	var releaseOnce sync.Once
+	var interceptOnce sync.Once
 	defer releaseOnce.Do(func() { close(release) })
 	adminHandler := admin.NewServer(gate.HandlerWithRequests(authorization)).Handler
 	private := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/decision") {
+			adminHandler.ServeHTTP(w, r)
+			return
+		}
+		intercept := false
+		interceptOnce.Do(func() { intercept = true })
+		if !intercept {
 			adminHandler.ServeHTTP(w, r)
 			return
 		}
