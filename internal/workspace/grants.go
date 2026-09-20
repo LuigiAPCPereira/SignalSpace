@@ -91,6 +91,20 @@ func (g *Grants) ReadText(owner, clientID, id, relative string) (string, error) 
 	return g.current.ReadText(relative)
 }
 
+// ListDirectory usa a mesma concessão e o mesmo mutex que a leitura de texto.
+// É uma operação interna: não cria ou publica nenhuma ferramenta MCP.
+func (g *Grants) ListDirectory(owner, clientID, id, relative string) ([]string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return nil, ErrClosed
+	}
+	if owner != g.owner || !validClientID(clientID) || clientID != g.clientID || g.current == nil || id != g.current.ID() {
+		return nil, ErrNotAuthorized
+	}
+	return g.current.ListDirectory(relative)
+}
+
 // Revoke é um comando exclusivamente local, sem rota pública equivalente.
 func (g *Grants) Revoke(id string) error {
 	g.mu.Lock()
