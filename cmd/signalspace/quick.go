@@ -68,6 +68,11 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 		return err
 	}
 	defer authorization.Close()
+	console, err := newWorkspaceConsole(authorization)
+	if err != nil {
+		return err
+	}
+	defer console.Close()
 	server := diagnosticServer(handler)
 	serveDone := make(chan error, 1)
 	serverExited := make(chan struct{})
@@ -109,7 +114,8 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 	}
 	fmt.Fprintf(output, "Diagnóstico HTTPS aprovado. Cole no ChatGPT Web: %s\n", resource)
 	fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
-	go serveApprovals(authorization, reader, output)
+	fmt.Fprintln(output, "Workspace local: workspace request <absolute-path> (exige confirmação posterior; nenhuma leitura MCP habilitada).")
+	go serveTerminalCommands(authorization, console, reader, output)
 	select {
 	case <-ctx.Done():
 		return nil
