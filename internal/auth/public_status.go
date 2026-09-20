@@ -10,8 +10,7 @@ import (
 const publicStatusPath = "/authorize/status"
 
 // PublicStatusHandler consulta exclusivamente o pedido associado ao cookie OAuth.
-// Este handler não decide solicitações, não emite códigos e não expõe dados administrativos.
-// A composição pública só deve registrar esta rota após validar seu fluxo de ponta a ponta.
+// Não decide solicitações, não emite códigos nem expõe dados administrativos.
 func (s *Server) PublicStatusHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -49,32 +48,39 @@ func (s *Server) PublicStatusHandler() http.Handler {
 		}
 		quota.Count++
 		s.quotas[publicStatusPath] = quota
-		p, exists := s.pending[query.Get("request_id")]
-		if !exists {
+		s.clean(now)
+		id := query.Get("request_id")
+		status := ""
+		var expires time.Time
+		var originalHash [32]byte
+		if p, ok := s.pending[id]; ok {
+			status = "PENDING"
+			if p.Denied {
+				status = "DENIED"
+			} else if p.Approved {
+				status = "APPROVED"
+			}
+			expires = p.Expires
+			originalHash = p.SessionHash
+		} else if record, ok := s.terminal[id]; ok && record.snapshot.Status != "COMPLETED" {
+			status = record.snapshot.Status
+			expires = record.snapshot.ExpiresAt
+			originalHash = record.sessionHash
+		}
+		if status == "" {
 			s.mu.Unlock()
 			bad(w, http.StatusNotFound, "not_found")
 			return
 		}
-		cookieHash := hashSession(cookie.Value)
-		if subtle.ConstantTimeCompare(p.SessionHash[:], cookieHash) != 1 {
+		if subtle.ConstantTimeCompare(originalHash[:], hashSession(cookie.Value)) != 1 {
 			s.mu.Unlock()
 			bad(w, http.StatusForbidden, "access_denied")
 			return
 		}
-		status := "PENDING"
-		if !now.Before(p.Expires) {
-			status = "EXPIRED"
-		} else if p.Denied {
-			status = "DENIED"
-		} else if p.Approved {
-			status = "APPROVED"
-		}
-		expires := p.Expires
 		s.mu.Unlock()
 		jsonReply(w, http.StatusOK, map[string]string{
-			"status":      status,
-			"server_time": now.UTC().Format(time.RFC3339Nano),
-			"expires_at":  expires.UTC().Format(time.RFC3339Nano),
+			"status": status, "server_time": now.UTC().Format(time.RFC3339Nano),
+			"expires_at": expires.UTC().Format(time.RFC3339Nano),
 		})
 	})
 }
