@@ -40,7 +40,7 @@ func TestEmbeddedPublicStatusIsRoutedWithoutAdministrativeAccess(t *testing.T) {
 	query := url.Values{
 		"client_id": {client.ID}, "redirect_uri": {readTestCallback}, "response_type": {"code"},
 		"scope": {"signalspace:diagnostic"}, "resource": {readTestResource},
-		"code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])},
+		"code_challenge":        {base64.RawURLEncoding.EncodeToString(hash[:])},
 		"code_challenge_method": {"S256"}, "state": {"random-state-identifier-for-status-test"},
 	}
 	consent := readRequest(t, handler, http.MethodGet, "/authorize?"+query.Encode(), "", "", "", nil)
