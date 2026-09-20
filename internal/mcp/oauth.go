@@ -13,6 +13,7 @@ import (
 )
 
 const diagnosticScope = "signalspace:diagnostic"
+const workspaceReadScope = "signalspace:workspace.read"
 const metadataPath = "/.well-known/oauth-protected-resource"
 
 var ErrInsufficientScope = errors.New("insufficient OAuth scope")
@@ -21,10 +22,20 @@ type TokenVerifier interface {
 	Verify(context.Context, string, string, string, string, string) error
 }
 
+// IdentityVerifier exige um token válido e retorna identidade assinada, não
+// campos fornecidos pelo cliente MCP.
+type IdentityVerifier interface {
+	TokenVerifier
+	VerifyIdentity(context.Context, string, string, string, string, string) (VerifiedIdentity, error)
+}
+
 type OAuthConfig struct {
 	ResourceURL  string
 	Issuer       string
 	OwnerSubject string
+	// WorkspaceReader é opcional e nunca é configurado por parâmetros HTTP.
+	// Uma instância sem este componente permanece exclusivamente diagnóstico.
+	WorkspaceReader WorkspaceTextReader
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
@@ -48,13 +59,24 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	if err != nil || issuer.String() != config.Issuer {
 		return nil, errors.New("OAuth issuer must be an absolute HTTPS URL")
 	}
+	var identityVerifier IdentityVerifier
+	if config.WorkspaceReader != nil {
+		identityVerifier, _ = verifier.(IdentityVerifier)
+		if identityVerifier == nil {
+			return nil, errors.New("workspace reader requires verified OAuth client identity")
+		}
+	}
 	origin := "https://" + resource.Host
 	metadataURL := origin + metadataPath
 	challenge := fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, diagnosticScope)
+	scopes := []string{diagnosticScope}
+	if config.WorkspaceReader != nil {
+		scopes = append(scopes, workspaceReadScope)
+	}
 	metadata := map[string]any{
 		"resource":              config.ResourceURL,
 		"authorization_servers": []string{config.Issuer},
-		"scopes_supported":      []string{diagnosticScope},
+		"scopes_supported":      scopes,
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Nunca confiar em X-Forwarded-Host ou X-Forwarded-Proto enviados pelo cliente.
@@ -99,7 +121,25 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			}
 			return
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent)
+		var readAccess *readToolAccess
+		if config.WorkspaceReader != nil {
+			accessToken := strings.TrimPrefix(bearer, "Bearer ")
+			readAccess = &readToolAccess{
+				reader: config.WorkspaceReader,
+				verify: func(ctx context.Context) (VerifiedIdentity, error) {
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceReadScope, config.OwnerSubject)
+					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
+						if err == nil {
+							err = errInvalidToken
+						}
+						return VerifiedIdentity{}, err
+					}
+					return identity, nil
+				},
+				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceReadScope),
+			}
+		}
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess)
 	}), nil
 }
 

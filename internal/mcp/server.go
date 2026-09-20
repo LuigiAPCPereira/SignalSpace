@@ -18,6 +18,7 @@ const (
 	protocolVersion = "2025-06-18"
 	maxBodyBytes    = 64 * 1024
 	toolName        = "connection_diagnostic"
+	readToolName    = "read_file"
 )
 
 type request struct {
@@ -134,12 +135,12 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		serveMCP(w, r, "local_diagnostic", nil)
+		serveMCP(w, r, "local_diagnostic", nil, nil)
 	}), nil
 }
 
 // serveMCP processa o protocolo somente após a fronteira de autenticação.
-func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string)) {
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -188,7 +189,7 @@ func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent fu
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	handle(w, msg, id, mode, onMCPEvent)
+	handle(w, r, msg, id, mode, onMCPEvent, readAccess)
 }
 
 func isOversized(err error) bool {
@@ -196,7 +197,7 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, msg request, id any, mode string, onMCPEvent func(string, string)) {
+func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess) {
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -206,11 +207,15 @@ func handle(w http.ResponseWriter, msg request, id any, mode string, onMCPEvent 
 			fail(w, http.StatusBadRequest, id, -32602, "Invalid params")
 			return
 		}
+		instructions := "Diagnostic only; no development tools are available."
+		if readAccess != nil {
+			instructions = "File reading requires a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
+		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "signalspace", "version": "0.1.0"},
-			"instructions":    "Diagnostic only; no development tools are available.",
+			"instructions":    instructions,
 		}})
 	case "ping":
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{}})
@@ -224,8 +229,12 @@ func handle(w http.ResponseWriter, msg request, id any, mode string, onMCPEvent 
 		if mode == "oauth_diagnostic" {
 			tool["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{diagnosticScope}}}
 		}
+		tools := []any{tool}
+		if readAccess != nil {
+			tools = append(tools, readToolDefinition())
+		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
-			"tools": []any{tool},
+			"tools": tools,
 		}})
 		if onMCPEvent != nil {
 			onMCPEvent("tools/list", "")
@@ -235,7 +244,15 @@ func handle(w http.ResponseWriter, msg request, id any, mode string, onMCPEvent 
 			Name      string          `json:"name"`
 			Arguments json.RawMessage `json:"arguments"`
 		}
-		if !validObject(msg.Params) || json.Unmarshal(msg.Params, &params) != nil || params.Name != toolName || !validObject(params.Arguments) {
+		if !validObject(msg.Params) || json.Unmarshal(msg.Params, &params) != nil || !validObject(params.Arguments) {
+			fail(w, http.StatusOK, id, -32602, "Invalid params")
+			return
+		}
+		if params.Name == readToolName && readAccess != nil {
+			readAccess.call(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name != toolName {
 			fail(w, http.StatusOK, id, -32602, "Invalid params")
 			return
 		}
