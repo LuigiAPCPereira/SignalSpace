@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -85,13 +84,17 @@ func TestQuickPanelOAuthDecisionAcrossActualListeners(t *testing.T) {
 	}
 
 	status, bootstrapJSON, bootstrapCookies := adminHTTP(t, client, "http://"+admin.AdminAddress, adminHost, "GET", adminBase+"/session", "", "", "", nil)
-	var bootstrap struct{ CSRF string `json:"csrf_token"` }
+	var bootstrap struct {
+		CSRF string `json:"csrf_token"`
+	}
 	if status != 200 || json.Unmarshal([]byte(bootstrapJSON), &bootstrap) != nil || bootstrap.CSRF == "" {
 		t.Fatalf("bootstrap failed: %d", status)
 	}
 	pairing := fmt.Sprintf(`{"pairing_code":%q,"passphrase":"long-local-owner-passphrase"}`, match[1])
 	status, sessionJSON, pairedCookies := adminHTTP(t, client, "http://"+admin.AdminAddress, adminHost, "POST", adminBase+"/pair", pairing, admin.AdminOrigin, bootstrap.CSRF, adminHTTPCookie(t, bootstrapCookies, "signalspace_admin_bootstrap"))
-	var owner struct{ CSRF string `json:"csrf_token"` }
+	var owner struct {
+		CSRF string `json:"csrf_token"`
+	}
 	if status != 201 || json.Unmarshal([]byte(sessionJSON), &owner) != nil || owner.CSRF == "" {
 		t.Fatalf("owner pairing failed: %d", status)
 	}
@@ -99,7 +102,9 @@ func TestQuickPanelOAuthDecisionAcrossActualListeners(t *testing.T) {
 
 	registration := fmt.Sprintf(`{"client_name":"Quick listener test","redirect_uris":[%q],"grant_types":["authorization_code"],"response_types":["code"],"token_endpoint_auth_method":"none"}`, readTestCallback)
 	status, registeredJSON, _ := adminHTTP(t, client, "http://"+admin.PublicAddress, publicHost, "POST", "/register", registration, "", "", nil)
-	var registered struct{ ClientID string `json:"client_id"` }
+	var registered struct {
+		ClientID string `json:"client_id"`
+	}
 	if status != 201 || json.Unmarshal([]byte(registeredJSON), &registered) != nil || registered.ClientID == "" {
 		t.Fatalf("public registration failed: %d", status)
 	}
@@ -119,9 +124,9 @@ func TestQuickPanelOAuthDecisionAcrossActualListeners(t *testing.T) {
 	status, listJSON, _ := adminHTTP(t, client, "http://"+admin.AdminAddress, adminHost, "GET", adminBase+"/requests", "", "", "", ownerCookie)
 	var list struct {
 		Requests []struct {
-			ID string `json:"id"`
-			Version int `json:"version"`
-			Status string `json:"status"`
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+			Status  string `json:"status"`
 		} `json:"requests"`
 	}
 	if status != 200 || json.Unmarshal([]byte(listJSON), &list) != nil || len(list.Requests) != 1 || list.Requests[0].Status != "PENDING" || list.Requests[0].Version != 1 || list.Requests[0].ID == "" {
