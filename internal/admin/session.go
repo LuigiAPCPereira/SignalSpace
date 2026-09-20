@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	pairingTTL       = 5 * time.Minute
-	bootstrapTTL     = 5 * time.Minute
-	idleTTL          = 15 * time.Minute
-	absoluteTTL      = time.Hour
-	unlockWindow     = 15 * time.Minute
-	passwordRounds   = 600000
+	pairingTTL        = 5 * time.Minute
+	bootstrapTTL      = 5 * time.Minute
+	idleTTL           = 15 * time.Minute
+	absoluteTTL       = time.Hour
+	unlockWindow      = 15 * time.Minute
+	passwordRounds    = 600000
 	maxBootstrapCount = 64
 )
 
@@ -57,19 +57,19 @@ type sessionRecord struct {
 // Gate mantém a identidade do proprietário apenas na memória do processo Quick.
 // Nenhuma operação usa IP local, JWT OAuth ou cookie público como autenticação.
 type Gate struct {
-	mu            sync.Mutex
-	now           func() time.Time
-	pairHash      [32]byte
-	pairUntil     time.Time
-	pairFailures  int
-	paired        bool
-	passwordSalt  [16]byte
-	passwordHash  [32]byte
-	unlockStart   time.Time
-	unlockFails   int
-	unlockUntil   time.Time
-	bootstraps    map[[32]byte]bootstrapRecord
-	sessions      map[[32]byte]sessionRecord
+	mu           sync.Mutex
+	now          func() time.Time
+	pairHash     [32]byte
+	pairUntil    time.Time
+	pairFailures int
+	paired       bool
+	passwordSalt [16]byte
+	passwordHash [32]byte
+	unlockStart  time.Time
+	unlockFails  int
+	unlockUntil  time.Time
+	bootstraps   map[[32]byte]bootstrapRecord
+	sessions     map[[32]byte]sessionRecord
 }
 
 func randomToken(size int) (string, error) {
