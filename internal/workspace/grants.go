@@ -8,13 +8,14 @@ import (
 
 var ErrNotAuthorized = errors.New("workspace session not authorized")
 
-// Grants mantém, no máximo, uma raiz concedida pelo terminal para a identidade
-// OAuth da instância. Nenhuma entrada HTTP pode criar ou ampliar essa concessão.
+// Grants mantém, no máximo, uma raiz concedida pelo terminal ao proprietário e
+// ao cliente OAuth selecionado. Nenhuma entrada HTTP cria ou amplia a concessão.
 type Grants struct {
-	mu      sync.Mutex
-	owner   string
-	current *Session
-	closed  bool
+	mu       sync.Mutex
+	owner    string
+	clientID string
+	current  *Session
+	closed   bool
 }
 
 func NewGrants(owner string) (*Grants, error) {
@@ -24,9 +25,26 @@ func NewGrants(owner string) (*Grants, error) {
 	return &Grants{owner: owner}, nil
 }
 
-// Grant só deve ser chamado depois da confirmação local do caminho exato.
+// validClientID aceita apenas IDs aleatórios do registro OAuth integrado.
+func validClientID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for _, r := range id {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// Grant recebe o cliente escolhido pelo proprietário no terminal.
 // Uma nova concessão revoga a anterior antes de tornar a nova disponível.
-func (g *Grants) Grant(root string) (string, error) {
+func (g *Grants) Grant(root, clientID string) (string, error) {
+	if !validClientID(clientID) {
+		return "", ErrNotAuthorized
+	}
 	opened, err := OpenApprovedRoot(root)
 	if err != nil {
 		return "", err
@@ -41,22 +59,25 @@ func (g *Grants) Grant(root string) (string, error) {
 		if err := g.current.Close(); err != nil {
 			_ = opened.Close()
 			g.current = nil
+			g.clientID = ""
 			return "", err
 		}
 	}
 	g.current = opened
+	g.clientID = clientID
 	return opened.ID(), nil
 }
 
-// ReadText exige identidade autorizada e ID exato. Revogação e leitura são
-// serializadas: quando Revoke retorna, nenhuma leitura antiga permanece ativa.
-func (g *Grants) ReadText(owner, id, relative string) (string, error) {
+// ReadText exige proprietário, cliente e sessão exatos. A fronteira de transporte
+// deverá fornecer clientID somente após validar assinatura e escopo de leitura.
+// Revogação e leitura são serializadas pelo mesmo mutex.
+func (g *Grants) ReadText(owner, clientID, id, relative string) (string, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
 		return "", ErrClosed
 	}
-	if owner != g.owner || g.current == nil || id != g.current.ID() {
+	if owner != g.owner || !validClientID(clientID) || clientID != g.clientID || g.current == nil || id != g.current.ID() {
 		return "", ErrNotAuthorized
 	}
 	return g.current.ReadText(relative)
@@ -74,6 +95,7 @@ func (g *Grants) Revoke(id string) error {
 	}
 	err := g.current.Close()
 	g.current = nil
+	g.clientID = ""
 	return err
 }
 
@@ -90,5 +112,6 @@ func (g *Grants) Close() error {
 	}
 	err := g.current.Close()
 	g.current = nil
+	g.clientID = ""
 	return err
 }

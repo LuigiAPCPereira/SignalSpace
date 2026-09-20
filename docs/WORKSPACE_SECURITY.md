@@ -44,3 +44,13 @@ A aprovação de uma raiz para arquivos **não confina processos**. Shell, Git e
 ## Evidência automatizada
 
 Testes em `internal/workspace/grants_test.go` e `cmd/signalspace/workspace_console_test.go` cobrem concessão inexistente, identidade divergente, confirmação separada, cancelamento, expiração, raízes amplas, revogação, substituição e encerramento. Testes em `internal/workspace/session_test.go` cobrem texto permitido, IDs de sessão, raízes amplas ou symlink, traversal, links intermediários e finais, limites de tamanho, binário, diretório, inexistência, fechamento e substituição de pathname depois da abertura. Isso verifica a camada interna, não uma autorização pelo proprietário nem a execução no ChatGPT Web.
+
+## Associação explícita ao cliente OAuth (fatia interna seguinte)
+
+Nesta instância, depois de concluir OAuth até a **emissão do token**, o operador local pode usar `workspace clients` para consultar os IDs dos clientes com token gerado. Um simples registro dinâmico, uma solicitação de autorização pendente ou a aprovação sem troca de código **não** torna o cliente elegível. O nome é apenas metadado declarado no registro, não atestação do aplicativo.
+
+O comando mudou para `workspace request <client-id> <raiz-absoluta-canônica>`; a confirmação posterior exibe tanto o ID do cliente quanto a raiz exata. `workspace approve <id>` grava somente essa combinação de proprietário, cliente e sessão. Uma leitura interna deve apresentar os **três identificadores corretos**; outro registro OAuth do mesmo proprietário é rejeitado mesmo conhecendo o ID da sessão. Substituição, revogação e encerramento invalidam a associação anterior. Somente o terminal cria, substitui ou revoga concessões. IDs apresentados por argumentos MCP não são identidades verificadas.
+
+Uma autorização vincula-se ao registro do cliente, **não a um chat**. Conversas diferentes só reutilizarão o mesmo acesso se o cliente efetivamente reutilizar esse registro e uma futura ferramenta receber um token válido com escopo de leitura. O SignalSpace não identifica chats nem transfere histórico/conteúdo entre conversas. Uma nova instância de `connect quick` cria identidade e registro distintos e exige nova autorização.
+
+**Ainda não há ferramenta de arquivo no MCP, não há emissão de `signalspace:workspace.read`, nem vínculo entre uma requisição remota e esta concessão.** Antes de habilitar leitura, a fronteira MCP deverá chamar `VerifyIdentity` exigindo escopo específico e repassar exclusivamente o `OwnerSubject` e `ClientID` verificados ao gerenciador, aplicando o ID de sessão e os limites de path. Validar em integração com projeto descartável e testes negativos. A lista local de clientes elegíveis não confere escopo de leitura ou atesta que o software é ChatGPT.

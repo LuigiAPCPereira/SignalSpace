@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,12 @@ type Config struct {
 }
 
 type RequestInfo struct{ ID, Client, Redirect string }
+
+// ClientInfo contém apenas metadados já registrados, exibidos somente no terminal.
+type ClientInfo struct {
+	ID   string
+	Name string
+}
 type client struct {
 	Name      string
 	Redirects []string
@@ -81,6 +88,7 @@ type Server struct {
 	store   *identityStore
 	mu      sync.Mutex
 	clients map[string]client
+	issued  map[string]bool
 	pending map[string]pending
 	codes   map[string]grant
 	quotas  map[string]requestQuota
@@ -98,7 +106,7 @@ func New(config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, pending: make(map[string]pending), codes: make(map[string]grant), quotas: make(map[string]requestQuota)}, nil
+	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, issued: make(map[string]bool), pending: make(map[string]pending), codes: make(map[string]grant), quotas: make(map[string]requestQuota)}, nil
 }
 
 // Close libera a trava do estado; não preserva códigos e aprovações temporárias.
@@ -107,6 +115,22 @@ func (s *Server) Close() error { return s.store.Close() }
 func (s *Server) PublicKey() *rsa.PublicKey { return &s.key.PublicKey }
 func (s *Server) KeyID() string             { return s.keyID }
 func (s *Server) OwnerSubject() string      { return ownerSubject }
+
+// IssuedClients retorna somente registros para os quais esta instância gerou
+// um token após consentimento e troca válida do código. Não atesta o software
+// cliente e não implica consentimento de workspace ou escopo de leitura.
+func (s *Server) IssuedClients() []ClientInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clients := make([]ClientInfo, 0, len(s.issued))
+	for id := range s.issued {
+		if registered, ok := s.clients[id]; ok {
+			clients = append(clients, ClientInfo{ID: id, Name: registered.Name})
+		}
+	}
+	sort.Slice(clients, func(i, j int) bool { return clients[i].ID < clients[j].ID })
+	return clients
+}
 
 func randomID(n int) (string, error) {
 	b := make([]byte, n)
@@ -558,5 +582,8 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jwt := signed + "." + base64.RawURLEncoding.EncodeToString(sig)
+	s.mu.Lock()
+	s.issued[g.ClientID] = true
+	s.mu.Unlock()
 	jsonReply(w, 200, map[string]any{"access_token": jwt, "token_type": "Bearer", "expires_in": int(tokenTTL.Seconds()), "scope": s.config.Scope})
 }

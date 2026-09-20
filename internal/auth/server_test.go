@@ -106,6 +106,9 @@ func redeem(h http.Handler, clientID, code, verifier, resource string) *httptest
 func TestCompleteOAuthFlowAndSingleUse(t *testing.T) {
 	s, h, events := startAuth(t)
 	id := register(t, h)
+	if len(s.IssuedClients()) != 0 {
+		t.Fatal("registered client listed before OAuth token")
+	}
 	metadata := invoke(h, "GET", "/.well-known/oauth-authorization-server", "", "", nil)
 	if metadata.Code != 200 || !strings.Contains(metadata.Body.String(), `"registration_endpoint"`) {
 		t.Fatal("missing discovery")
@@ -127,6 +130,9 @@ func TestCompleteOAuthFlowAndSingleUse(t *testing.T) {
 	}
 	if err := s.Approve(p.ID, true); err != nil {
 		t.Fatal(err)
+	}
+	if len(s.IssuedClients()) != 0 {
+		t.Fatal("approved but unredeemed client listed")
 	}
 	if err := s.Approve(p.ID, true); err == nil {
 		t.Fatal("duplicate owner approval")
@@ -163,6 +169,10 @@ func TestCompleteOAuthFlowAndSingleUse(t *testing.T) {
 	tokenResponse := redeem(h, id, code, testVerifier, resourceURL)
 	if tokenResponse.Code != 200 {
 		t.Fatalf("token exchange %d %s", tokenResponse.Code, tokenResponse.Body.String())
+	}
+	issued := s.IssuedClients()
+	if len(issued) != 1 || issued[0].ID != id || issued[0].Name != "ChatGPT" {
+		t.Fatalf("client eligible after token exchange: %+v", issued)
 	}
 	var token struct {
 		AccessToken string `json:"access_token"`
@@ -220,6 +230,9 @@ func TestBoundariesAndDenial(t *testing.T) {
 	}
 	if w := complete(h, p.ID, csrf, cookie); w.Code != 403 {
 		t.Fatal("denied request accepted")
+	}
+	if got := s.IssuedClients(); len(got) != 0 {
+		t.Fatalf("denied client eligible: %+v", got)
 	}
 	if w := invoke(h, "POST", "/approve", p.ID, "application/json", nil); w.Code != 404 {
 		t.Fatalf("public approval endpoint exists: %d", w.Code)

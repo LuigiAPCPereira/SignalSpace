@@ -114,7 +114,7 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 	}
 	fmt.Fprintf(output, "Diagnóstico HTTPS aprovado. Cole no ChatGPT Web: %s\n", resource)
 	fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
-	fmt.Fprintln(output, "Workspace local: workspace request <absolute-path> (exige confirmação posterior; nenhuma leitura MCP habilitada).")
+	fmt.Fprintln(output, "Workspace local: workspace clients; workspace request <client-id> <absolute-path> (aprovação posterior; nenhuma leitura MCP habilitada).")
 	go serveTerminalCommands(authorization, console, reader, output)
 	select {
 	case <-ctx.Done():
