@@ -21,16 +21,16 @@ import (
 
 func main() {
 	if len(os.Args) != 1 {
-		if (len(os.Args) == 3 || (len(os.Args) == 4 && os.Args[3] == "read")) && os.Args[1] == "connect" && os.Args[2] == "quick" {
+		if read, panel, ok := quickModeArgs(os.Args[1:]); ok {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer stop()
-			if err := runQuickMode(ctx, os.Stdin, os.Stdout, len(os.Args) == 4); err != nil {
+			if err := runQuickModePanel(ctx, os.Stdin, os.Stdout, read, panel); err != nil {
 				log.Fatal(err)
 			}
 			return
 		}
 		if len(os.Args) != 3 || os.Args[1] != "doctor" {
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read]]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read] [panel]]")
 		}
 		var err error
 		switch os.Args[2] {
@@ -39,7 +39,7 @@ func main() {
 		case "transport":
 			err = runTransportDoctor(context.Background(), os.Stdout)
 		default:
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read]]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read] [panel]]")
 		}
 		if err != nil {
 			log.Fatal(err)
@@ -273,7 +273,7 @@ func runTransportDoctor(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Public HTTPS resource: reachable (%s)\n", report.ResourceURL)
+	fmt.Fprintf(out, "Public HTTPS resource: reachable (%s\n", report.ResourceURL)
 	fmt.Fprintf(out, "OAuth issuer and metadata: consistent (%s)\n", report.Issuer)
 	fmt.Fprintln(out, "JWKS and unauthenticated MCP challenges: verified")
 	fmt.Fprintln(out, "NOT VERIFIED: owner login/consent, real ChatGPT OAuth callback, token exchange and ChatGPT Web invocation.")
