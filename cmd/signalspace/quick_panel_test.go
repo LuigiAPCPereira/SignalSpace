@@ -24,7 +24,7 @@ import (
 
 func TestQuickModeArgumentsRequireExplicitPanel(t *testing.T) {
 	for _, tc := range []struct {
-		args []string
+		args            []string
 		read, panel, ok bool
 	}{
 		{[]string{"connect", "quick"}, false, false, true},
