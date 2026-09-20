@@ -58,12 +58,13 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 		return nil
 	}
 
-	// Reservar a porta antes de publicar: não expor outro serviço por engano.
-	listener, err := net.Listen("tcp", "127.0.0.1:7676")
+	// O modo terminal usa apenas a porta pública. A reserva conjunta do painel
+	// fica preparada, mas não é selecionável até completar os gates HTTP.
+	ports, err := reserveQuickPorts(false)
 	if err != nil {
-		return fmt.Errorf("bind diagnostic loopback: %w", err)
+		return err
 	}
-	defer listener.Close()
+	defer ports.Close()
 	quick, err := start(ctx)
 	if err != nil {
 		return err
@@ -93,7 +94,7 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 	serveDone := make(chan error, 1)
 	serverExited := make(chan struct{})
 	go func() {
-		serveDone <- server.Serve(listener)
+		serveDone <- server.Serve(ports.Public)
 		close(serverExited)
 	}()
 	defer func() {
