@@ -153,7 +153,9 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (h
 		}
 	}}
 	if enableRead {
+		// Ambas as ferramentas usam a mesma concessão revogável do terminal.
 		mcpConfig.WorkspaceReader = grants
+		mcpConfig.WorkspaceLister = grants
 	}
 	protected, err := mcp.NewOAuthHandler(mcpConfig, verifier)
 	if err != nil {

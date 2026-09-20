@@ -36,6 +36,9 @@ type OAuthConfig struct {
 	// WorkspaceReader é opcional e nunca é configurado por parâmetros HTTP.
 	// Uma instância sem este componente permanece exclusivamente diagnóstico.
 	WorkspaceReader WorkspaceTextReader
+	// WorkspaceLister é independente e só pode ser habilitado com WorkspaceReader.
+	// A composição local deve injetar a mesma concessão nas duas portas.
+	WorkspaceLister WorkspaceDirectoryLister
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
@@ -58,6 +61,9 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	issuer, err := parseSecureURL(config.Issuer)
 	if err != nil || issuer.String() != config.Issuer {
 		return nil, errors.New("OAuth issuer must be an absolute HTTPS URL")
+	}
+	if config.WorkspaceLister != nil && config.WorkspaceReader == nil {
+		return nil, errors.New("workspace directory listing requires workspace reader")
 	}
 	var identityVerifier IdentityVerifier
 	if config.WorkspaceReader != nil {
@@ -126,6 +132,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			readAccess = &readToolAccess{
 				reader: config.WorkspaceReader,
+				lister: config.WorkspaceLister,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
 					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceReadScope, config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {

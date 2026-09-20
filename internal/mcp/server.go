@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	protocolVersion = "2025-06-18"
-	maxBodyBytes    = 64 * 1024
-	toolName        = "connection_diagnostic"
-	readToolName    = "read_file"
+	protocolVersion       = "2025-06-18"
+	maxBodyBytes          = 64 * 1024
+	toolName              = "connection_diagnostic"
+	readToolName          = "read_file"
+	listDirectoryToolName = "list_directory"
 )
 
 type request struct {
@@ -210,6 +211,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		instructions := "Diagnostic only; no development tools are available."
 		if readAccess != nil {
 			instructions = "File reading requires a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
+			if readAccess.lister != nil {
+				instructions = "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
+			}
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"protocolVersion": protocolVersion,
@@ -232,6 +236,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		tools := []any{tool}
 		if readAccess != nil {
 			tools = append(tools, readToolDefinition())
+			if readAccess.lister != nil {
+				tools = append(tools, listDirectoryToolDefinition())
+			}
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"tools": tools,
@@ -250,6 +257,10 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		}
 		if params.Name == readToolName && readAccess != nil {
 			readAccess.call(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == listDirectoryToolName && readAccess != nil && readAccess.lister != nil {
+			readAccess.list(w, r.Context(), id, params.Arguments)
 			return
 		}
 		if params.Name != toolName {
