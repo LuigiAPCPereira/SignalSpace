@@ -68,7 +68,7 @@ Concentrar parse/validação em uma fronteira. Raízes permitidas, URL pública,
 
 ## 15. Testes e gates
 
-Testar comportamento observável, inclusive falhas de autenticação, root escape, symlink, perda de resposta e cancelamento conforme cada recurso for implementado. Registrar baseline antes da mudança e executar formatação, testes, análise estática, build e smoke relevantes à stack escolhida. A stack ainda não foi definida; não inventar comandos de testes inexistentes.
+Testar comportamento observável, inclusive falhas de autenticação, root escape, symlink, perda de resposta e cancelamento conforme cada recurso for implementado. Stack vigente: Go; registrar baseline e executar `gofmt`, `go test ./...`, `go test -race` nos pacotes afetados, `go vet ./...`, `go build ./...` e smoke pertinente ao escopo. Não declarar que um gate valida comportamento de navegador ou túnel não exercitado.
 
 ## 16. Git
 
