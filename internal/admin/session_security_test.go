@@ -113,9 +113,8 @@ func TestGateConcurrentVerificationAfterLockReturns(t *testing.T) {
 		t.Fatal(err)
 	}
 	group.Wait()
-	close(results)
-	for err := range results {
-		if err != nil && !errors.Is(err, ErrAccessDenied) {
+	for i := 0; i < workers; i++ {
+		if err := <-results; err != nil && !errors.Is(err, ErrAccessDenied) {
 			t.Fatalf("unexpected concurrent result: %v", err)
 		}
 	}
