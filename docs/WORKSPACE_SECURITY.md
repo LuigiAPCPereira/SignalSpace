@@ -1,6 +1,6 @@
 # Fronteira de workspace: leitura de texto (fatia M2 interna)
 
-**Estado:** `internal/workspace` implementa uma sessão de leitura restrita a uma raiz fornecida pelo controle local, com testes negativos. **Não há aprovação de raiz via terminal, ferramenta MCP de workspace, leitura remota, Git, edição ou shell nesta entrega.** A prova de conectividade do M1 não autoriza implicitamente nenhum diretório.
+**Estado:** `internal/workspace` implementa sessões com raiz restrita e um gerenciador de concessão revogável. `connect quick` oferece **pedido e confirmação separados somente pelo terminal local**. **Não há ferramenta MCP de workspace, leitura remota, Git, edição ou shell nesta entrega.** A prova de conectividade do M1 não autoriza implicitamente nenhum diretório.
 
 ## Comportamento implementado
 
@@ -25,12 +25,18 @@ A implementação atual é **específica para Linux**, usa exclusivamente a bibl
 | Conteúdo binário ou UTF-8 inválido | `ErrNotText` |
 | Sessão encerrada | `ErrClosed` |
 
+## Aprovação local implementada em `connect quick`
+
+Após a aprovação HTTPS, somente o operador do **stdin local** pode digitar `workspace request /caminho/absoluto/exato`. O terminal devolve o caminho entre aspas, um ID aleatório e um comando separado `workspace approve <id>` ou `workspace cancel <id>`. O pedido expira em dois minutos. Nada é aberto ou concedido durante o pedido; somente a confirmação tenta abrir a raiz via `OpenApprovedRoot`. Raiz `/`, home, caminho relativo, traversal e symlink são recusados. Um segundo pedido substitui o anterior; uma segunda aprovação revoga a sessão anterior. `workspace revoke <session-id>` revoga a concessão ativa. O encerramento normal fecha o descritor.
+
+O gerenciador mantém **uma sessão por instância**, vincula-a ao `OwnerSubject` conhecido da composição OAuth e exige a identidade e o ID exatos para operações internas de leitura. O subject do OAuth embutido representa a mesma identidade de proprietário, **não um cliente externo criptograficamente atestado ou isolamento individual entre clientes**. A concessão não é exibida por HTTP e nenhum endpoint de leitura foi habilitado. Não usar pasta com dados pessoais para demonstrações desta fatia; prefira um diretório descartável.
+
 ## Fronteiras pendentes antes de publicar qualquer ferramenta
 
-A composição local deve apresentar o **caminho real exato** escolhido pelo usuário e pedir aprovação explícita no terminal. Só depois poderá chamar `OpenApprovedRoot`; uma URL pública, um bearer OAuth válido ou um argumento de ferramenta **não podem escolher ou ampliar a raiz**. A exposição MCP precisará associar a sessão à autorização corrente, recusar IDs desconhecidos e revogar as sessões quando a autorização terminar. A seleção de projetos sob uma raiz aprovada, leitura de arquivo real pelo ChatGPT e testes de negação ponta a ponta ainda não foram realizados.
+A exposição MCP ainda precisa receber a identidade autenticada do verificador, impor escopo próprio de leitura, vincular sessão à autorização corrente e negar ID desconhecido ou revogado em testes ponta a ponta. Uma URL pública, um bearer OAuth de diagnóstico ou argumento de ferramenta **não escolhe ou amplia a raiz**. A seleção de projetos, leitura pelo ChatGPT e testes de negação remotos ainda não foram realizados.
 
 A aprovação de uma raiz para arquivos **não confina processos**. Shell, Git e edição permanecem indisponíveis, e não há promessa de sandbox. Não usar Quick Tunnel experimental para expor a futura leitura de dados privados antes de concluir os controles e o teste real com projeto descartável.
 
 ## Evidência automatizada
 
-Testes em `internal/workspace/session_test.go` cobrem texto permitido, IDs de sessão, raízes amplas ou symlink, traversal, links intermediários e finais, limites de tamanho, binário, diretório, inexistência, fechamento e substituição de pathname depois da abertura. Isso verifica a camada interna, não uma autorização pelo proprietário nem a execução no ChatGPT Web.
+Testes em `internal/workspace/grants_test.go` e `cmd/signalspace/workspace_console_test.go` cobrem concessão inexistente, identidade divergente, confirmação separada, cancelamento, expiração, raízes amplas, revogação, substituição e encerramento. Testes em `internal/workspace/session_test.go` cobrem texto permitido, IDs de sessão, raízes amplas ou symlink, traversal, links intermediários e finais, limites de tamanho, binário, diretório, inexistência, fechamento e substituição de pathname depois da abertura. Isso verifica a camada interna, não uma autorização pelo proprietário nem a execução no ChatGPT Web.
