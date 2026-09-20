@@ -48,7 +48,7 @@ func adminJSON(w http.ResponseWriter, status int, value any) {
 
 func adminError(w http.ResponseWriter, status int, code, message string) {
 	adminJSON(w, status, map[string]any{
-		"error": map[string]string{"code": code, "message": message},
+		"error":       map[string]string{"code": code, "message": message},
 		"server_time": time.Now().UTC().Format(time.RFC3339Nano),
 	})
 }
@@ -92,10 +92,10 @@ func adminBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 func sessionModel(session Session) map[string]any {
 	return map[string]any{
 		"state": "AUTHENTICATED", "authenticated": true,
-		"csrf_token": session.CSRF,
-		"idle_expires_at": session.IdleUntil.UTC().Format(time.RFC3339Nano),
+		"csrf_token":          session.CSRF,
+		"idle_expires_at":     session.IdleUntil.UTC().Format(time.RFC3339Nano),
 		"absolute_expires_at": session.AbsoluteAt.UTC().Format(time.RFC3339Nano),
-		"server_time": time.Now().UTC().Format(time.RFC3339Nano),
+		"server_time":         time.Now().UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -106,9 +106,9 @@ func bootstrapModel(bootstrap Bootstrap, paired bool) map[string]any {
 	}
 	return map[string]any{
 		"state": state, "authenticated": false,
-		"csrf_token": bootstrap.CSRF,
+		"csrf_token":           bootstrap.CSRF,
 		"bootstrap_expires_at": bootstrap.ExpiresAt.UTC().Format(time.RFC3339Nano),
-		"server_time": time.Now().UTC().Format(time.RFC3339Nano),
+		"server_time":          time.Now().UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -147,8 +147,8 @@ func (g *Gate) sessionHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		setCookie(w, bootstrapCookie, bootstrap.Cookie, bootstrapTTL)
 		adminJSON(w, 401, map[string]any{
-			"error": map[string]string{"code": "AUTH_REQUIRED", "message": "Desbloqueio necessário."},
-			"session": bootstrapModel(bootstrap, paired),
+			"error":       map[string]string{"code": "AUTH_REQUIRED", "message": "Desbloqueio necessário."},
+			"session":     bootstrapModel(bootstrap, paired),
 			"server_time": time.Now().UTC().Format(time.RFC3339Nano),
 		})
 		return
