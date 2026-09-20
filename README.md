@@ -2,7 +2,7 @@
 
 **Give ChatGPT a secure connection to your own machine and turn ChatGPT into Codex.**
 
-SignalSpace é um projeto independente em **Go** para conectar ferramentas de desenvolvimento da máquina do usuário ao **ChatGPT Web** via MCP HTTPS autenticado. **Ainda está em desenvolvimento.** A única ferramenta implementada é `connection_diagnostic`; não há leitura/edição de arquivos, Git ou terminal. Em teste real em 19/09/2026, o proprietário correlacionou um `diagnosticID` da resposta no ChatGPT com o registro de uma chamada MCP autenticada no terminal. Isso comprova a execução do diagnóstico naquela sessão, mas não atesta criptograficamente a identidade do cliente.
+SignalSpace é um projeto independente em **Go** para conectar ferramentas de desenvolvimento da máquina do usuário ao **ChatGPT Web** via MCP HTTPS autenticado. **Ainda está em desenvolvimento.** Por padrão, a única ferramenta pública é `connection_diagnostic`; existe um modo experimental de leitura explicitamente opt-in, sem edição, Git ou terminal. Em teste real em 19/09/2026, o proprietário correlacionou um `diagnosticID` da resposta no ChatGPT com o registro de uma chamada MCP autenticada no terminal. Isso comprova a execução do diagnóstico naquela sessão, mas não atesta criptograficamente a identidade do cliente.
 
 ## Primeira experiência: Quick Tunnel experimental
 
@@ -15,7 +15,7 @@ go test ./...
 go run ./cmd/signalspace connect quick
 ```
 
-Leia [passo a passo, consentimento e limites do Quick Tunnel](docs/QUICK_TUNNEL.md). O SignalSpace não instala executáveis automaticamente. A URL `trycloudflare.com` muda entre sessões; é necessário atualizar/recriar o conector no ChatGPT. A criação de um plugin personalizado e a chamada de diagnóstico foram observadas na conta utilizada no teste; isso não comprova disponibilidade em outras contas, planos ou sessões.
+O terminal aceita `workspace clients` e `workspace request <client-id> <absolute-path>`, com confirmação separada e revogação. No modo padrão, isso **não expõe arquivos ao MCP**. Para um teste exclusivamente com pasta descartável não sensível, existe `go run ./cmd/signalspace connect quick read`, que exige confirmação distinta `PUBLICAR LEITURA`, concessão local vinculada ao cliente e novo consentimento OAuth de leitura. Ainda não foi testado com ChatGPT Web. Consulte o [contrato de segurança de workspace](docs/WORKSPACE_SECURITY.md). Leia [passo a passo, consentimento e limites do Quick Tunnel](docs/QUICK_TUNNEL.md). O SignalSpace não instala executáveis automaticamente. A URL `trycloudflare.com` muda entre sessões; é necessário atualizar/recriar o conector no ChatGPT. A criação de um plugin personalizado e a chamada de diagnóstico foram observadas na conta utilizada no teste; isso não comprova disponibilidade em outras contas, planos ou sessões.
 
 ## Diagnóstico local, sem publicar
 
@@ -36,7 +36,7 @@ O uso de provedor OAuth externo é opcional, sem fallback para bearer local. Vej
 
 ## Produto e segurança
 
-Fluxo desejado: iniciar serviço → estabelecer HTTPS → conectar e autorizar ChatGPT Web → abrir workspace aprovado → inspecionar código → editar → executar testes/comandos → revisar alterações. Workspaces, leitura/edição, terminal, Git, diffs e continuidade entre conversas são trabalhos futuros. Não planejamos frontend substituto do ChatGPT, IA própria, agent-runtime, agent-orchestrator, fork/dependência do DevSpace ou subagentes nesta fase.
+Fluxo desejado: iniciar serviço → estabelecer HTTPS → conectar e autorizar ChatGPT Web → abrir workspace aprovado → inspecionar código → editar → executar testes/comandos → revisar alterações. A leitura MCP está disponível somente no modo experimental `connect quick read`, mediante consentimento OAuth separado e concessão local revogável; edição, terminal, Git, diffs e continuidade de histórico entre conversas são trabalhos futuros. Não planejamos frontend substituto do ChatGPT, IA própria, agent-runtime, agent-orchestrator, fork/dependência do DevSpace ou subagentes nesta fase.
 
 O processo escuta somente em loopback, embora o túnel permita acesso público explicitamente autorizado. Nenhuma ferramenta poderosa é exposta enquanto o vínculo do proprietário não for validado. **Quando implementado, o shell terá os privilégios do usuário local; uma allowlist de arquivos não é sandbox.** Uma chamada real da ferramenta de diagnóstico foi correlacionada no teste do proprietário; compatibilidade com outros planos e ferramentas de desenvolvimento não foi verificada.
 

@@ -21,25 +21,39 @@ type quickVerifier func(context.Context, string) (mcp.TransportReport, error)
 
 // runQuick só apresenta o endereço quando a URL pública passa no diagnóstico.
 func runQuick(ctx context.Context, input io.Reader, output io.Writer) error {
-	return runQuickWith(ctx, input, output, tunnel.Start, func(ctx context.Context, resource string) (mcp.TransportReport, error) {
+	return runQuickMode(ctx, input, output, false)
+}
+
+func runQuickMode(ctx context.Context, input io.Reader, output io.Writer, read bool) error {
+	return runQuickWithMode(ctx, input, output, tunnel.Start, func(ctx context.Context, resource string) (mcp.TransportReport, error) {
 		return mcp.CheckEmbeddedTransport(ctx, resource, nil)
-	})
+	}, read)
 }
 
 func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier) error {
+	return runQuickWithMode(ctx, input, output, start, verify, false)
+}
+
+func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read bool) error {
 	for _, name := range []string{"SIGNALSPACE_AUTH_MODE", "SIGNALSPACE_RESOURCE_URL", "SIGNALSPACE_OAUTH_ISSUER", "SIGNALSPACE_JWKS_URL", "SIGNALSPACE_OAUTH_OWNER_SUBJECT", "SIGNALSPACE_LOCAL_TOKEN", "SIGNALSPACE_STATE_DIR"} {
 		if os.Getenv(name) != "" {
 			return fmt.Errorf("connect quick requires %s to be unset (isolated OAuth state)", name)
 		}
 	}
-	fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública na internet, somente com connection_diagnostic. Sem arquivos, Git ou terminal.")
-	fmt.Fprintln(output, "Digite PUBLICAR para iniciar o túnel. Qualquer outra resposta cancela.")
+	confirmation := "PUBLICAR"
+	if read {
+		confirmation = "PUBLICAR LEITURA"
+		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública. read_file poderá ler texto de uma pasta aprovada para um cliente OAuth; nunca use pastas com segredos nesta fase. Sem edição, Git ou shell.")
+	} else {
+		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública na internet, somente com connection_diagnostic. Sem arquivos, Git ou terminal.")
+	}
+	fmt.Fprintf(output, "Digite %s para iniciar o túnel. Qualquer outra resposta cancela.\n", confirmation)
 	reader := bufio.NewReader(input)
 	answer, err := reader.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
-	if strings.TrimSpace(answer) != "PUBLICAR" {
+	if strings.TrimSpace(answer) != confirmation {
 		fmt.Fprintln(output, "Conexão cancelada; nenhum túnel iniciado.")
 		return nil
 	}
@@ -63,14 +77,16 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 	}
 	defer os.RemoveAll(stateDir)
 	resource := quick.URL + "/mcp"
-	handler, authorization, err := embeddedHandler(resource, stateDir)
+	handler, authorization, console, err := embeddedHandlerWithWorkspace(resource, stateDir, read)
 	if err != nil {
 		return err
 	}
 	defer authorization.Close()
-	console, err := newWorkspaceConsole(authorization)
-	if err != nil {
-		return err
+	if !read {
+		console, err = newWorkspaceConsole(authorization)
+		if err != nil {
+			return err
+		}
 	}
 	defer console.Close()
 	server := diagnosticServer(handler)
@@ -114,7 +130,11 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 	}
 	fmt.Fprintf(output, "Diagnóstico HTTPS aprovado. Cole no ChatGPT Web: %s\n", resource)
 	fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
-	fmt.Fprintln(output, "Workspace local: workspace clients; workspace request <client-id> <absolute-path> (aprovação posterior; nenhuma leitura MCP habilitada).")
+	if read {
+		fmt.Fprintln(output, "Leitura experimental: conclua OAuth de diagnóstico; workspace clients; workspace request <client-id> <absolute-path>; workspace approve <id>. Uma nova autorização OAuth com escopo de leitura é obrigatória; informe o session ID da concessão ao chat somente se quiser usar a ferramenta.")
+	} else {
+		fmt.Fprintln(output, "Workspace local: workspace clients; workspace request <client-id> <absolute-path> (aprovação posterior; nenhuma leitura MCP habilitada).")
+	}
 	go serveTerminalCommands(authorization, console, reader, output)
 	select {
 	case <-ctx.Done():

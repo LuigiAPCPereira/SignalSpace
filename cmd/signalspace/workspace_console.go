@@ -32,6 +32,7 @@ type workspaceConsole struct {
 	mu            sync.Mutex
 	grants        *workspace.Grants
 	issuedClients func() []auth.ClientInfo
+	readEnabled   bool
 	pending       *pendingWorkspace
 }
 
@@ -129,7 +130,9 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 		// %q impede que caracteres de controle de um nome de pasta alterem o terminal.
 		fmt.Fprintf(output, "Pasta solicitada (somente leitura): %q\nCliente OAuth selecionado: %s\n", root, clientID)
 		fmt.Fprintf(output, "Confirme o caminho exato com workspace approve %s ou cancele com workspace cancel %s (expira em 2 minutos).\n", id, id)
-		fmt.Fprintln(output, "Nenhuma ferramenta de arquivo foi habilitada no MCP.")
+		if !c.readEnabled {
+			fmt.Fprintln(output, "Nenhuma ferramenta de arquivo foi habilitada no MCP.")
+		}
 	case "approve", "cancel":
 		if c.pending == nil || argument != c.pending.id || time.Now().After(c.pending.expires) {
 			c.pending = nil
@@ -152,7 +155,11 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			return true
 		}
 		fmt.Fprintf(output, "Local workspace grant created: session=%s client=%s. Revoke using workspace revoke %s\n", id, pending.clientID, id)
-		fmt.Fprintln(output, "A concessão é interna e local; o MCP continua oferecendo somente connection_diagnostic.")
+		if c.readEnabled {
+			fmt.Fprintln(output, "A leitura requer um novo consentimento OAuth com signalspace:workspace.read e o ID da sessão. Revogue com workspace revoke <session-id>.")
+		} else {
+			fmt.Fprintln(output, "A concessão é interna e local; o MCP continua oferecendo somente connection_diagnostic.")
+		}
 	case "revoke":
 		if err := c.grants.Revoke(argument); err != nil {
 			fmt.Fprintln(output, "workspace session not active or already revoked")

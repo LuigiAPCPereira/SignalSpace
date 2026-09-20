@@ -68,6 +68,14 @@ func (g *Grants) Grant(root, clientID string) (string, error) {
 	return opened.ID(), nil
 }
 
+// AllowsClient só é usada pelo emissor OAuth para verificar a concessão corrente.
+// Não retorna o ID da sessão e não autoriza uma leitura por si só.
+func (g *Grants) AllowsClient(clientID string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID
+}
+
 // ReadText exige proprietário, cliente e sessão exatos. A fronteira de transporte
 // deverá fornecer clientID somente após validar assinatura e escopo de leitura.
 // Revogação e leitura são serializadas pelo mesmo mutex.

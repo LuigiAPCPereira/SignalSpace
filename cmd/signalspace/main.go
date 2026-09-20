@@ -16,20 +16,21 @@ import (
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/auth"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
+	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
 )
 
 func main() {
 	if len(os.Args) != 1 {
-		if len(os.Args) == 3 && os.Args[1] == "connect" && os.Args[2] == "quick" {
+		if (len(os.Args) == 3 || (len(os.Args) == 4 && os.Args[3] == "read")) && os.Args[1] == "connect" && os.Args[2] == "quick" {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer stop()
-			if err := runQuick(ctx, os.Stdin, os.Stdout); err != nil {
+			if err := runQuickMode(ctx, os.Stdin, os.Stdout, len(os.Args) == 4); err != nil {
 				log.Fatal(err)
 			}
 			return
 		}
 		if len(os.Args) != 3 || os.Args[1] != "doctor" {
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read]]")
 		}
 		var err error
 		switch os.Args[2] {
@@ -38,7 +39,7 @@ func main() {
 		case "transport":
 			err = runTransportDoctor(context.Background(), os.Stdout)
 		default:
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read]]")
 		}
 		if err != nil {
 			log.Fatal(err)
@@ -96,34 +97,67 @@ func main() {
 	}
 }
 
-// embeddedHandler é a composição única dos servidores de autorização e de recursos.
+// embeddedHandler preserva a composição de diagnóstico sem concessões de arquivos.
 func embeddedHandler(resource, stateDir string) (http.Handler, *auth.Server, error) {
+	handler, authorization, _, err := embeddedHandlerWithWorkspace(resource, stateDir, false)
+	return handler, authorization, err
+}
+
+// embeddedHandlerWithWorkspace cria uma única concessão compartilhada entre
+// terminal, emissor OAuth e recurso MCP; a opção precisa vir do operador local.
+func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (http.Handler, *auth.Server, *workspaceConsole, error) {
 	issuer := strings.TrimSuffix(resource, "/mcp")
-	authorization, err := auth.New(auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
+	var grants *workspace.Grants
+	authConfig := auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
 		log.Printf("Authorization requested: %s; client: %s; client_id: %s; redirect: %s; scope: %s; type approve %s or deny %s", info.ID, info.Client, info.ClientID, info.Redirect, info.Scope, info.ID, info.ID)
 	}, OnRegistrationFailure: func(reason string) {
-		// Categoria fixa; nunca registrar o corpo da requisição ou credenciais OAuth.
+		// Categoria fixa: não registrar corpos nem credenciais OAuth.
 		log.Printf("OAuth client registration rejected: %s (client metadata omitted)", reason)
-	}})
+	}}
+	if enableRead {
+		authConfig.ReadScope = "signalspace:workspace.read"
+		authConfig.CanIssueRead = func(clientID string) bool {
+			// Falhar fechado se a composição não terminou ou a concessão foi revogada.
+			return grants != nil && grants.AllowsClient(clientID)
+		}
+	}
+	authorization, err := auth.New(authConfig)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	closeFailure := func(err error) (http.Handler, *auth.Server, *workspaceConsole, error) {
+		if grants != nil {
+			_ = grants.Close()
+		}
+		_ = authorization.Close()
+		return nil, nil, nil, err
+	}
+	var console *workspaceConsole
+	if enableRead {
+		grants, err = workspace.NewGrants(authorization.OwnerSubject())
+		if err != nil {
+			return closeFailure(err)
+		}
+		console = &workspaceConsole{grants: grants, issuedClients: authorization.IssuedClients, readEnabled: true}
 	}
 	verifier, err := mcp.NewStaticJWTVerifier(authorization.PublicKey(), authorization.KeyID())
 	if err != nil {
-		_ = authorization.Close()
-		return nil, nil, err
+		return closeFailure(err)
 	}
-	protected, err := mcp.NewOAuthHandler(mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject(), OnMCPEvent: func(method, diagnosticID string) {
+	mcpConfig := mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject(), OnMCPEvent: func(method, diagnosticID string) {
 		// Registrar somente método conhecido e ID aleatório; sem token ou argumentos.
 		if method == "tools/list" {
 			log.Print("Authenticated MCP tool discovery served: tools/list")
 		} else if method == "tools/call" {
 			log.Printf("Authenticated MCP connection_diagnostic handled: diagnosticID=%s (caller identity not attested)", diagnosticID)
 		}
-	}}, verifier)
+	}}
+	if enableRead {
+		mcpConfig.WorkspaceReader = grants
+	}
+	protected, err := mcp.NewOAuthHandler(mcpConfig, verifier)
 	if err != nil {
-		_ = authorization.Close()
-		return nil, nil, err
+		return closeFailure(err)
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", protected)
@@ -132,7 +166,7 @@ func embeddedHandler(resource, stateDir string) (http.Handler, *auth.Server, err
 	for _, path := range []string{"/.well-known/oauth-authorization-server", "/oauth/jwks", "/register", "/authorize", "/authorize/complete", "/token"} {
 		mux.Handle(path, authorization.Handler())
 	}
-	return mux, authorization, nil
+	return mux, authorization, console, nil
 }
 
 // serveApprovals não oferece endpoints públicos para aceitar solicitações.
