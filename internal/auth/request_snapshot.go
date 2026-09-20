@@ -19,8 +19,6 @@ type RequestWorkspaceRead struct {
 }
 
 // RequestSnapshot é uma cópia sem cookie, PKCE, state, CSRF ou caminhos locais.
-// A retenção de COMPLETED e o instante exato da decisão ainda dependem da
-// evolução da estrutura pending; não publicar este modelo como contrato final.
 type RequestSnapshot struct {
 	ID            string               `json:"id"`
 	Version       int                  `json:"version"`
@@ -36,17 +34,19 @@ type RequestSnapshot struct {
 
 // snapshotLocked exige s.mu e calcula o grant apenas pelo serviço de concessões.
 func (s *Server) snapshotLocked(id string, p pending, now time.Time) RequestSnapshot {
-	status, version := "PENDING", 1
+	version := p.Version
+	if version == 0 {
+		version = 1 // Compatibilidade com entradas montadas por testes antigos.
+	}
+	status := "PENDING"
 	switch {
-	case !now.Before(p.Expires):
-		status = "EXPIRED"
-		version = 2
 	case p.Denied:
 		status = "DENIED"
-		version = 2
+	case !now.Before(p.Expires):
+		status = "EXPIRED"
+		version++
 	case p.Approved:
 		status = "APPROVED"
-		version = 2
 	}
 	read := s.readRequested(p.Scope)
 	grantStatus := "NOT_APPLICABLE"
@@ -56,24 +56,37 @@ func (s *Server) snapshotLocked(id string, p pending, now time.Time) RequestSnap
 			grantStatus = "ACTIVE"
 		}
 	}
+	created := p.CreatedAt
+	if created.IsZero() {
+		created = p.Expires.Add(-pendingTTL)
+	}
+	var decidedAt *time.Time
+	if !p.DecidedAt.IsZero() {
+		utc := p.DecidedAt.UTC()
+		decidedAt = &utc
+	}
 	return RequestSnapshot{
 		ID: id, Version: version, Status: status,
 		Client:      RequestClient{ID: p.ClientID, DisplayName: s.clients[p.ClientID].Name, Verified: false},
 		RedirectURI: p.Redirect, Scope: p.Scope,
 		WorkspaceRead: RequestWorkspaceRead{Required: read, GrantStatus: grantStatus},
-		CreatedAt:     p.Expires.Add(-pendingTTL).UTC(), ExpiresAt: p.Expires.UTC(),
+		CreatedAt:     created.UTC(), ExpiresAt: p.Expires.UTC(), DecidedAt: decidedAt,
 	}
 }
 
-// ListRequestSnapshots não executa clean: expiração observável não é um GET mutável.
-// O armazenamento existente ainda apaga terminais na limpeza OAuth comum.
+// ListRequestSnapshots executa limpeza limitada, sem renovar autorização ou
+// prazo. Uma expiração é transição real e passa ao armazenamento terminal.
 func (s *Server) ListRequestSnapshots() []RequestSnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
-	items := make([]RequestSnapshot, 0, len(s.pending))
+	s.clean(now)
+	items := make([]RequestSnapshot, 0, len(s.pending)+len(s.terminal))
 	for id, p := range s.pending {
 		items = append(items, s.snapshotLocked(id, p, now))
+	}
+	for _, record := range s.terminal {
+		items = append(items, s.terminalSnapshotLocked(record))
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if !items[i].CreatedAt.Equal(items[j].CreatedAt) {
@@ -84,16 +97,20 @@ func (s *Server) ListRequestSnapshots() []RequestSnapshot {
 	return items
 }
 
-// GetRequestSnapshot exige um ID exato e não confunde 404 com expiração.
+// GetRequestSnapshot exige ID exato e não confunde 404 com expiração.
 func (s *Server) GetRequestSnapshot(id string) (RequestSnapshot, error) {
 	if !requestID.MatchString(id) {
 		return RequestSnapshot{}, ErrOAuthRequestNotFound
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p, ok := s.pending[id]
-	if !ok {
-		return RequestSnapshot{}, ErrOAuthRequestNotFound
+	now := time.Now()
+	s.clean(now)
+	if p, ok := s.pending[id]; ok {
+		return s.snapshotLocked(id, p, now), nil
 	}
-	return s.snapshotLocked(id, p, time.Now()), nil
+	if record, ok := s.terminal[id]; ok {
+		return s.terminalSnapshotLocked(record), nil
+	}
+	return RequestSnapshot{}, ErrOAuthRequestNotFound
 }
