@@ -58,10 +58,10 @@ func (s *Server) snapshotLocked(id string, p pending, now time.Time) RequestSnap
 	}
 	return RequestSnapshot{
 		ID: id, Version: version, Status: status,
-		Client: RequestClient{ID: p.ClientID, DisplayName: s.clients[p.ClientID].Name, Verified: false},
+		Client:      RequestClient{ID: p.ClientID, DisplayName: s.clients[p.ClientID].Name, Verified: false},
 		RedirectURI: p.Redirect, Scope: p.Scope,
 		WorkspaceRead: RequestWorkspaceRead{Required: read, GrantStatus: grantStatus},
-		CreatedAt: p.Expires.Add(-pendingTTL).UTC(), ExpiresAt: p.Expires.UTC(),
+		CreatedAt:     p.Expires.Add(-pendingTTL).UTC(), ExpiresAt: p.Expires.UTC(),
 	}
 }
 
