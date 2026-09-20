@@ -137,9 +137,19 @@ func embeddedHandler(resource, stateDir string) (http.Handler, *auth.Server, err
 
 // serveApprovals não oferece endpoints públicos para aceitar solicitações.
 func serveApprovals(authorization *auth.Server, input io.Reader, output io.Writer) {
+	serveTerminalCommands(authorization, nil, input, output)
+}
+
+// serveTerminalCommands recebe apenas stdin local; concessões não são rotas HTTP.
+func serveTerminalCommands(authorization *auth.Server, console *workspaceConsole, input io.Reader, output io.Writer) {
 	scanner := bufio.NewScanner(input)
+	scanner.Buffer(make([]byte, 4096), 8192)
 	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
+		line := scanner.Text()
+		if console != nil && console.handleWorkspaceCommand(line, output) {
+			continue
+		}
+		fields := strings.Fields(line)
 		if len(fields) != 2 || (fields[0] != "approve" && fields[0] != "deny") {
 			fmt.Fprintln(output, "use approve <id> or deny <id>")
 			continue
