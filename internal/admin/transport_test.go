@@ -16,7 +16,7 @@ func TestAdminTransportRejectsUnexpectedOriginsAndPaths(t *testing.T) {
 	}))
 	cases := []struct {
 		name, method, path, host, origin string
-		want int
+		want                             int
 	}{
 		{"authenticated_route_transport_only", "GET", "/api/admin/v1/session", "localhost:7677", "", 204},
 		{"external_host", "GET", "/api/admin/v1/session", "evil.example", "", 403},
