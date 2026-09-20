@@ -108,6 +108,15 @@ func TestPublicStatusRejectsCrossOriginAndExpiresWithoutCode(t *testing.T) {
 	if w := complete(h, pendingRequest.ID, csrf, cookie); w.Code == http.StatusSeeOther {
 		t.Fatal("expired request issued an authorization code")
 	}
+	// O resultado da expiração deve sobreviver ao POST negado para reconciliação.
+	if w := statusCall(status, pendingRequest.ID, cookie); w.Code != http.StatusOK || statusValue(t, w)["status"] != "EXPIRED" {
+		t.Fatalf("expiry tombstone missing: %d", w.Code)
+	}
+	s.mu.Lock()
+	record := s.terminal[pendingRequest.ID]
+	record.retainUntil = time.Now().Add(-time.Second)
+	s.terminal[pendingRequest.ID] = record
+	s.mu.Unlock()
 	if w := statusCall(status, pendingRequest.ID, cookie); w.Code != http.StatusNotFound {
 		t.Fatalf("status survived definitive cleanup: %d", w.Code)
 	}
