@@ -2,7 +2,6 @@ package admin
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -95,10 +94,11 @@ func TestOAuthRequestsRequireOwnerCSRFAndExactPayload(t *testing.T) {
 	defer gate.Close()
 	fixture := newRequestFixture()
 	handler := gate.HandlerWithRequests(fixture)
+	body := `{"decision":"approve","expected_version":1}`
 	if got := adminRequest(handler, http.MethodGet, requestsPath, "", ""); got.Code != 401 {
 		t.Fatalf("unauthenticated list: %d", got.Code)
 	}
-	if got := adminRequest(handler, http.MethodPost, decisionPath(fixture.item.ID), `{"decision":"approve","expected_version":1}`, ""); got.Code != 401 {
+	if got := adminRequest(handler, http.MethodPost, decisionPath(fixture.item.ID), body, ""); got.Code != 401 {
 		t.Fatalf("unauthenticated decision: %d", got.Code)
 	}
 	handler, cookie, csrf := authenticatedRequests(t, gate, code, fixture)
@@ -112,7 +112,6 @@ func TestOAuthRequestsRequireOwnerCSRFAndExactPayload(t *testing.T) {
 	if got := adminRequest(handler, http.MethodGet, requestsPath+"/missing", "", "", cookie); got.Code != 404 {
 		t.Fatalf("unknown detail: %d", got.Code)
 	}
-	body := `{"decision":"approve","expected_version":1}`
 	if got := adminRequest(handler, http.MethodPost, decisionPath(fixture.item.ID), body, "", cookie); got.Code != 403 {
 		t.Fatalf("missing csrf accepted: %d", got.Code)
 	}
@@ -200,18 +199,18 @@ func TestOAuthDecisionAndLockAreSerialized(t *testing.T) {
 		lockDone <- result.Code
 	}()
 	close(fixture.release)
-	if code := <-decisionDone; code != 200 {
-		t.Fatalf("decision result: %d", code)
+	if result := <-decisionDone; result != 200 {
+		t.Fatalf("decision result: %d", result)
 	}
-	if code := <-lockDone; code != 200 {
-		t.Fatalf("lock result: %d", code)
+	if result := <-lockDone; result != 200 {
+		t.Fatalf("lock result: %d", result)
 	}
 	if result := adminRequest(handler, http.MethodPost, decisionPath(fixture.item.ID), `{"decision":"approve","expected_version":2}`, csrf, cookie); result.Code != 401 {
 		t.Fatalf("locked session reused: %d", result.Code)
 	}
 	fixture.mu.Lock()
 	defer fixture.mu.Unlock()
-	if fixture.decisions != 1 || !errors.Is(auth.ErrOAuthAlreadyDecided, auth.ErrOAuthAlreadyDecided) {
-		t.Fatal("unexpected decision count")
+	if fixture.decisions != 1 || fixture.item.Status != "DENIED" {
+		t.Fatal("lock raced with the committed decision")
 	}
 }
