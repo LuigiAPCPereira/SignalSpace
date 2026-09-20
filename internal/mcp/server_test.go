@@ -111,8 +111,14 @@ func TestDiagnostic(t *testing.T) {
 	if err := json.Unmarshal([]byte(content[0].(map[string]any)["text"].(string)), &diagnostic); err != nil {
 		t.Fatal(err)
 	}
-	if diagnostic["connected"] != true || diagnostic["chatgptVerified"] != false {
+	if diagnostic["connected"] != true || diagnostic["mode"] != "local_diagnostic" {
 		t.Fatalf("incorrect diagnostic: %v", diagnostic)
+	}
+	if _, exists := diagnostic["chatgptVerified"]; exists {
+		t.Fatalf("caller identity must not be claimed: %v", diagnostic)
+	}
+	if id, ok := diagnostic["diagnosticID"].(string); !ok || len(id) != 32 {
+		t.Fatalf("missing correlation identifier: %v", diagnostic)
 	}
 }
 

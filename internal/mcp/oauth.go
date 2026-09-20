@@ -25,6 +25,9 @@ type OAuthConfig struct {
 	ResourceURL  string
 	Issuer       string
 	OwnerSubject string
+	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
+	// diagnosticID é um identificador de correlação, nunca um token OAuth.
+	OnMCPEvent func(method, diagnosticID string)
 }
 
 // NewOAuthHandler separa a descoberta pública da autorização obrigatória no MCP.
@@ -96,7 +99,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			}
 			return
 		}
-		serveMCP(w, r, "oauth_diagnostic")
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent)
 	}), nil
 }
 

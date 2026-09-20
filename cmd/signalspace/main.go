@@ -113,7 +113,14 @@ func embeddedHandler(resource, stateDir string) (http.Handler, *auth.Server, err
 		_ = authorization.Close()
 		return nil, nil, err
 	}
-	protected, err := mcp.NewOAuthHandler(mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject()}, verifier)
+	protected, err := mcp.NewOAuthHandler(mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject(), OnMCPEvent: func(method, diagnosticID string) {
+		// Registrar somente método conhecido e ID aleatório; sem token ou argumentos.
+		if method == "tools/list" {
+			log.Print("Authenticated MCP tool discovery served: tools/list")
+		} else if method == "tools/call" {
+			log.Printf("Authenticated MCP connection_diagnostic handled: diagnosticID=%s (caller identity not attested)", diagnosticID)
+		}
+	}}, verifier)
 	if err != nil {
 		_ = authorization.Close()
 		return nil, nil, err

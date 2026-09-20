@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,12 +134,12 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		serveMCP(w, r, "local_diagnostic")
+		serveMCP(w, r, "local_diagnostic", nil)
 	}), nil
 }
 
 // serveMCP processa o protocolo somente após a fronteira de autenticação.
-func serveMCP(w http.ResponseWriter, r *http.Request, mode string) {
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string)) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -186,7 +188,7 @@ func serveMCP(w http.ResponseWriter, r *http.Request, mode string) {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	handle(w, msg, id, mode)
+	handle(w, msg, id, mode, onMCPEvent)
 }
 
 func isOversized(err error) bool {
@@ -194,7 +196,7 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, msg request, id any, mode string) {
+func handle(w http.ResponseWriter, msg request, id any, mode string, onMCPEvent func(string, string)) {
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -225,6 +227,9 @@ func handle(w http.ResponseWriter, msg request, id any, mode string) {
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"tools": []any{tool},
 		}})
+		if onMCPEvent != nil {
+			onMCPEvent("tools/list", "")
+		}
 	case "tools/call":
 		var params struct {
 			Name      string          `json:"name"`
@@ -240,11 +245,22 @@ func handle(w http.ResponseWriter, msg request, id any, mode string) {
 			fail(w, http.StatusOK, id, -32602, "Invalid params")
 			return
 		}
-		text, _ := json.Marshal(map[string]any{"connected": true, "mode": mode, "chatgptVerified": false})
+		// O servidor não consegue atestar que o solicitante é o ChatGPT. Um ID
+		// aleatório permite comparar o resultado exibido no chat com o log local.
+		var correlation [16]byte
+		if _, err := rand.Read(correlation[:]); err != nil {
+			fail(w, http.StatusServiceUnavailable, id, -32603, "Diagnostic unavailable")
+			return
+		}
+		diagnosticID := hex.EncodeToString(correlation[:])
+		text, _ := json.Marshal(map[string]any{"connected": true, "mode": mode, "diagnosticID": diagnosticID})
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"content": []any{map[string]any{"type": "text", "text": string(text)}},
 			"isError": false,
 		}})
+		if onMCPEvent != nil {
+			onMCPEvent("tools/call", diagnosticID)
+		}
 	default:
 		fail(w, http.StatusOK, id, -32601, "Method not found")
 	}

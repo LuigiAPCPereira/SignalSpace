@@ -1,6 +1,6 @@
 # OAuth no SignalSpace: servidor de recursos (fatia M1)
 
-**Status:** código implementado e testado com emissor/JWKS simulado local. Nenhum provedor OAuth real, túnel HTTPS ou conta do ChatGPT Web foi validado. Este documento NÃO é um guia de instalação completa do conector.
+**Status do modo com provedor externo:** código implementado e testado com emissor/JWKS simulado local; nenhum provedor externo real foi validado. Em modo separado, o Quick Tunnel com OAuth integrado teve chamada MCP autenticada correlacionada com o ChatGPT Web em 19/09/2026. Essa evidência não valida o provedor externo. Este documento NÃO é um guia de instalação completa do conector.
 
 ## O que a implementação faz
 
@@ -38,9 +38,9 @@ O JWKS informado deve pertencer ao provedor confiável. O nome do host, o emisso
 
 1. Selecionar/configurar um emissor OAuth confiável que atenda aos requisitos acima e testar a descoberta, registro do cliente, PKCE e emissão de tokens destinados ao SignalSpace.
 2. Validar um túnel HTTPS cujo encaminhamento preserve o `Host`, com autorização negativa e positiva em ambiente controlado.
-3. Conectar o ChatGPT Web e observar uma chamada REAL da ferramenta; conferir disponibilidade na configuração da conta/modelo.
+3. Para modo externo ou outras contas, observar uma chamada real de ferramenta. O teste do proprietário em 19/09/2026 correlacionou o `diagnosticID` no ChatGPT com o evento do servidor **somente no Quick Tunnel com OAuth integrado experimental**; não valida o modo externo ou disponibilidade geral.
 4. Acrescentar autorização dos workspaces antes de disponibilizar leitura, edição, Git e shell. O shell rodará com os privilégios do usuário, sem sandbox neste MVP.
 
-Não apresentar esta fatia como conexão de ChatGPT pronta. O resultado `chatgptVerified: false` da ferramenta permanece intencional.
+Uma chamada do diagnóstico MCP foi correlacionada no Quick Tunnel experimental, mas isso não valida o modo OAuth externo, outras sessões nem ferramentas de desenvolvimento. O campo estático `chatgptVerified: false` não media a origem das requisições e foi removido. A ferramenta retorna um `diagnosticID` aleatório por chamada; somente comparar esse valor ao evento do servidor fornece evidência de execução na sessão, sem atestar quem originou o pedido.
 
 Referências: [autenticação de plug-ins da OpenAI](https://developers.openai.com/pt-BR/plugins/build/auth) e [autorização do MCP](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).

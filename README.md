@@ -2,7 +2,7 @@
 
 **Give ChatGPT a secure connection to your own machine and turn ChatGPT into Codex.**
 
-SignalSpace é um projeto independente em **Go** para conectar ferramentas de desenvolvimento da máquina do usuário ao **ChatGPT Web** via MCP HTTPS autenticado. **Ainda está em desenvolvimento.** A única ferramenta implementada é `connection_diagnostic`; não há leitura/edição de arquivos, Git ou terminal, e nenhuma chamada real do ChatGPT Web foi validada.
+SignalSpace é um projeto independente em **Go** para conectar ferramentas de desenvolvimento da máquina do usuário ao **ChatGPT Web** via MCP HTTPS autenticado. **Ainda está em desenvolvimento.** A única ferramenta implementada é `connection_diagnostic`; não há leitura/edição de arquivos, Git ou terminal. Em teste real em 19/09/2026, o proprietário correlacionou um `diagnosticID` da resposta no ChatGPT com o registro de uma chamada MCP autenticada no terminal. Isso comprova a execução do diagnóstico naquela sessão, mas não atesta criptograficamente a identidade do cliente.
 
 ## Primeira experiência: Quick Tunnel experimental
 
@@ -15,7 +15,7 @@ go test ./...
 go run ./cmd/signalspace connect quick
 ```
 
-Leia [passo a passo, consentimento e limites do Quick Tunnel](docs/QUICK_TUNNEL.md). O SignalSpace não instala executáveis automaticamente. A URL `trycloudflare.com` muda entre sessões; é necessário atualizar/recriar o conector no ChatGPT. O ChatGPT precisa permitir adicionar um servidor MCP personalizado, algo ainda não testado com a conta do proprietário.
+Leia [passo a passo, consentimento e limites do Quick Tunnel](docs/QUICK_TUNNEL.md). O SignalSpace não instala executáveis automaticamente. A URL `trycloudflare.com` muda entre sessões; é necessário atualizar/recriar o conector no ChatGPT. A criação de um plugin personalizado e a chamada de diagnóstico foram observadas na conta utilizada no teste; isso não comprova disponibilidade em outras contas, planos ou sessões.
 
 ## Diagnóstico local, sem publicar
 
@@ -30,7 +30,7 @@ O endpoint `http://127.0.0.1:7676/mcp` oferece somente `connection_diagnostic` c
 
 ## OAuth integrado e transporte persistente
 
-O SignalSpace pode emitir tokens OAuth sem Auth0, com PKCE S256, registro dinâmico do cliente, aprovação local no terminal e verificação JWT. No modo integrado **persistente**, chave privada RSA e clientes ficam em diretório próprio com permissões restritas, vinculados à URL HTTPS exata; autorizações pendentes e códigos não persistem. O arquivo da chave não tem criptografia em repouso. Faltam refresh, revogação, revisão de segurança para exposição contínua e validação pelo ChatGPT. Não confundir esse modo com o Quick Tunnel descartável. Consulte [autorização integrada](docs/EMBEDDED_OAUTH.md) e [diagnóstico e configuração HTTPS](docs/TRANSPORT.md).
+O SignalSpace pode emitir tokens OAuth sem Auth0, com PKCE S256, registro dinâmico do cliente, aprovação local no terminal e verificação JWT. No modo integrado **persistente**, chave privada RSA e clientes ficam em diretório próprio com permissões restritas, vinculados à URL HTTPS exata; autorizações pendentes e códigos não persistem. O arquivo da chave não tem criptografia em repouso. Faltam refresh, revogação e revisão de segurança para exposição contínua; a evidência de conexão pelo ChatGPT se limita à sessão efêmera de diagnóstico, não ao modo persistente. Não confundir esse modo com o Quick Tunnel descartável. Consulte [autorização integrada](docs/EMBEDDED_OAUTH.md) e [diagnóstico e configuração HTTPS](docs/TRANSPORT.md).
 
 O uso de provedor OAuth externo é opcional, sem fallback para bearer local. Veja [servidor de recursos OAuth](docs/OAUTH_RESOURCE_SERVER.md), [diagnóstico do provedor](docs/OAUTH_PREFLIGHT.md) e [Auth0 opcional](docs/AUTH0_INTEGRATION.md).
 
@@ -38,7 +38,7 @@ O uso de provedor OAuth externo é opcional, sem fallback para bearer local. Vej
 
 Fluxo desejado: iniciar serviço → estabelecer HTTPS → conectar e autorizar ChatGPT Web → abrir workspace aprovado → inspecionar código → editar → executar testes/comandos → revisar alterações. Workspaces, leitura/edição, terminal, Git, diffs e continuidade entre conversas são trabalhos futuros. Não planejamos frontend substituto do ChatGPT, IA própria, agent-runtime, agent-orchestrator, fork/dependência do DevSpace ou subagentes nesta fase.
 
-O processo escuta somente em loopback, embora o túnel permita acesso público explicitamente autorizado. Nenhuma ferramenta poderosa é exposta enquanto o vínculo do proprietário não for validado. **Quando implementado, o shell terá os privilégios do usuário local; uma allowlist de arquivos não é sandbox.** O suporte ao plano do ChatGPT só será afirmado após uma chamada real à ferramenta.
+O processo escuta somente em loopback, embora o túnel permita acesso público explicitamente autorizado. Nenhuma ferramenta poderosa é exposta enquanto o vínculo do proprietário não for validado. **Quando implementado, o shell terá os privilégios do usuário local; uma allowlist de arquivos não é sandbox.** Uma chamada real da ferramenta de diagnóstico foi correlacionada no teste do proprietário; compatibilidade com outros planos e ferramentas de desenvolvimento não foi verificada.
 
 ## Documentação
 
