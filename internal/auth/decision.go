@@ -7,10 +7,10 @@ import (
 
 var (
 	ErrOAuthRequestNotFound = errors.New("oauth request not found")
-	ErrOAuthRequestExpired = errors.New("oauth request expired")
-	ErrOAuthAlreadyDecided = errors.New("oauth request already decided")
-	ErrOAuthStaleRequest = errors.New("oauth request version changed")
-	ErrOAuthGrantRequired = errors.New("workspace grant required")
+	ErrOAuthRequestExpired  = errors.New("oauth request expired")
+	ErrOAuthAlreadyDecided  = errors.New("oauth request already decided")
+	ErrOAuthStaleRequest    = errors.New("oauth request version changed")
+	ErrOAuthGrantRequired   = errors.New("workspace grant required")
 	ErrOAuthInvalidDecision = errors.New("invalid oauth decision")
 )
 
