@@ -42,11 +42,21 @@ func (s *Server) decideLocked(id string, expectedVersion int, decision string, n
 	return nil
 }
 
-// DecideVersioned compartilha o mutex e o mapa com o terminal e o OAuth público.
+// DecideVersioned compartilha a operação de domínio com o terminal e o OAuth público.
 func (s *Server) DecideVersioned(id string, expectedVersion int, decision string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.decideLocked(id, expectedVersion, decision, time.Now())
+}
+
+// DecideTerminal preserva o comando local approve/deny sem contornar a checagem
+// da concessão de leitura; terminal e API competem pela mesma decisão atômica.
+func (s *Server) DecideTerminal(id string, allow bool) error {
+	decision := "deny"
+	if allow {
+		decision = "approve"
+	}
+	return s.DecideVersioned(id, 1, decision)
 }
 
 // DecideAndSnapshot captura o resultado na mesma região crítica da decisão.
