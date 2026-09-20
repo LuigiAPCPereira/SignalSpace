@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -50,7 +51,7 @@ func TestVersionedDecisionRequiresLiveReadGrantButAllowsDenial(t *testing.T) {
 		Scope:        scope,
 		ReadScope:    "signalspace:workspace.read",
 		CanIssueRead: func(clientID string) bool { return allowed && clientID == "client-a" },
-		StateDir:     t.TempDir(),
+		StateDir:     filepath.Join(t.TempDir(), "state"),
 		OnRequest:    func(RequestInfo) {},
 	})
 	if err != nil {
