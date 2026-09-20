@@ -45,13 +45,13 @@ func TestVersionedDecisionRejectsStaleDuplicateAndExpired(t *testing.T) {
 func TestVersionedDecisionRequiresLiveReadGrantButAllowsDenial(t *testing.T) {
 	allowed := false
 	s, err := New(Config{
-		ResourceURL: resourceURL,
-		Issuer: "https://signalspace.example",
-		Scope: scope,
-		ReadScope: "signalspace:workspace.read",
+		ResourceURL:  resourceURL,
+		Issuer:       "https://signalspace.example",
+		Scope:        scope,
+		ReadScope:    "signalspace:workspace.read",
 		CanIssueRead: func(clientID string) bool { return allowed && clientID == "client-a" },
-		StateDir: t.TempDir(),
-		OnRequest: func(RequestInfo) {},
+		StateDir:     t.TempDir(),
+		OnRequest:    func(RequestInfo) {},
 	})
 	if err != nil {
 		t.Fatal(err)
