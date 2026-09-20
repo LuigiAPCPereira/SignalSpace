@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,28 @@ const maxTokenBytes = 16 * 1024
 const keyCacheTTL = 5 * time.Minute
 
 var errInvalidToken = errors.New("invalid OAuth access token")
+
+// O servidor OAuth embutido registra client IDs aleatórios de 24 bytes em base64url.
+// Outros formatos não identificam um cliente para futuras permissões de workspace.
+var embeddedClientID = regexp.MustCompile(`^[A-Za-z0-9_-]{32}$`)
+
+// VerifiedIdentity é produzida somente após validação de assinatura, emissor,
+// público-alvo, proprietário, validade e escopo. Não atesta o nome do aplicativo.
+type VerifiedIdentity struct {
+	OwnerSubject string
+	ClientID     string
+}
+
+type tokenClaims struct {
+	Issuer    string          `json:"iss"`
+	Subject   string          `json:"sub"`
+	Audience  json.RawMessage `json:"aud"`
+	Expires   int64           `json:"exp"`
+	NotBefore *int64          `json:"nbf"`
+	Scope     string          `json:"scope"`
+	Scopes    []string        `json:"scp"`
+	ClientID  json.RawMessage `json:"client_id"`
+}
 
 type JWKSVerifier struct {
 	url     string
@@ -49,16 +72,37 @@ func NewJWKSVerifier(rawURL string) (*JWKSVerifier, error) {
 }
 
 func (v *JWKSVerifier) Verify(ctx context.Context, token, issuer, audience, scope, ownerSubject string) error {
+	_, err := v.verifyClaims(ctx, token, issuer, audience, scope, ownerSubject)
+	return err
+}
+
+// VerifyIdentity nunca confia em client_id vindo de parâmetros MCP ou cabeçalhos.
+// Tokens antigos, sem o claim assinado, continuam válidos para diagnóstico via
+// Verify, mas não fornecem identidade para permissões de workspace.
+func (v *JWKSVerifier) VerifyIdentity(ctx context.Context, token, issuer, audience, scope, ownerSubject string) (VerifiedIdentity, error) {
+	claims, err := v.verifyClaims(ctx, token, issuer, audience, scope, ownerSubject)
+	if err != nil {
+		return VerifiedIdentity{}, err
+	}
+	var clientID string
+	if json.Unmarshal(claims.ClientID, &clientID) != nil || !embeddedClientID.MatchString(clientID) {
+		return VerifiedIdentity{}, errInvalidToken
+	}
+	return VerifiedIdentity{OwnerSubject: claims.Subject, ClientID: clientID}, nil
+}
+
+func (v *JWKSVerifier) verifyClaims(ctx context.Context, token, issuer, audience, scope, ownerSubject string) (tokenClaims, error) {
+	var empty tokenClaims
 	if len(token) == 0 || len(token) > maxTokenBytes {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	var header struct {
 		Algorithm string   `json:"alg"`
@@ -66,52 +110,44 @@ func (v *JWKSVerifier) Verify(ctx context.Context, token, issuer, audience, scop
 		Critical  []string `json:"crit"`
 	}
 	if len(headerBytes) > 4096 || json.Unmarshal(headerBytes, &header) != nil || header.Algorithm != "RS256" || header.KeyID == "" || len(header.Critical) != 0 {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	keys, err := v.publicKeys(ctx)
 	if err != nil {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	key := keys[header.KeyID]
 	if key == nil {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	signed := []byte(parts[0] + "." + parts[1])
 	digest := crypto.SHA256.New()
 	_, _ = digest.Write(signed)
 	if rsa.VerifyPKCS1v15(key, crypto.SHA256, digest.Sum(nil), signature) != nil {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil || len(payload) > maxTokenBytes {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
-	var claims struct {
-		Issuer    string          `json:"iss"`
-		Subject   string          `json:"sub"`
-		Audience  json.RawMessage `json:"aud"`
-		Expires   int64           `json:"exp"`
-		NotBefore *int64          `json:"nbf"`
-		Scope     string          `json:"scope"`
-		Scopes    []string        `json:"scp"`
-	}
+	var claims tokenClaims
 	if json.Unmarshal(payload, &claims) != nil || claims.Issuer != issuer || claims.Subject != ownerSubject || ownerSubject == "" || !hasAudience(claims.Audience, audience) {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	now := time.Now().Unix()
 	if claims.Expires <= now || (claims.NotBefore != nil && *claims.NotBefore > now) {
-		return errInvalidToken
+		return empty, errInvalidToken
 	}
 	for _, allowed := range append(strings.Fields(claims.Scope), claims.Scopes...) {
 		if allowed == scope {
-			return nil
+			return claims, nil
 		}
 	}
-	return ErrInsufficientScope
+	return empty, ErrInsufficientScope
 }
 
 func hasAudience(raw json.RawMessage, expected string) bool {

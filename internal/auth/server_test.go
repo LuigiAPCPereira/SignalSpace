@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -169,6 +171,19 @@ func TestCompleteOAuthFlowAndSingleUse(t *testing.T) {
 	}
 	if json.Unmarshal(tokenResponse.Body.Bytes(), &token) != nil || token.TokenType != "Bearer" || token.Expires != 900 {
 		t.Fatal("invalid token contract")
+	}
+	// Conferir a identidade do cliente usando a mesma verificação de assinatura
+	// que antecederá uma futura autorização de workspace.
+	jwtVerifier, err := mcp.NewStaticJWTVerifier(s.PublicKey(), s.KeyID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := jwtVerifier.VerifyIdentity(context.Background(), token.AccessToken, "https://signalspace.example", resourceURL, scope, ownerSubject)
+	if err != nil || identity.ClientID != id || identity.OwnerSubject != ownerSubject {
+		t.Fatalf("OAuth client identity mismatch: %+v, %v", identity, err)
+	}
+	if _, err := jwtVerifier.VerifyIdentity(context.Background(), token.AccessToken, "https://signalspace.example", resourceURL, "signalspace:workspace.read", ownerSubject); !errors.Is(err, mcp.ErrInsufficientScope) {
+		t.Fatalf("diagnostic-only token accepted for read scope: %v", err)
 	}
 	r := httptest.NewRequest("POST", "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"connection_diagnostic","arguments":{}}}`))
 	r.Host = "signalspace.example"

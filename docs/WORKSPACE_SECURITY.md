@@ -31,9 +31,13 @@ Após a aprovação HTTPS, somente o operador do **stdin local** pode digitar `w
 
 O gerenciador mantém **uma sessão por instância**, vincula-a ao `OwnerSubject` conhecido da composição OAuth e exige a identidade e o ID exatos para operações internas de leitura. O subject do OAuth embutido representa a mesma identidade de proprietário, **não um cliente externo criptograficamente atestado ou isolamento individual entre clientes**. A concessão não é exibida por HTTP e nenhum endpoint de leitura foi habilitado. Não usar pasta com dados pessoais para demonstrações desta fatia; prefira um diretório descartável.
 
+O servidor OAuth agora inclui o `client_id` do cliente registrado no JWT assinado. O verificador fornece `VerifyIdentity`, que valida assinatura, emissor, audiência, validade, proprietário e o escopo **solicitado pelo chamador**, recusando tokens sem identificador válido. O método legado `Verify` continua aceitando tokens de diagnóstico antigos sem `client_id` para não quebrar a conexão já existente. `client_id` identifica um registro OAuth, **não atesta que o software cliente seja o ChatGPT**. Não há permissão remota implícita: `VerifyIdentity` ainda não é usado para liberar arquivos, e a concessão local ainda não seleciona um `client_id` específico.
+
 ## Fronteiras pendentes antes de publicar qualquer ferramenta
 
 A exposição MCP ainda precisa receber a identidade autenticada do verificador, impor escopo próprio de leitura, vincular sessão à autorização corrente e negar ID desconhecido ou revogado em testes ponta a ponta. Uma URL pública, um bearer OAuth de diagnóstico ou argumento de ferramenta **não escolhe ou amplia a raiz**. A seleção de projetos, leitura pelo ChatGPT e testes de negação remotos ainda não foram realizados.
+
+O emissor integrado **continua emitindo somente `signalspace:diagnostic`**. O teste do verificador com `signalspace:workspace.read` usa um JWT sintético assinado apenas para verificar a exigência de escopo; não demonstra emissão de um token real de leitura. Antes de permitir leitura, a confirmação local deve vincular explicitamente a concessão a um cliente registrado e o token real deve possuir o escopo separado de leitura.
 
 A aprovação de uma raiz para arquivos **não confina processos**. Shell, Git e edição permanecem indisponíveis, e não há promessa de sandbox. Não usar Quick Tunnel experimental para expor a futura leitura de dados privados antes de concluir os controles e o teste real com projeto descartável.
 

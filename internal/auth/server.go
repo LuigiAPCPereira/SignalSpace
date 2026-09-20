@@ -547,7 +547,9 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": s.keyID})
-	payload, _ := json.Marshal(map[string]any{"iss": s.config.Issuer, "sub": ownerSubject, "aud": s.config.ResourceURL, "exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "nbf": now.Unix(), "scope": s.config.Scope, "jti": jti})
+	// Vincular o token ao cliente registrado que recebeu o código OAuth.
+	// O identificador não é uma atestação de que o aplicativo é o ChatGPT.
+	payload, _ := json.Marshal(map[string]any{"iss": s.config.Issuer, "sub": ownerSubject, "aud": s.config.ResourceURL, "exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "nbf": now.Unix(), "scope": s.config.Scope, "client_id": g.ClientID, "jti": jti})
 	signed := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
 	h := sha256.Sum256([]byte(signed))
 	sig, err := rsa.SignPKCS1v15(rand.Reader, s.key, crypto.SHA256, h[:])
