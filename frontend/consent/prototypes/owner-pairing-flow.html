@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Laboratório de pareamento local — SignalSpace</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #19283d; background: #f4f6f9; line-height: 1.5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 280px; }
+    button, select { font: inherit; }
+    button:focus-visible, select:focus-visible, h2:focus-visible { outline: 3px solid #78aafa; outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    .wrap { max-width: 980px; margin: auto; padding: 22px 15px 60px; }
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 22px; font-weight: 800; }
+    .mark { display: grid; place-items: center; width: 36px; height: 36px; background: #e5efff; border: 1px solid #bcd4f7; border-radius: 11px; color: #1353ad; }
+    .demo { padding: 13px 16px; border: 1px solid #dfc27f; border-radius: 10px; background: #fff8e7; color: #594009; font-size: 14px; margin-bottom: 30px; }
+    .demo strong { display: block; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 265px; gap: 28px; align-items: start; }
+    .eyebrow { color: #245a9f; font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: .09em; margin: 0 0 7px; }
+    h1 { font-size: clamp(28px, 4vw, 38px); line-height: 1.15; letter-spacing: -.04em; margin: 0; }
+    .lead { color: #4c5e75; margin: 11px 0 23px; }
+    .panel, .lab { background: #fff; border: 1px solid #d9e2ec; border-radius: 15px; padding: clamp(18px, 3vw, 27px); }
+    .status { display: inline-flex; align-items: center; gap: 8px; padding: 5px 11px; font-size: 13px; font-weight: 750; border: 1px solid #d8e1eb; color: #46566c; background: #f3f6fa; border-radius: 99px; }
+    .status::before { content: ""; width: 8px; height: 8px; background: currentColor; border-radius: 50%; }
+    .status[data-tone="warning"] { background: #fff8e7; color: #654600; border-color: #e9d5a5; }
+    .status[data-tone="success"] { background: #ecf8f1; color: #17603f; border-color: #b7ddc7; }
+    .status[data-tone="danger"] { background: #fff0f1; color: #8c2b3b; border-color: #efc0c9; }
+    h2 { font-size: 21px; line-height: 1.25; letter-spacing: -.025em; margin: 18px 0 9px; }
+    .detail { color: #4c5e75; margin: 0 0 18px; }
+    .mock-form { border-top: 1px solid #e3e9f0; padding-top: 19px; display: grid; gap: 15px; }
+    .field-label { font-weight: 750; font-size: 13px; margin: 0 0 5px; display: block; }
+    .mock-input { min-height: 46px; border: 1px dashed #aebfd3; color: #4c6079; background: #f7f9fc; border-radius: 8px; padding: 11px 12px; overflow-wrap: anywhere; }
+    .field-help, .footnote { font-size: 13px; color: #526379; margin: 5px 0 0; }
+    .rule { margin-top: 19px; padding: 12px 14px; border-left: 3px solid #2d68ba; background: #f0f6ff; color: #2e4d75; font-size: 13px; }
+    .client { border-top: 1px solid #e3e9f0; margin-top: 20px; padding-top: 19px; }
+    .client h3 { margin: 0 0 8px; font-size: 15px; }
+    .client p { margin: 0 0 8px; overflow-wrap: anywhere; }
+    .client code { overflow-wrap: anywhere; font: 12px ui-monospace, Consolas, monospace; }
+    .disabled-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 19px; }
+    .button { min-height: 46px; border-radius: 8px; border: 1px solid #b4c2d3; background: #fff; color: #223852; font-weight: 750; padding: 9px 12px; }
+    .button.primary { color: #fff; background: #175fbe; border-color: #175fbe; }
+    .button:disabled { opacity: .66; cursor: not-allowed; }
+    .lab h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 7px; }
+    .lab p { font-size: 13px; color: #526379; margin: 0 0 16px; }
+    .lab label { display: block; font-size: 13px; font-weight: 750; margin-bottom: 7px; }
+    .lab select { width: 100%; min-height: 46px; border: 1px solid #9bafc8; border-radius: 8px; background: #fff; padding: 9px; }
+    .lab button { width: 100%; margin-top: 12px; cursor: pointer; }
+    .lab .footnote { margin-top: 17px; }
+    .visually-hidden { position: absolute; height: 1px; width: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 740px) { .layout { grid-template-columns: 1fr; } .lab { max-width: 100%; } }
+    @media (max-width: 390px) { .disabled-actions { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="demo" role="note"><strong>Laboratório de UX — nenhuma autenticação real.</strong> Não digite senhas nem códigos aqui. A prévia não coleta credenciais, não acessa APIs, não cria sessões nem aprova OAuth. Use o seletor para conhecer as telas planejadas.</div>
+    <header class="brand"><span class="mark" aria-hidden="true">S</span> SignalSpace <span style="font-size:12px;font-weight:600;color:#53647b;margin-left:auto">Prévia de interface</span></header>
+    <div class="layout">
+      <main>
+        <p class="eyebrow">Administração local · modo Quick</p>
+        <h1>Controle de acesso ao painel</h1>
+        <p class="lead">Primeiro prove o controle da instalação. Depois, revise cada solicitação OAuth separadamente.</p>
+        <section class="panel" aria-labelledby="view-title">
+          <div id="announcement" role="status" aria-live="polite" aria-atomic="true"><span class="status" id="status">Primeiro acesso</span></div>
+          <h2 id="view-title" tabindex="-1">Parear este início do SignalSpace</h2>
+          <p class="detail" id="view-detail">No modo Quick, cada reinicialização exige um novo pareamento. O código inicial aparece somente no terminal deste computador.</p>
+          <div class="mock-form" id="pair-fields">
+            <div><span class="field-label">Código exibido no terminal</span><div class="mock-input" role="note">Campo apenas ilustrativo — entrada desativada</div><p class="field-help">O código real expira em cinco minutos; após três erros, precisa ser emitido novamente pelo procedimento local.</p></div>
+            <div><span class="field-label">Definir frase-senha administrativa</span><div class="mock-input" role="note">Campo apenas ilustrativo — entrada desativada</div><p class="field-help">Na implementação real, será usada para desbloqueios posteriores, não para repetir o pareamento imediatamente.</p></div>
+          </div>
+          <div class="mock-form" id="unlock-fields" hidden>
+            <div><span class="field-label">Frase-senha administrativa</span><div class="mock-input" role="note">Campo apenas ilustrativo — entrada desativada</div><p class="field-help">Não é necessário outro código do terminal durante esta inicialização, salvo recuperação explícita.</p></div>
+          </div>
+          <div id="request-view" class="client" hidden>
+            <h3>Solicitação de demonstração</h3>
+            <p><strong>Cliente de exemplo</strong> · nome declarado, não verificado.</p>
+            <p><code>demo-client-id</code></p>
+            <p><code>https://example.invalid/callback</code></p>
+            <p>Escopo fictício: <code>signalspace:diagnostic</code>. OAuth não cria concessão de pasta.</p>
+            <div class="disabled-actions"><button class="button" type="button" disabled>Recusar</button><button class="button primary" type="button" disabled>Autorizar conexão</button></div>
+            <p class="field-help">Somente a versão integrada, após autenticação e consulta real, poderá exibir dados e habilitar decisões.</p>
+          </div>
+          <p class="rule" id="rule">Contrato de backend: pareamento válido retorna uma nova sessão autenticada. A simples apresentação desta tela não comprova acesso.</p>
+          <p class="footnote" id="status-note">A sessão inicial de bootstrap permite enviar pareamento, mas não ler solicitações administrativas.</p>
+        </section>
+      </main>
+      <aside class="lab" aria-label="Laboratório de estados">
+        <h2>Explorar estados</h2>
+        <p>Este seletor altera apenas textos e elementos locais, sem executar nenhuma operação de segurança.</p>
+        <label for="scenario">Situação simulada</label>
+        <select id="scenario">
+          <option value="unpaired">Novo pareamento · UNPAIRED</option>
+          <option value="pairing">Pareamento enviado</option>
+          <option value="locked">Desbloqueio posterior · LOCKED</option>
+          <option value="checking">Desbloqueio enviado</option>
+          <option value="authenticated">Sessão confirmada · AUTHENTICATED</option>
+          <option value="expired">Sessão expirada</option>
+          <option value="unknown">Resposta perdida</option>
+          <option value="unavailable">Serviço indisponível</option>
+        </select>
+        <button class="button" type="button" id="reset">Voltar ao primeiro acesso</button>
+        <p class="footnote">Prazos contratuais: inatividade de 15 min e limite absoluto de 60 min. Consultas automáticas não renovam a sessão. Valores não são simulados como contadores.</p>
+      </aside>
+    </div>
+  </div>
+  <script>
+    // Somente alternamos cenários locais; não há coleta de dados, rede ou armazenamento.
+    const states = {
+      unpaired: ['Primeiro acesso','Parear este início do SignalSpace','No modo Quick, cada reinicialização exige um novo pareamento. O código inicial aparece somente no terminal deste computador.','O POST de pareamento deverá criar imediatamente uma sessão autenticada, sem exigir outro desbloqueio.','A sessão inicial de bootstrap permite enviar pareamento, mas não ler solicitações administrativas.','neutral','pair'],
+      pairing: ['Verificação pendente','Aguardando resultado do pareamento','O envio de um código e de uma frase-senha não comprova autenticação enquanto o backend não confirmar.','Se a resposta se perder, consultar a sessão. Não reenviar automaticamente o código, que pode ter sido consumido.','Dados administrativos permanecem indisponíveis durante a verificação.','warning','none'],
+      locked: ['Painel bloqueado','Desbloquear painel','O pareamento desta inicialização já foi concluído. Agora o proprietário usa apenas a frase-senha administrativa.','Uma sessão de bootstrap não permite consultar solicitações nem tomar decisões.','O backend deve confirmar a nova sessão antes de liberar qualquer dado.','neutral','unlock'],
+      checking: ['Verificação pendente','Aguardando resultado do desbloqueio','A frase-senha foi enviada apenas nesta história fictícia; a resposta do backend seria a única prova de autenticação.','Se a resposta se perder, consultar GET /session antes de considerar outro envio.','Não há dados de pedidos durante a verificação.','warning','none'],
+      authenticated: ['Sessão confirmada — simulação','Painel liberado neste cenário','O contrato determina que o servidor confirme AUTHENTICATED e que a lista de pedidos seja consultada separadamente.','Esta prévia exibe somente um pedido fictício; os controles OAuth estão intencionalmente desabilitados.','Sessão contratada: 15 minutos sem atividade, até 60 minutos absolutos. Somente gesto deliberado pode renovar inatividade.','success','request'],
+      expired: ['Acesso expirado','Desbloqueio necessário','Uma sessão encerrada não autoriza novas leituras administrativas nem decisões.','Apagar dados de pedidos da interface e exigir novo desbloqueio ou pareamento conforme a resposta da sessão.','Polling não estende a sessão; não exibir pedido antigo enquanto bloqueado.','neutral','none'],
+      unknown: ['Resultado desconhecido','Não sabemos se o acesso foi criado','Uma resposta de pareamento ou desbloqueio foi perdida. Isso não prova sucesso nem falha.','Consultar GET /session: somente AUTHENTICATED com cookie correspondente libera pedidos.','Se o pareamento foi consumido sem sessão recuperável, a recuperação exigirá procedimento local no terminal.','warning','none'],
+      unavailable: ['Serviço indisponível','Não foi possível verificar o acesso','Sem uma resposta confiável do backend, não é possível exibir pedidos nem permitir autorização.','Indisponível não equivale a sessão expirada, lista vazia ou negativa registrada.','Esta é uma prévia: não existem conexões de rede para recuperar.','danger','none']
+    };
+    const byId = id => document.getElementById(id);
+    function displayState(key, moveFocus = false) {
+      const value = states[key];
+      if (!value) return;
+      byId('scenario').value = key;
+      byId('status').textContent = value[0];
+      byId('status').dataset.tone = value[5];
+      byId('view-title').textContent = value[1];
+      byId('view-detail').textContent = value[2];
+      byId('rule').textContent = value[3];
+      byId('status-note').textContent = value[4];
+      byId('pair-fields').hidden = value[6] !== 'pair';
+      byId('unlock-fields').hidden = value[6] !== 'unlock';
+      byId('request-view').hidden = value[6] !== 'request';
+      if (moveFocus) byId('view-title').focus();
+    }
+    byId('scenario').addEventListener('change', event => displayState(event.target.value));
+    byId('reset').addEventListener('click', () => displayState('unpaired', true));
+    displayState('unpaired');
+  </script>
+</body>
+</html>
