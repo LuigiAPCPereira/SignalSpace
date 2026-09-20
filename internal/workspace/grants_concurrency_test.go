@@ -71,7 +71,8 @@ func TestConcurrentWorkspaceReadListRevocation(t *testing.T) {
 	// A segunda fase começa estritamente depois do retorno de Revoke.
 	// Ela não pode observar dados, mesmo com várias chamadas simultâneas.
 	postRevoke := make(chan struct{})
-	denials := make(chan error, workers)
+	// Cada goroutine pode registrar duas falhas sem bloquear o próprio teste.
+	denials := make(chan error, workers*2)
 	var denied sync.WaitGroup
 	for i := 0; i < workers; i++ {
 		denied.Add(1)
