@@ -46,6 +46,12 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 // runQuickWithOptions só liga a API administrativa em modo panel explícito.
 // A origem cloudflared permanece fixa em 127.0.0.1:7676, nunca na porta 7677.
 func runQuickWithOptions(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read, panel bool) error {
+	return runQuickWithAdminFactory(ctx, input, output, start, verify, read, panel, admin.NewServer)
+}
+
+// runQuickWithAdminFactory permite testar a saída do servidor administrativo.
+// A execução normal sempre fornece admin.NewServer; a fábrica não é configurável pela CLI.
+func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read, panel bool, adminServerFactory func(http.Handler) *http.Server) error {
 	for _, name := range []string{"SIGNALSPACE_AUTH_MODE", "SIGNALSPACE_RESOURCE_URL", "SIGNALSPACE_OAUTH_ISSUER", "SIGNALSPACE_JWKS_URL", "SIGNALSPACE_OAUTH_OWNER_SUBJECT", "SIGNALSPACE_LOCAL_TOKEN", "SIGNALSPACE_STATE_DIR"} {
 		if os.Getenv(name) != "" {
 			return fmt.Errorf("connect quick requires %s to be unset (isolated OAuth state)", name)
@@ -119,7 +125,7 @@ func runQuickWithOptions(ctx context.Context, input io.Reader, output io.Writer,
 	serveDone := make(chan error, 2)
 	serverExited := make(chan struct{})
 	if panel {
-		adminServer := admin.NewServer(gate.HandlerWithRequests(authorization))
+		adminServer := adminServerFactory(gate.HandlerWithRequests(authorization))
 		adminExited := make(chan struct{})
 		go func() {
 			serveDone <- fmt.Errorf("administrative HTTP server: %w", adminServer.Serve(ports.Admin))
