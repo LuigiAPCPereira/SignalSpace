@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/tunnel"
 )
@@ -25,9 +26,13 @@ func runQuick(ctx context.Context, input io.Reader, output io.Writer) error {
 }
 
 func runQuickMode(ctx context.Context, input io.Reader, output io.Writer, read bool) error {
-	return runQuickWithMode(ctx, input, output, tunnel.Start, func(ctx context.Context, resource string) (mcp.TransportReport, error) {
+	return runQuickModePanel(ctx, input, output, read, false)
+}
+
+func runQuickModePanel(ctx context.Context, input io.Reader, output io.Writer, read, panel bool) error {
+	return runQuickWithOptions(ctx, input, output, tunnel.Start, func(ctx context.Context, resource string) (mcp.TransportReport, error) {
 		return mcp.CheckEmbeddedTransport(ctx, resource, nil)
-	}, read)
+	}, read, panel)
 }
 
 func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier) error {
@@ -35,6 +40,12 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 }
 
 func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read bool) error {
+	return runQuickWithOptions(ctx, input, output, start, verify, read, false)
+}
+
+// runQuickWithOptions só liga a API administrativa em modo panel explícito.
+// A origem cloudflared permanece fixa em 127.0.0.1:7676, nunca na porta 7677.
+func runQuickWithOptions(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read, panel bool) error {
 	for _, name := range []string{"SIGNALSPACE_AUTH_MODE", "SIGNALSPACE_RESOURCE_URL", "SIGNALSPACE_OAUTH_ISSUER", "SIGNALSPACE_JWKS_URL", "SIGNALSPACE_OAUTH_OWNER_SUBJECT", "SIGNALSPACE_LOCAL_TOKEN", "SIGNALSPACE_STATE_DIR"} {
 		if os.Getenv(name) != "" {
 			return fmt.Errorf("connect quick requires %s to be unset (isolated OAuth state)", name)
@@ -47,6 +58,10 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 	} else {
 		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública na internet, somente com connection_diagnostic. Sem arquivos, Git ou terminal.")
 	}
+	if panel {
+		confirmation += " PAINEL"
+		fmt.Fprintln(output, "API administrativa experimental: somente http://localhost:7677, com pareamento local. Não há página HTML integrada; nunca exponha a porta 7677 por proxy ou túnel.")
+	}
 	fmt.Fprintf(output, "Digite %s para iniciar o túnel. Qualquer outra resposta cancela.\n", confirmation)
 	reader := bufio.NewReader(input)
 	answer, err := reader.ReadString('\n')
@@ -58,13 +73,22 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 		return nil
 	}
 
-	// O modo terminal usa apenas a porta pública. A reserva conjunta do painel
-	// fica preparada, mas não é selecionável até completar os gates HTTP.
-	ports, err := reserveQuickPorts(false)
+	// A reserva conjunta ocorre ANTES de cloudflared. A falha na segunda porta
+	// libera a primeira e nunca provoca fallback para o modo terminal.
+	ports, err := reserveQuickPorts(panel)
 	if err != nil {
 		return err
 	}
 	defer ports.Close()
+	var gate *admin.Gate
+	var pairingCode string
+	if panel {
+		gate, pairingCode, err = admin.NewGate()
+		if err != nil {
+			return fmt.Errorf("initialize local admin authentication: %w", err)
+		}
+		defer gate.Close()
+	}
 	quick, err := start(ctx)
 	if err != nil {
 		return err
@@ -90,9 +114,28 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 		}
 	}
 	defer console.Close()
+
 	server := diagnosticServer(handler)
-	serveDone := make(chan error, 1)
+	serveDone := make(chan error, 2)
 	serverExited := make(chan struct{})
+	if panel {
+		adminServer := admin.NewServer(gate.HandlerWithRequests(authorization))
+		adminExited := make(chan struct{})
+		go func() {
+			serveDone <- fmt.Errorf("administrative HTTP server: %w", adminServer.Serve(ports.Admin))
+			close(adminExited)
+		}()
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = adminServer.Shutdown(shutdownCtx)
+			_ = adminServer.Close()
+			<-adminExited
+		}()
+		if err := awaitQuickAdmin(ctx, ports.Admin, serveDone); err != nil {
+			return err
+		}
+	}
 	go func() {
 		serveDone <- server.Serve(ports.Public)
 		close(serverExited)
@@ -127,10 +170,20 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 	select {
 	case <-quick.Done():
 		return errors.New("cloudflared exited before the connection was ready")
+	case err := <-serveDone:
+		return fmt.Errorf("local HTTP service stopped before publishing the URL: %w", err)
 	default:
 	}
+	if panel {
+		fmt.Fprintln(output, "API administrativa local: http://localhost:7677/api/admin/v1/session (somente API, sem interface HTML).")
+		fmt.Fprintf(output, "Código de pareamento desta instância (somente neste terminal, expira em 5 minutos): %s\n", pairingCode)
+	}
 	fmt.Fprintf(output, "Diagnóstico HTTPS aprovado. Cole no ChatGPT Web: %s\n", resource)
-	fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
+	if panel {
+		fmt.Fprintln(output, "A API local e o terminal compartilham a mesma decisão OAuth. Nenhum acesso MCP é autorizado por chamada individual; a porta 7677 não é publicada pelo túnel.")
+	} else {
+		fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
+	}
 	if read {
 		fmt.Fprintln(output, "Leitura experimental: conclua OAuth de diagnóstico; workspace clients; workspace request <client-id> <absolute-path>; workspace approve <id>. Uma nova autorização OAuth com escopo de leitura é obrigatória; informe o session ID da concessão ao chat somente se quiser usar a ferramenta.")
 	} else {
@@ -146,7 +199,7 @@ func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, st
 		if errors.Is(err, http.ErrServerClosed) && ctx.Err() != nil {
 			return nil
 		}
-		return fmt.Errorf("local MCP server stopped: %w", err)
+		return fmt.Errorf("local HTTP service stopped: %w", err)
 	}
 }
 
