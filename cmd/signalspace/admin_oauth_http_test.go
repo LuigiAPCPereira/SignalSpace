@@ -102,7 +102,9 @@ func TestAdminOAuthRealHTTPDecisionAndReconciliation(t *testing.T) {
 	if status != 201 {
 		t.Fatalf("registration: %d %s", status, body)
 	}
-	var registered struct { ClientID string `json:"client_id"` }
+	var registered struct {
+		ClientID string `json:"client_id"`
+	}
 	if err := json.Unmarshal([]byte(body), &registered); err != nil || registered.ClientID == "" {
 		t.Fatalf("invalid client registration: %v", err)
 	}
@@ -128,14 +130,18 @@ func TestAdminOAuthRealHTTPDecisionAndReconciliation(t *testing.T) {
 	}
 
 	status, sessionJSON, bootstrapCookies := adminHTTP(t, client, private.URL, adminHost, "GET", adminPath+"/session", "", "", "", nil)
-	var bootstrap struct { CSRF string `json:"csrf_token"` }
+	var bootstrap struct {
+		CSRF string `json:"csrf_token"`
+	}
 	if status != 200 || json.Unmarshal([]byte(sessionJSON), &bootstrap) != nil || bootstrap.CSRF == "" {
 		t.Fatalf("bootstrap: %d %s", status, sessionJSON)
 	}
 	bootstrapCookie := adminHTTPCookie(t, bootstrapCookies, "signalspace_admin_bootstrap")
 	pairBody := fmt.Sprintf(`{"pairing_code":%q,"passphrase":"long-local-owner-passphrase"}`, pairingCode)
 	status, sessionJSON, pairedCookies := adminHTTP(t, client, private.URL, adminHost, "POST", adminPath+"/pair", pairBody, admin.AdminOrigin, bootstrap.CSRF, bootstrapCookie)
-	var owner struct { CSRF string `json:"csrf_token"` }
+	var owner struct {
+		CSRF string `json:"csrf_token"`
+	}
 	if status != 201 || json.Unmarshal([]byte(sessionJSON), &owner) != nil || owner.CSRF == "" {
 		t.Fatalf("pair: %d %s", status, sessionJSON)
 	}
@@ -144,9 +150,12 @@ func TestAdminOAuthRealHTTPDecisionAndReconciliation(t *testing.T) {
 	if status != 200 || !strings.Contains(list, id) || strings.Contains(list, readTestVerifier) || strings.Contains(list, csrfMatch[1]) {
 		t.Fatalf("authenticated list missing or leaking: %d %s", status, list)
 	}
-	decisionPath := adminPath+"/requests/"+id+"/decision"
+	decisionPath := adminPath + "/requests/" + id + "/decision"
 	decision := `{"decision":"approve","expected_version":1}`
-	for _, tc := range []struct { name, origin, csrf, body string; expected int }{
+	for _, tc := range []struct {
+		name, origin, csrf, body string
+		expected                 int
+	}{
 		{"cross_origin", "https://attacker.invalid", owner.CSRF, decision, 403},
 		{"bad_csrf", admin.AdminOrigin, "invalid", decision, 403},
 		{"stale_version", admin.AdminOrigin, owner.CSRF, `{"decision":"approve","expected_version":2}`, 409},
