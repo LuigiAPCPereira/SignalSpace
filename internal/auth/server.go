@@ -72,6 +72,9 @@ type pending struct {
 	SessionHash                                           [32]byte
 	CSRF                                                  string
 	Expires                                               time.Time
+	CreatedAt                                             time.Time
+	DecidedAt                                             time.Time
+	Version                                               int
 	Approved                                              bool
 	Denied                                                bool
 }
@@ -86,16 +89,17 @@ type requestQuota struct {
 }
 
 type Server struct {
-	config  Config
-	key     *rsa.PrivateKey
-	keyID   string
-	store   *identityStore
-	mu      sync.Mutex
-	clients map[string]client
-	issued  map[string]bool
-	pending map[string]pending
-	codes   map[string]grant
-	quotas  map[string]requestQuota
+	config   Config
+	key      *rsa.PrivateKey
+	keyID    string
+	store    *identityStore
+	mu       sync.Mutex
+	clients  map[string]client
+	issued   map[string]bool
+	pending  map[string]pending
+	terminal map[string]terminalRecord
+	codes    map[string]grant
+	quotas   map[string]requestQuota
 }
 
 func New(config Config) (*Server, error) {
@@ -113,7 +117,7 @@ func New(config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, issued: make(map[string]bool), pending: make(map[string]pending), codes: make(map[string]grant), quotas: make(map[string]requestQuota)}, nil
+	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, issued: make(map[string]bool), pending: make(map[string]pending), terminal: make(map[string]terminalRecord), codes: make(map[string]grant), quotas: make(map[string]requestQuota)}, nil
 }
 
 // Close libera a trava do estado; não preserva códigos e aprovações temporárias.
@@ -202,11 +206,7 @@ func allowedRedirect(raw string) bool {
 	return err == nil && u.Scheme == "https" && strings.EqualFold(u.Hostname(), "chatgpt.com") && u.Port() == "" && u.User == nil && u.Path != "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.String() == raw
 }
 func (s *Server) clean(now time.Time) {
-	for id, p := range s.pending {
-		if !now.Before(p.Expires) {
-			delete(s.pending, id)
-		}
-	}
+	s.expireRequestsLocked(now)
 	for id, c := range s.codes {
 		if !now.Before(c.Expires) {
 			delete(s.codes, id)
@@ -214,19 +214,9 @@ func (s *Server) clean(now time.Time) {
 	}
 }
 
-// Approve só é chamado pelo terminal local, nunca pelas rotas HTTP públicas.
+// Approve é um alias legado do terminal; não pode contornar a decisão única.
 func (s *Server) Approve(id string, allow bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.clean(time.Now())
-	p, ok := s.pending[id]
-	if !ok || p.Denied || p.Approved {
-		return errors.New("solicitação inexistente, expirada ou já decidida")
-	}
-	p.Approved = allow
-	p.Denied = !allow
-	s.pending[id] = p
-	return nil
+	return s.DecideTerminal(id, allow)
 }
 
 // Handler contém somente os endpoints públicos de autorização. Aprovação não é uma rota HTTP.
@@ -460,7 +450,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 503, "server_error")
 		return
 	}
-	p := pending{ClientID: id, Redirect: redirect, Challenge: q.Get("code_challenge"), State: q.Get("state"), Resource: s.config.ResourceURL, Scope: requestedScope, SessionHash: sha256.Sum256([]byte(session)), CSRF: csrf, Expires: time.Now().Add(pendingTTL)}
+	now := time.Now()
+	p := pending{ClientID: id, Redirect: redirect, Challenge: q.Get("code_challenge"), State: q.Get("state"), Resource: s.config.ResourceURL, Scope: requestedScope, SessionHash: sha256.Sum256([]byte(session)), CSRF: csrf, CreatedAt: now, Version: 1, Expires: now.Add(pendingTTL)}
 	s.mu.Lock()
 	s.clean(time.Now())
 	if len(s.pending) >= maxPending {
@@ -513,8 +504,9 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		bad(w, 409, "authorization_pending")
 		return
 	}
-	delete(s.pending, id)
 	if p.Denied {
+		s.terminalizeLocked(id, p, "DENIED", time.Now())
+		delete(s.pending, id)
 		s.mu.Unlock()
 		bad(w, 403, "access_denied")
 		return
@@ -535,7 +527,10 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		bad(w, 503, "server_error")
 		return
 	}
+	// Somente depois de todas as verificações a conclusão consome o pedido.
 	s.codes[code] = grant{ClientID: p.ClientID, Redirect: p.Redirect, Challenge: p.Challenge, Resource: p.Resource, Scope: p.Scope, Expires: time.Now().Add(codeTTL)}
+	s.terminalizeLocked(id, p, "COMPLETED", time.Now())
+	delete(s.pending, id)
 	s.mu.Unlock()
 	redirect, err := url.Parse(p.Redirect)
 	if err != nil {
