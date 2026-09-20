@@ -192,7 +192,9 @@ func serveTerminalCommands(authorization *auth.Server, console *workspaceConsole
 			fmt.Fprintln(output, "use approve <id> or deny <id>")
 			continue
 		}
-		if err := authorization.Approve(fields[1], fields[0] == "approve"); err != nil {
+		// O terminal usa a mesma transição atômica e a mesma revalidação de
+		// concessão exigidas pela API administrativa; stdin não é um atalho.
+		if err := authorization.DecideTerminal(fields[1], fields[0] == "approve"); err != nil {
 			fmt.Fprintln(output, err)
 		} else {
 			fmt.Fprintln(output, "authorization decision recorded")
