@@ -1,27 +1,20 @@
 # SignalSpace — checkpoint de continuidade
 
-**Natureza:** fotografia derivada de execução, não substitui requisitos, código, estado Git nem aprova merge. **Consulta registrada:** 20/09/2026; atualizar após cada marco relevante e revalidar HEAD/CI na sessão seguinte.
+**Natureza:** checkpoint derivado do estado remoto observado em 20/09/2026. Não substitui código, contratos, CI, árvore local ou autorização de merge. Revalidar PR/HEAD antes de escrever; não colocar o próprio SHA do commit documental em um ciclo de atualizações.
 
-## Projeto e escopo autorizado
+## Escopo e fontes
 
-Repositório: `LuigiAPCPereira/SignalSpace`. Produto e limites em [`PRODUCT.md`](PRODUCT.md) e [`MVP.md`](MVP.md). Trabalho ativo da frente backend: autorização OAuth pelo painel local, segundo [`LOCAL_ADMIN_AUTHORIZATION.md`](LOCAL_ADMIN_AUTHORIZATION.md), sem integrar os protótipos HTML. O modo padrão Quick expõe diagnóstico; leitura é opt-in com concessão independente de workspace. Não ampliar escrita, Git, shell ou aprovação por chamada MCP.
+Repositório `LuigiAPCPereira/SignalSpace`; backend na branch `feat/m1-local-mcp-diagnostic`, [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), aberto e draft na última inspeção. Contrato de segurança: [`LOCAL_ADMIN_AUTHORIZATION.md`](LOCAL_ADMIN_AUTHORIZATION.md); regras de trabalho: [`../DOCUMENTATION_AND_CONTINUITY.md`](../DOCUMENTATION_AND_CONTINUITY.md) e [`../AGENTS.md`](../AGENTS.md). A branch `feat/frontend-oauth-consent` e seus protótipos não devem ser alterados nesta etapa. Não fazer merge, escrita, Git, shell ou aprovação por chamada MCP sem autorização própria.
 
-## Referências e estado observado
+## Implementado e validado
 
-- Branch backend: `feat/m1-local-mcp-diagnostic`; [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), **aberto, draft e não mesclado** na consulta de 20/09/2026. HEAD de código inspecionado antes da adoção: `f2e7e541e69700bd7099cd3b450da50323728722`. A adoção do protocolo adiciona commits documentais posteriores: consultar o HEAD do PR em vez de presumir que esse SHA continua atual.
-- Branch da outra frente: `feat/frontend-oauth-consent`. **Não modificar** nem integrar seu HTML/CSS/JS nesta etapa.
-- Fonte de continuidade para esta branch: `../DOCUMENTATION_AND_CONTINUITY.md` + `../AGENTS.md`. A cópia no ChatGPT Project pode divergir; não presumir sincronização nem acesso de tarefas agendadas.
-- A árvore de trabalho local do proprietário **não foi verificada**: o acesso usado foi o conector remoto do GitHub. Não apagar ou sobrescrever alterações e stashes locais.
+- Smoke real de `read_file`/`list_directory` e negativa após revogação: relato anterior do proprietário, registrado no PR com limitações de correlação; não repetido nesta sessão.
+- Componentes já presentes antes desta continuação: listeners 7676/7677 isolados como componentes; pareamento, sessão, CSRF e handlers administrativos de consulta/decisão isolados; status público vinculado ao cookie OAuth. **O listener administrativo não está integrado ao `connect quick` nem o frontend está conectado.**
+- Continuação a partir de `97eba3878b2966ed6eb0df1713e5af9bc98649f2`: [`7dbd5d2`](https://github.com/LuigiAPCPereira/SignalSpace/commit/7dbd5d21c3cb358e9f74d2200e2834371dfff689) faz o stdin chamar `DecideTerminal`, que reutiliza `decideLocked` via `DecideVersioned` e revalida a concessão antes da aprovação. Adicionados testes em `internal/auth/terminal_decision_test.go` e `cmd/signalspace/terminal_decision_test.go` para concorrência terminal/painel, expiração, revogação da leitura, negativa posterior e status público.
+- [CI #106](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35521202757) no commit `7dbd5d2`: formato, `go test ./...`, detector de corridas, `go vet` e build concluíram com sucesso. Essa CI **não prova** integração do painel/Quick Tunnel nem teste real de navegador.
 
-## Implementação / evidências
+## Pendências objetivas
 
-- **Documentado mas não revalidado nesta adoção:** smoke real informado pelo proprietário em 20/09/2026: `read_file` autorizado e negado após revogação; `list_directory` raiz/subdiretório e negativa após `workspace revoke`. Evidência e limites foram consolidados na descrição do PR; sem log por chamada individual de listagem.
-- **Confirmado pelo código remoto e PR consultados nesta adoção:** separação de componentes de listeners/roteadores 7676 e 7677; Gate administrativo isolado com pareamento, desbloqueio, sessão, cookie, CSRF e lock; `GET /authorize/status` registrado apenas no roteador público; snapshots e handlers administrativos de consulta/decisão adicionados, mas ainda não integrados ao `connect quick`.
-- **Validado anteriormente, não reexecutado nesta adoção:** [CI #98](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35518520439) concluída com sucesso para formato, testes, corrida, `go vet` e build nos componentes então presentes. Esse resultado não valida integração de painel, túnel ou navegador.
-- **Integração:** PR em draft; nenhum merge, frontend integrado ou deploy confirmado.
+A operação `Approve` legada ainda existe no servidor OAuth e é usada por alguns testes; o **caminho de terminal em produção já migrou** para `DecideTerminal`, mas a remoção/delegação do método legado deve acompanhar a evolução do lifecycle. Ainda faltam `decided_at` real, estados `COMPLETED`/`EXPIRED` e tombstones com retenção/capacidade limitada; reconciliar resposta HTTP perdida e expiração sob concorrência; revisar derivação da frase-senha; vincular os listeners no modo painel explicitamente opt-in e falhar fechado se 7677 não puder ser reservado; executar testes de composição, de túnel e smoke de navegador na etapa apropriada.
 
-## Bloqueios e próxima ação executável
-
-Completar em `internal/auth` uma máquina de estados compartilhada terminal/painel, com `decided_at` real, transições `COMPLETED`/`EXPIRED`, retenção/tombstones limitados e decisões atômicas. Depois executar testes negativos de concorrência, expiração, workspace revogado e perda de resposta; somente então ligar as APIs ao listener administrativo no ciclo de vida Quick de forma opt-in, falhando fechado se 7677 não puder ser reservado. Revisar derivação da frase-senha antes de expor a superfície administrativa. Validar CI no HEAD exato e, posteriormente, smoke real do painel e integração com o frontend em etapa separada.
-
-**Critério de segurança:** aprovação pública não existe; OAuth não concede pasta implicitamente; token e concessão continuam distintos. Não declarar a integração pronta enquanto os bloqueios acima persistirem. Não fazer merge sem autorização expressa do proprietário.
+**Próxima ação verificável:** evoluir `internal/auth/server.go`, `decision.go`, `request_snapshot.go` e seus testes como uma única fatia de lifecycle, preservando compatibilidade OAuth e a emissão de código apenas em `/authorize/complete`. Antes de iniciar, verificar o HEAD real do PR, checkout local caso disponível e contrato; após a mudança, testar corrida entre terminal/painel/conclusão, limite de registros terminais e revogação de workspace. PR permanece draft até validação integral; nenhum merge autorizado.
