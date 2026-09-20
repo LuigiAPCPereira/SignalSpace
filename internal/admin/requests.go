@@ -14,7 +14,7 @@ const requestsPath = "/api/admin/v1/requests"
 
 var (
 	errSessionRequired = errors.New("admin session required")
-	errInvalidCSRF    = errors.New("invalid admin csrf")
+	errInvalidCSRF     = errors.New("invalid admin csrf")
 )
 
 // OAuthRequests é a porta de leitura e decisão; não oferece emissão de token.
@@ -99,8 +99,8 @@ func (g *Gate) HandlerWithRequests(requests OAuthRequests) http.Handler {
 			return
 		}
 		adminJSON(w, 200, map[string]any{
-			"requests": items,
-			"server_time": time.Now().UTC().Format(time.RFC3339Nano),
+			"requests":           items,
+			"server_time":        time.Now().UTC().Format(time.RFC3339Nano),
 			"next_poll_after_ms": 2000,
 		})
 	})
