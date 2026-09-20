@@ -31,8 +31,13 @@ func TestGateUnlockRateLimitAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	for attempt := 0; attempt < 5; attempt++ {
-		if _, err := gate.Unlock(bootstrap.Cookie, bootstrap.CSRF, "incorrect-passphrase"); !errors.Is(err, ErrAccessDenied) {
-			t.Fatalf("attempt %d: %v", attempt, err)
+		_, err := gate.Unlock(bootstrap.Cookie, bootstrap.CSRF, "incorrect-passphrase")
+		want := ErrAccessDenied
+		if attempt == 4 {
+			want = ErrRateLimited
+		}
+		if !errors.Is(err, want) {
+			t.Fatalf("attempt %d: got %v, want %v", attempt+1, err, want)
 		}
 	}
 	if _, err := gate.Unlock(bootstrap.Cookie, bootstrap.CSRF, testPassphrase); !errors.Is(err, ErrRateLimited) {
