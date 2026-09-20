@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -10,6 +9,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/crypto/argon2"
 )
 
 const (
@@ -18,8 +19,11 @@ const (
 	idleTTL           = 15 * time.Minute
 	absoluteTTL       = time.Hour
 	unlockWindow      = 15 * time.Minute
-	passwordRounds    = 600000
+	argonPasses       = 3
+	argonMemoryKiB    = 32 * 1024
+	argonThreads      = 1
 	maxBootstrapCount = 64
+	maxSessionCount   = 64
 )
 
 var (
@@ -95,23 +99,15 @@ func NewGate() (*Gate, string, error) {
 	return g, code, nil
 }
 
-// passwordKey implementa PBKDF2-HMAC-SHA256 (um bloco de 32 bytes) com salt
-// aleatório. Os parâmetros são fixos no backend; não aceitamos custo do cliente.
+// passwordKey utiliza a implementação Argon2id do x/crypto, com parâmetros
+// fixos e custo de memória limitado por tentativa. A instância serializa KDFs.
 func passwordKey(passphrase string, salt [16]byte) [32]byte {
-	mac := hmac.New(sha256.New, []byte(passphrase))
-	_, _ = mac.Write(salt[:])
-	_, _ = mac.Write([]byte{0, 0, 0, 1})
-	u := mac.Sum(nil)
+	password := []byte(passphrase)
+	derived := argon2.IDKey(password, salt[:], argonPasses, argonMemoryKiB, argonThreads, 32)
 	var result [32]byte
-	copy(result[:], u)
-	for i := 1; i < passwordRounds; i++ {
-		mac.Reset()
-		_, _ = mac.Write(u)
-		u = mac.Sum(u[:0])
-		for j := range result {
-			result[j] ^= u[j]
-		}
-	}
+	copy(result[:], derived)
+	clear(password)
+	clear(derived)
 	return result
 }
 
@@ -169,6 +165,9 @@ func (g *Gate) checkBootstrapLocked(cookie, csrf string, now time.Time) bool {
 }
 
 func (g *Gate) issueLocked(now time.Time) (Session, error) {
+	if len(g.sessions) >= maxSessionCount {
+		return Session{}, ErrRateLimited
+	}
 	id, err := randomToken(32)
 	if err != nil {
 		return Session{}, err
@@ -246,12 +245,14 @@ func (g *Gate) Unlock(bootstrapCookie, csrf, passphrase string) (Session, error)
 		g.unlockFails = 0
 	}
 	key := passwordKey(passphrase, g.passwordSalt)
-	if subtle.ConstantTimeCompare(key[:], g.passwordHash[:]) != 1 {
+	valid := validPassphrase(passphrase) && subtle.ConstantTimeCompare(key[:], g.passwordHash[:]) == 1
+	if !valid {
 		g.unlockFails++
 		if g.unlockFails >= 5 {
 			g.unlockUntil = now.Add(unlockWindow)
 			g.unlockFails = 0
 			g.unlockStart = time.Time{}
+			return Session{}, ErrRateLimited
 		}
 		return Session{}, ErrAccessDenied
 	}
