@@ -207,6 +207,23 @@ func (g *Gate) unlockHTTP(w http.ResponseWriter, r *http.Request) {
 	adminJSON(w, 200, sessionModel(session))
 }
 
+// mutationSession separa uma sessão ausente (401) de CSRF inválido (403).
+// Refresh/Lock revalidam ambos sob o mutex antes do efeito: estas leituras não
+// constituem autorização isolada nem permitem corrida para ignorar revogação.
+func (g *Gate) mutationSession(w http.ResponseWriter, r *http.Request) (string, bool) {
+	cookie := cookieValue(r, adminCookie)
+	if _, err := g.Verify(cookie, "", false); err != nil {
+		clearCookie(w, adminCookie)
+		adminError(w, 401, "AUTH_REQUIRED", "Desbloqueio necessário.")
+		return "", false
+	}
+	if _, err := g.Verify(cookie, r.Header.Get("X-CSRF-Token"), true); err != nil {
+		adminError(w, 403, "ACCESS_DENIED", "Acesso negado.")
+		return "", false
+	}
+	return cookie, true
+}
+
 func (g *Gate) refreshHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -216,7 +233,11 @@ func (g *Gate) refreshHTTP(w http.ResponseWriter, r *http.Request) {
 	if !adminBody(w, r, &input) {
 		return
 	}
-	session, err := g.Refresh(cookieValue(r, adminCookie), r.Header.Get("X-CSRF-Token"))
+	cookie, ok := g.mutationSession(w, r)
+	if !ok {
+		return
+	}
+	session, err := g.Refresh(cookie, r.Header.Get("X-CSRF-Token"))
 	if err != nil {
 		adminError(w, 401, "AUTH_REQUIRED", "Desbloqueio necessário.")
 		return
@@ -233,7 +254,11 @@ func (g *Gate) lockHTTP(w http.ResponseWriter, r *http.Request) {
 	if !adminBody(w, r, &input) {
 		return
 	}
-	if err := g.Lock(cookieValue(r, adminCookie), r.Header.Get("X-CSRF-Token")); err != nil {
+	cookie, ok := g.mutationSession(w, r)
+	if !ok {
+		return
+	}
+	if err := g.Lock(cookie, r.Header.Get("X-CSRF-Token")); err != nil {
 		adminError(w, 401, "AUTH_REQUIRED", "Desbloqueio necessário.")
 		return
 	}
