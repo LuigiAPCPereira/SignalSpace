@@ -14,17 +14,11 @@ var (
 	ErrOAuthInvalidDecision = errors.New("invalid oauth decision")
 )
 
-// DecideVersioned registra uma única decisão em uma solicitação específica.
-// A mutação compartilha o mesmo mutex e mapa usados pelo terminal, pelo OAuth
-// público e pela conclusão; não emite código, token ou concessão de workspace.
-// A futura API administrativa precisa verificar sessão e CSRF antes da chamada.
-func (s *Server) DecideVersioned(id string, expectedVersion int, decision string) error {
+// decideLocked exige s.mu; nenhuma decisão cria código, token ou concessão.
+func (s *Server) decideLocked(id string, expectedVersion int, decision string, now time.Time) error {
 	if !requestID.MatchString(id) || (decision != "approve" && decision != "deny") || expectedVersion < 1 {
 		return ErrOAuthInvalidDecision
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := time.Now()
 	p, exists := s.pending[id]
 	if !exists {
 		return ErrOAuthRequestNotFound
@@ -35,8 +29,7 @@ func (s *Server) DecideVersioned(id string, expectedVersion int, decision string
 	if p.Approved || p.Denied {
 		return ErrOAuthAlreadyDecided
 	}
-	// O modelo existente inicia em versão 1 e permite uma única transição de decisão.
-	// A retenção de terminais/COMPLETED requer a evolução da estrutura pending.
+	// O registro existente possui uma única transição de decisão: 1 -> 2.
 	if expectedVersion != 1 {
 		return ErrOAuthStaleRequest
 	}
@@ -47,4 +40,23 @@ func (s *Server) DecideVersioned(id string, expectedVersion int, decision string
 	p.Denied = decision == "deny"
 	s.pending[id] = p
 	return nil
+}
+
+// DecideVersioned compartilha o mutex e o mapa com o terminal e o OAuth público.
+func (s *Server) DecideVersioned(id string, expectedVersion int, decision string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.decideLocked(id, expectedVersion, decision, time.Now())
+}
+
+// DecideAndSnapshot captura o resultado na mesma região crítica da decisão.
+// Assim a conclusão pública concorrente não apaga o pedido entre POST e resposta.
+func (s *Server) DecideAndSnapshot(id string, expectedVersion int, decision string) (RequestSnapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	if err := s.decideLocked(id, expectedVersion, decision, now); err != nil {
+		return RequestSnapshot{}, err
+	}
+	return s.snapshotLocked(id, s.pending[id], now), nil
 }
