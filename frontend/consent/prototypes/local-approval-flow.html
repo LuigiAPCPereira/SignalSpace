@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Protótipo de fluxo OAuth — SignalSpace</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#19283d;background:#f4f6f9;line-height:1.5;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0;min-width:280px}button,select{font:inherit}button:focus-visible,select:focus-visible{outline:3px solid #85b4ff;outline-offset:3px}
+    .wrap{width:min(100% - 2rem,1000px);margin:0 auto;padding:26px 0 65px}.brand{display:flex;align-items:center;gap:12px;font-weight:750;letter-spacing:-.02em;margin-bottom:28px}.mark{width:36px;height:36px;border-radius:11px;background:#e4efff;color:#1554ab;border:1px solid #bcd4f7;display:grid;place-items:center;font-weight:800}
+    .banner{padding:14px 18px;border-radius:12px;border:1px solid #e4c77e;background:#fff8e7;color:#654600;font-size:14px;margin-bottom:30px}.banner strong{display:block}
+    .layout{display:grid;grid-template-columns:minmax(0,1fr) 258px;gap:30px;align-items:start}.eyebrow{font-size:12px;color:#265eab;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin:0 0 7px}h1{font-size:clamp(28px,4vw,37px);line-height:1.15;letter-spacing:-.045em;margin:0}.lead{color:#526176;margin:11px 0 23px;max-width:570px}
+    .panel{background:#fff;border:1px solid #dae2eb;border-radius:17px;padding:clamp(18px,3vw,30px)}.status{display:inline-flex;align-items:center;gap:9px;font-weight:750;font-size:13px;padding:6px 11px;border-radius:999px;border:1px solid #e8d5a4;background:#fff9eb;color:#684800}.status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}.status[data-tone="success"]{color:#17603f;background:#edf9f1;border-color:#bfe5cf}.status[data-tone="danger"]{color:#932d3c;background:#fff1f3;border-color:#f2c8d0}.status[data-tone="neutral"]{color:#46566c;background:#f3f6fa;border-color:#d9e1e9}
+    .state-title{font-size:21px;letter-spacing:-.025em;margin:17px 0 6px}.state-detail{color:#526176;font-size:14px;margin:0 0 21px}.divider{border:0;border-top:1px solid #e6ebf1;margin:23px 0}h2{font-size:12px;letter-spacing:.075em;text-transform:uppercase;color:#536177;margin:0 0 13px}.client{display:flex;gap:12px;align-items:flex-start}.avatar{flex:none;width:43px;height:43px;border:1px solid #d6e4f5;background:#f1f6ff;border-radius:12px;display:grid;place-items:center;font-weight:800;color:#315789}.client strong{display:block;font-size:16px;overflow-wrap:anywhere}.client small{display:block;color:#825815;font-size:12px;margin-top:2px}.detail-grid{display:grid;gap:12px;margin:19px 0 0}dt{font-size:12px;font-weight:750;color:#536177;margin:0 0 3px}dd{margin:0;overflow-wrap:anywhere}code{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}.detail-grid code{display:block;border:1px solid #e3eaf2;background:#f7f9fc;border-radius:7px;padding:8px 10px}
+    .permission{background:#f1f6ff;border:1px solid #ccdcf4;border-radius:10px;padding:14px}.permission strong{display:block;color:#17457f}.permission p{font-size:13px;color:#465c74;margin:4px 0 0}.note{font-size:13px;color:#536177;margin:15px 0 0}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:23px}.btn{min-height:46px;border-radius:9px;border:1px solid #bdc9d9;background:#fff;color:#263d5b;font-weight:750;padding:9px 14px;cursor:pointer}.btn.primary{border-color:#185cc1;background:#185cc1;color:#fff}.btn:disabled{opacity:.55;cursor:not-allowed}.btn:not(:disabled):hover{filter:brightness(.94)}.only{margin-top:22px}.hint{color:#536177;font-size:12px;margin:12px 0 0}
+    .sidebar{border:1px solid #dbe3ec;background:#fff;border-radius:14px;padding:19px}.sidebar h2{margin-bottom:8px}.sidebar p{font-size:13px;color:#536177;margin:0 0 18px}.sidebar label{display:block;font-size:13px;font-weight:750;margin-bottom:6px}.sidebar select{width:100%;min-height:43px;border:1px solid #aebdd0;border-radius:8px;background:#fff;color:#172b46;padding:8px}.sidebar .secondary{margin-top:15px}.sidebar .secondary button{width:100%;background:#f5f7fa}.sidebar .fine{margin:15px 0 0;font-size:12px}.empty-view{padding:12px 0}.empty-view h2{font-size:21px;letter-spacing:-.02em;text-transform:none;color:#19283d}.empty-view p{color:#526176;font-size:14px}
+    [hidden]{display:none!important}@media(max-width:760px){.layout{grid-template-columns:1fr}.sidebar{order:-1}.wrap{padding-top:16px}.brand{margin-bottom:20px}}@media(max-width:420px){.wrap{width:calc(100% - 20px)}.panel{border-radius:12px}.actions{grid-template-columns:1fr}.btn{width:100%}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner" role="note"><strong>DEMONSTRAÇÃO INTERATIVA — não é o SignalSpace em execução.</strong> Os dados são fictícios. Nenhuma autenticação, autorização, requisição de rede ou gravação acontece neste arquivo. Os botões apenas alternam telas da prévia.</div>
+    <header class="brand"><span class="mark" aria-hidden="true">S</span> SignalSpace <span style="margin-left:auto;font-size:12px;color:#526176;font-weight:600">Laboratório de interface</span></header>
+    <div class="layout">
+      <main>
+        <p class="eyebrow">Painel local · conceito</p>
+        <h1>Autorizações de conexão</h1>
+        <p class="lead">Uma tarefa por vez: conferir quem pede acesso, entender as permissões e decidir no seu computador.</p>
+        <section class="panel" aria-label="Prévia da solicitação">
+          <div id="live-status" role="status" aria-live="polite" aria-atomic="true"><span class="status" id="badge" data-tone="warning">Aguardando decisão</span></div>
+          <h2 class="state-title" id="state-title">Nova solicitação de conexão</h2>
+          <p class="state-detail" id="state-detail">Confira os detalhes antes de autorizar ou recusar.</p>
+          <div id="request-view">
+            <hr class="divider">
+            <section aria-labelledby="client-title"><h2 id="client-title">Aplicativo solicitante</h2><div class="client"><span class="avatar" aria-hidden="true">?</span><div><strong>Cliente de demonstração</strong><small>Nome declarado pelo aplicativo · identidade não verificada</small></div></div><dl class="detail-grid"><div><dt>Registro OAuth fictício</dt><dd><code>demo-client-id</code></dd></div><div><dt>Destino de retorno fictício</dt><dd><code>https://example.invalid/callback</code></dd></div></dl></section>
+            <hr class="divider">
+            <section aria-labelledby="permission-title"><h2 id="permission-title">Permissões solicitadas</h2><div class="permission"><strong>Somente diagnóstico de conexão</strong><p>Esta solicitação ilustrativa não autoriza arquivos, edição, Git nem terminal. Uma concessão de pasta é uma decisão separada.</p></div><dl class="detail-grid"><div><dt>Escopo ilustrativo</dt><dd><code>signalspace:diagnostic</code></dd></div></dl><p class="note">Autorizar OAuth não equivale a aprovar cada chamada MCP no ChatGPT.</p></section>
+          </div>
+          <div id="empty-view" class="empty-view" hidden><h2 id="empty-title">Nenhuma solicitação pendente</h2><p id="empty-detail">Quando houver um pedido validado, ele aparecerá aqui. Este protótipo não verifica o servidor.</p></div>
+          <div id="actions" class="actions"><button class="btn" id="deny" type="button">Simular recusa</button><button class="btn primary" id="approve" type="button">Simular autorização</button></div>
+          <p class="hint" id="action-note">Prévia: estes controles não aprovam uma conexão real. O prazo de expiração dependerá do servidor.</p>
+        </section>
+      </main>
+      <aside class="sidebar" aria-label="Controles do protótipo"><h2>Explorar estados</h2><p>Escolha uma situação para revisar a interface. Nenhum estado vem de uma API real.</p><label for="scenario">Situação simulada</label><select id="scenario"><option value="pending">Aguardando decisão</option><option value="locked">Painel bloqueado</option><option value="submitting">Decisão em envio</option><option value="approved">Autorização confirmada</option><option value="denied">Recusa confirmada</option><option value="expired">Solicitação expirada</option><option value="unavailable">Servidor indisponível</option><option value="unknown">Estado desconhecido</option><option value="empty">Sem solicitações</option></select><div class="secondary"><button class="btn" id="reset" type="button">Voltar à solicitação</button></div><p class="fine">Desbloqueio, consulta de status, prazo e decisões reais dependem de contratos seguros ainda não implementados.</p></aside>
+    </div>
+  </div>
+  <script>
+    // Este script altera apenas a apresentação local do protótipo; não acessa APIs.
+    const scenarios = {
+      pending: {badge:'Aguardando decisão',tone:'warning',title:'Nova solicitação de conexão',detail:'Confira os detalhes antes de autorizar ou recusar.',showRequest:true,canDecide:true,note:'Prévia: estes controles não aprovam uma conexão real. O prazo de expiração dependerá do servidor.'},
+      locked: {badge:'Acesso protegido',tone:'neutral',title:'Painel bloqueado',detail:'Antes de mostrar solicitações reais, o proprietário deverá comprovar sua identidade por um mecanismo ainda a definir com o backend.',showRequest:false,note:'Não há formulário de desbloqueio fictício: localhost, sozinho, não autentica o proprietário.'},
+      submitting: {badge:'Processando decisão',tone:'warning',title:'Aguardando confirmação do servidor',detail:'Uma decisão enviada não é sucesso. Até a resposta válida, não apresentar a conexão como autorizada.',showRequest:true,note:'Ações desabilitadas nesta simulação. Sem resposta confirmada, o resultado continua desconhecido.'},
+      approved: {badge:'Decisão confirmada',tone:'success',title:'Conexão OAuth autorizada',detail:'O proprietário aprovou a solicitação. Isso não confirma troca de token, conexão MCP ou chamada de ferramenta.',showRequest:true,note:'A página pública só poderá concluir o OAuth conforme uma decisão válida confirmada pelo backend.'},
+      denied: {badge:'Acesso recusado',tone:'danger',title:'Solicitação recusada',detail:'Nenhuma autorização foi concedida por esta solicitação. Para tentar novamente, o cliente deverá iniciar outro pedido.',showRequest:true,note:'A recusa e o seu efeito precisam ser confirmados pelo backend na versão real.'},
+      expired: {badge:'Prazo encerrado',tone:'neutral',title:'Solicitação expirada',detail:'Esta solicitação não pode mais ser aprovada. É necessário iniciar outra solicitação de conexão.',showRequest:true,note:'Nenhum cronômetro é simulado: a expiração real deve vir do servidor.'},
+      unavailable: {badge:'Serviço indisponível',tone:'danger',title:'Não foi possível carregar a solicitação',detail:'Não há uma resposta confiável do serviço neste momento. Nenhuma decisão pode ser tomada pela interface.',showRequest:false,note:'Uma recuperação segura será definida quando houver contrato real de consulta.'},
+      unknown: {badge:'Resultado desconhecido',tone:'neutral',title:'Não sabemos se a decisão foi registrada',detail:'A resposta se perdeu. A interface não deve reenviar automaticamente uma decisão nem afirmar sucesso.',showRequest:false,note:'O backend deverá permitir reconciliar o resultado sem duplicar efeitos.'},
+      empty: {badge:'Sem solicitações',tone:'neutral',title:'Nenhum pedido em andamento',detail:'O painel está vazio nesta simulação.',showRequest:false,empty:true,note:'Vazio significa ausência confirmada de solicitações; não significa indisponibilidade.'}
+    };
+    const $ = id => document.getElementById(id);
+    function showScenario(key) {
+      const state = scenarios[key];
+      if (!state) return;
+      $('scenario').value = key;
+      $('badge').textContent = state.badge;
+      $('badge').dataset.tone = state.tone;
+      $('state-title').textContent = state.title;
+      $('state-detail').textContent = state.detail;
+      $('request-view').hidden = !state.showRequest;
+      $('empty-view').hidden = !state.empty;
+      $('actions').hidden = !state.canDecide;
+      $('approve').disabled = !state.canDecide;
+      $('deny').disabled = !state.canDecide;
+      $('action-note').textContent = state.note;
+    }
+    $('scenario').addEventListener('change', event => showScenario(event.target.value));
+    $('reset').addEventListener('click', () => showScenario('pending'));
+    $('approve').addEventListener('click', () => showScenario('approved'));
+    $('deny').addEventListener('click', () => showScenario('denied'));
+    showScenario('pending');
+  </script>
+</body>
+</html>
