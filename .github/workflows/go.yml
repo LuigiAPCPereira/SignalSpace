@@ -21,6 +21,7 @@ jobs:
           files="$(gofmt -l cmd internal)"
           if [ -n "$files" ]; then
             printf 'Unformatted Go files:\n%s\n' "$files"
+            gofmt -d cmd internal
             exit 1
           fi
       - name: Test
