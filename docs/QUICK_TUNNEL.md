@@ -1,6 +1,6 @@
 # Quick Tunnel: conexão experimental guiada
 
-**Estado:** o comando `connect quick` automatiza o processo `cloudflared` e testa o HTTPS público, mas **não foi executado na máquina do proprietário nem vinculado ao ChatGPT Web**. Apenas `connection_diagnostic` está disponível. Não há ferramentas de arquivos, Git ou terminal.
+**Estado observado em 19/09/2026:** `connect quick` passou no preflight HTTPS na máquina do proprietário e apresentou um endpoint ao ChatGPT Web. O primeiro cadastro OAuth real foi rejeitado com `400 invalid_client_metadata`; a correção de compatibilidade DCR descrita abaixo ainda depende de novo teste real. Nenhuma autorização ou chamada MCP do ChatGPT foi comprovada. Apenas `connection_diagnostic` está disponível; não há arquivos, Git ou terminal.
 
 O Cloudflare Quick Tunnel cria uma URL aleatória `https://...trycloudflare.com`, gratuitamente e sem conta ou domínio. É uma opção **exclusivamente para testes**; não oferece SLA, não suporta SSE e pode limitar requisições. O SignalSpace usa o transporte MCP de respostas HTTP JSON nesta fase. Consulte a [documentação oficial de Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/).
 
@@ -31,9 +31,17 @@ O SignalSpace explica que o túnel publicará um endereço acessível pela inter
 
 Quando o ChatGPT solicitar autorização, confira o nome declarado pelo cliente e a URL de retorno exibidos. Digite `approve IDENTIFICADOR` ou `deny IDENTIFICADOR` **no terminal que executa o SignalSpace**. O consentimento só prossegue após a decisão local. Não divulgue a URL a terceiros: a descoberta e a autorização são públicas e a identidade do proprietário depende de quem controla esse terminal.
 
+## Cadastro OAuth (DCR) no ChatGPT
+
+Após o diagnóstico HTTPS, crie a conexão com a URL **nova** da sessão, terminada em `/mcp`. O primeiro teste real chegou à etapa de registro dinâmico, mas o servidor rejeitou metadados do cliente. O servidor agora trata `client_name` como opcional (exibe "Cliente sem nome informado" em vez de se passar pelo ChatGPT) e negocia uma solicitação de `authorization_code` + `refresh_token` respondendo **apenas `authorization_code`**. Não emite nem anuncia refresh tokens. Métodos de autenticação do cliente diferentes de `none` e callbacks fora de `chatgpt.com` continuam proibidos.
+
+Se o cadastro falhar de novo, o terminal exibirá `OAuth client registration rejected: CATEGORIA` sem corpo da requisição, URLs, tokens ou outros metadados. Envie **somente essa categoria e a mensagem de erro do ChatGPT**, sem enviar credenciais. Categorias incluem `invalid_client_name`, `invalid_redirect_uris`, `unsupported_grant_types`, `unsupported_token_auth_method`, `unsupported_response_types` e `redirect_uri_not_allowed`. Não é necessário repetir os testes de DNS ou trocar a configuração do sistema.
+
+Como o Quick Tunnel é efêmero, ao reiniciar o comando será necessário **remover ou atualizar a tentativa de conexão antiga** e cadastrar a URL recém-gerada; IDs de clientes anteriores não sobrevivem à nova sessão.
+
 ## DNS temporariamente indisponível
 
-Após o `cloudflared` anunciar uma URL, um resolvedor pode inicialmente responder `no such host`/NXDOMAIN. O SignalSpace espera **até 60 segundos** e repete apenas falhas DNS antes de encerrar a sessão. Erros de TLS, metadados e autenticação continuam interrompendo imediatamente. A espera não altera DNS do sistema, não desliga a verificação TLS e não gera outro túnel automaticamente. Se a falha persistir, a URL não será apresentada como pronta.
+O teste real observou `registered=true` e `connection_errors=0`, mas o novo hostname continuou retornando `no such host` mesmo após 60 segundos. A Cloudflare documenta que um registro recém-criado pode ficar invisível por **cache negativo (NXDOMAIN)** se for consultado cedo demais; a causa específica ainda não está comprovada. Agora, após a URL, o SignalSpace aguarda brevemente um registro de conexão do processo e mais três segundos **antes da primeira consulta DNS local**. Depois, espera **até 60 segundos** e repete apenas falhas DNS antes de encerrar a sessão. Erros de TLS, metadados e autenticação continuam interrompendo imediatamente. A espera não altera DNS do sistema, não desliga a verificação TLS e não gera outro túnel automaticamente. Se a falha persistir, o SignalSpace consulta **somente para diagnóstico** o Google Public DNS por HTTPS (DoH) e inclui `public_dns=resolved`, `nxdomain`, `no_a_record` ou `unavailable` no erro. Essa consulta não é usada para conectar, substituir o DNS local, dispensar o teste HTTPS nem aprovar a URL. `public_dns=resolved` com `no such host` local sugere diferença entre os resolvedores; `nxdomain` demonstra resposta negativa no resolvedor consultado, mas não prova ausência no DNS autoritativo. Se a falha persistir, a URL não será apresentada como pronta. Documentação sobre cache negativo: https://developers.cloudflare.com/dns/troubleshooting/dns-issues/ e API usada: https://developers.google.com/speed/public-dns/docs/doh/json.
 
 Para inspecionar o resolvedor no Linux, use o hostname citado no erro anterior (sem `https://` e sem `/mcp`):
 

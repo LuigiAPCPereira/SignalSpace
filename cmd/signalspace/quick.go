@@ -83,12 +83,23 @@ func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start 
 		<-serverExited
 	}()
 
-	// A publicação não é declarada pronta apenas porque cloudflared imprimiu uma URL.
+	// A URL pode ser anunciada antes da conexão e do registro DNS público.
+	// Evitar uma consulta prematura que envenenaria caches com NXDOMAIN.
+	if err := waitQuickDNSWarmup(ctx, quick, 2*time.Second, 3*time.Second); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
 	if err := awaitQuickTransport(ctx, resource, quick.Done(), serveDone, verify, 60*time.Second, 2*time.Second); err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
 		status := quick.Diagnostics()
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			return fmt.Errorf("%w; public_dns=%s; cloudflared signals: registrations=%d, registered=%t, disconnections=%d, connection_errors=%d, log_read_errors=%d (raw logs omitted)", err, probeQuickPublicDNS(ctx, resource, nil, publicDNSURL), status.Registrations, status.Registered, status.Disconnections, status.ConnectionErrors, status.LogReadErrors)
+		}
 		return fmt.Errorf("%w; cloudflared signals: registrations=%d, registered=%t, disconnections=%d, connection_errors=%d, log_read_errors=%d (raw logs omitted)", err, status.Registrations, status.Registered, status.Disconnections, status.ConnectionErrors, status.LogReadErrors)
 	}
 	select {
@@ -156,5 +167,37 @@ func awaitQuickTransport(ctx context.Context, resource string, tunnelDone <-chan
 			return fmt.Errorf("public HTTPS verification failed after DNS retry window, tunnel closed: %w", lastErr)
 		case <-timer.C:
 		}
+	}
+}
+
+// waitQuickDNSWarmup espera pelo marcador de conexão de forma limitada e concede
+// uma curta janela para a criação do registro DNS antes da primeira consulta.
+// A ausência do marcador não vira prova de falha: formatos de log podem mudar.
+func waitQuickDNSWarmup(ctx context.Context, quick *tunnel.Quick, registrationWindow, settle time.Duration) error {
+	waitCtx, cancel := context.WithTimeout(ctx, registrationWindow)
+	defer cancel()
+	poll := time.NewTicker(100 * time.Millisecond)
+	defer poll.Stop()
+	for !quick.Diagnostics().Registered {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-quick.Done():
+			return errors.New("cloudflared stopped before DNS warm-up")
+		case <-waitCtx.Done():
+			goto settleDNS
+		case <-poll.C:
+		}
+	}
+settleDNS:
+	timer := time.NewTimer(settle)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-quick.Done():
+		return errors.New("cloudflared stopped during DNS warm-up")
+	case <-timer.C:
+		return nil
 	}
 }
