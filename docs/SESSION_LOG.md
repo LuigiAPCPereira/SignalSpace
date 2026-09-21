@@ -111,6 +111,14 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - A CI do SHA exato não foi consultada, conforme orientação do proprietário; não registrar PASS/FAIL remoto. Nenhum túnel, grant OAuth, merge ou deploy foi realizado.
 - Depois da reconciliação, o commit somente documental `66f2641` foi publicado normalmente; ele é o HEAD corrente da branch, enquanto `3deefc1` continua sendo o commit funcional e `9e93b65` o checkpoint anterior.
 
+## 20/09/2026 — fatia local da matriz negativa SS-BE-007
+
+- Reabertos na ref corrente os onze grupos de `docs/LOCAL_ADMIN_AUTHORIZATION.md`, §8, e classificados na [TASKLIST](../TASKLIST.md) como cobertura automatizada local, cobertura parcial ou pendência operacional. Testes simulados e harnesses não foram contados como smoke externo.
+- A lacuna selecionada foi o grupo 1, por risco de exposição do painel no listener público. O teste novo `cmd/signalspace/quick_ports_test.go:TestQuickPublicListenerRejectsAdministrativeMatrix` reproduziu `307` para `OPTIONS /api/admin/v1//session`, causado pela normalização do `http.ServeMux`, antes da correção.
+- `cmd/signalspace/main.go` passou a rejeitar caminhos decodificados sob `/api/admin/` antes do mux público. A repetição do teste cobre seis variantes — sessão, pareamento, detalhe, decisão, caminho codificado e barras duplicadas — com `404` e sem `Set-Cookie`.
+- Validação focada sequencial: matriz pública, isolamento Quick, testes negativos de `internal/admin`/`internal/auth` e testes de `internal/mcp`/`internal/workspace` passaram. CI remota não foi consultada por orientação do proprietário; nenhum túnel, TLS bypass, navegador, grant OAuth, frontend, merge ou deploy foi usado.
+- SS-BE-007 permanece em andamento: faltam evidências operacionais de DNS rebinding/proxy, restart completo, estados negativos visuais/externos e repetição de leitura/revogação no fluxo M3.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.

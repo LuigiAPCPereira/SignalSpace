@@ -170,7 +170,19 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (h
 	}
 	// Consulta pública apenas do próprio pedido OAuth; nenhum handler administrativo.
 	mux.Handle("/authorize/status", authorization.PublicStatusHandler())
-	return mux, authorization, console, nil
+	return rejectPublicAdministrativePaths(mux), authorization, console, nil
+}
+
+// rejectPublicAdministrativePaths impede que o ServeMux normalize uma rota
+// administrativa pública e responda com redirecionamento em vez de 404.
+func rejectPublicAdministrativePaths(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/admin/") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // serveApprovals não oferece endpoints públicos para aceitar solicitações.

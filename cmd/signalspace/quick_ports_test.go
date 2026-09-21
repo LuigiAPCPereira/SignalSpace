@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -143,5 +144,64 @@ func TestQuickPreparedListenersServeIsolatedHTTPRouters(t *testing.T) {
 	}
 	if status, _ := fetch(public.Addr().String(), "localhost:7676", "/mcp"); status != 204 {
 		t.Fatalf("public service did not serve its own route: %d", status)
+	}
+}
+
+func TestQuickPublicListenerRejectsAdministrativeMatrix(t *testing.T) {
+	public := testLoopback(t)
+	handler, authorization, err := embeddedHandler("https://public.example/mcp", filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer authorization.Close()
+
+	server := diagnosticServer(handler)
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(public) }()
+	defer func() {
+		_ = server.Close()
+		if err := <-done; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Errorf("public server: %v", err)
+		}
+	}()
+
+	client := &http.Client{
+		Transport: &http.Transport{Proxy: nil},
+		Timeout:   2 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	defer client.Transport.(*http.Transport).CloseIdleConnections()
+	cases := []struct {
+		name, method, path, host string
+	}{
+		{"session", http.MethodGet, "/api/admin/v1/session", "localhost:7676"},
+		{"pair", http.MethodPost, "/api/admin/v1/pair", "localhost:7677"},
+		{"request_detail", http.MethodGet, "/api/admin/v1/requests/abcdefghijklmnopqrstuv", "evil.example"},
+		{"decision_alternative_method", http.MethodPut, "/api/admin/v1/requests/abcdefghijklmnopqrstuv/decision", "localhost:7677"},
+		{"encoded_path", http.MethodGet, "/%61pi/admin/v1/session", "localhost:7677"},
+		{"duplicate_slash", http.MethodOptions, "/api/admin/v1//session", "localhost:7677"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, "http://"+public.Addr().String()+tc.path, strings.NewReader("{}"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Host = tc.host
+			req.Header.Set("Cookie", "signalspace_auth=stale")
+			response, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusNotFound {
+				t.Fatalf("public listener exposed administrative path: %s %s returned %d", tc.method, tc.path, response.StatusCode)
+			}
+			if len(response.Cookies()) != 0 {
+				t.Fatalf("public listener set administrative cookie for %s", tc.path)
+			}
+		})
 	}
 }
