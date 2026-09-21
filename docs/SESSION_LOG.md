@@ -79,6 +79,14 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - Validação local nesta sessão: `gofmt -l .`, `git diff --check`, `go test ./...`, `go test -race ./internal/auth ./cmd/signalspace`, `go vet ./...`, `go build ./...`, `node --check internal/auth/consent.js` e testes focados de status/Quick — todos PASS. A primeira tentativa deixou um processo de teste próprio segurando 7676 após uma falha de roteamento; o processo foi encerrado, a rota explícita foi corrigida e a sequência completa passou.
 - Limites: CI remoto ainda não executada/observada para `0ed5f5a`; não houve execução em navegador real nem integração da branch `feat/frontend-oauth-consent`. PR #1 permanece draft, sem merge/deploy; os dois patches não rastreados do worktree foram preservados.
 
+## 20/09/2026 — revisão da CSP e testes funcionais do polling (SS-BE-006)
+
+- A revisão identificou uma falha comprovada em [`0ed5f5a`](https://github.com/LuigiAPCPereira/SignalSpace/commit/0ed5f5a): `default-src 'none'` sem `connect-src` bloqueava o `fetch` same-origin do polling. Também foi corrigido o estado inicial do botão, que agora nasce `disabled` no HTML.
+- [`0988fc5`](https://github.com/LuigiAPCPereira/SignalSpace/commit/0988fc53101ef87a8f76c7b08865cf75d5cb872c) adiciona `connect-src 'self'`, mantém `script-src 'self'`, todas as demais diretivas existentes e um `<noscript>` que preserva a submissão manual sujeita à validação do servidor. `consent_page_test.go` verifica as diretivas, o botão desabilitado e o fallback.
+- `consent_js_test.mjs` executa funcionalmente a IIFE com DOM/fetch/timers controlados e cobre PENDING → APPROVED, DENIED, EXPIRED, 403, 404, 429/Retry-After, 5xx, JSON inválido, perda de rede, headers same-origin/no-store e submissão protegida. `gofmt`, `go test ./...`, race dos pacotes afetados, `go vet ./...`, `go build ./...`, `node --check` e os testes Node passaram localmente.
+- [CI #188](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35548396262) passou integralmente no SHA. Tentou-se um harness HTTPS local descartável com cookie e aprovação automática, mas o navegador integrado recusou o certificado autoassinado (`ERR_CERT_AUTHORITY_INVALID`); nenhum intersticial foi contornado e nenhum túnel público foi iniciado. A aceitação real de navegador permanece desconhecida/pendente.
+- PR #1 permanece draft, sem merge/deploy; `feat/frontend-oauth-consent` e os dois patches não rastreados do worktree foram preservados.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
