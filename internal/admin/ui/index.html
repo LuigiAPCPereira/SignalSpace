@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SignalSpace — administração local</title>
+</head>
+<body>
+  <main>
+    <h1>SignalSpace</h1>
+    <p id="session-status" role="status">Carregando sessão local…</p>
+    <p id="error" role="alert" hidden></p>
+
+    <section id="pair-section" hidden>
+      <h2>Parear esta instância</h2>
+      <p>Use o código exibido pelo processo local e defina uma frase-senha.</p>
+      <form id="pair-form">
+        <label>Código de pareamento <input name="pairing_code" autocomplete="one-time-code" required></label>
+        <label>Frase-senha <input name="passphrase" type="password" autocomplete="new-password" required></label>
+        <button type="submit">Parear</button>
+      </form>
+    </section>
+
+    <section id="unlock-section" hidden>
+      <h2>Desbloquear instância</h2>
+      <form id="unlock-form">
+        <label>Frase-senha <input name="passphrase" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Desbloquear</button>
+      </form>
+    </section>
+
+    <section id="authenticated-section" hidden>
+      <h2>Solicitações OAuth</h2>
+      <p><button id="refresh-session" type="button">Renovar sessão</button> <button id="lock-session" type="button">Bloquear</button></p>
+      <p id="requests-status" role="status"></p>
+      <ul id="requests"></ul>
+    </section>
+  </main>
+  <script src="/admin.js" defer></script>
+</body>
+</html>
