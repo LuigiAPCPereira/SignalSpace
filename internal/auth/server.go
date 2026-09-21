@@ -62,7 +62,8 @@ var (
 <form id="authorization-complete-form" method="post" action="/authorize/complete">
 <input type="hidden" name="request" value="{{.ID}}">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<button id="continue-button" type="submit">Continuar</button>
+<button id="continue-button" type="submit" disabled>Continuar</button>
+<noscript><p>JavaScript está desativado; a atualização automática não está disponível. O servidor continuará validando a aprovação local antes de concluir.</p><button type="submit">Continuar sem atualização automática</button></noscript>
 </form>
 <p>Esta solicitação expira em cinco minutos. Nenhum acesso é concedido antes da aprovação local.</p>
 </main>
@@ -511,7 +512,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: "signalspace_auth", Value: session, Path: "/authorize", MaxAge: int(pendingTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if s.config.OnRequest != nil {

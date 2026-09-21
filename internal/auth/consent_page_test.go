@@ -13,10 +13,15 @@ func TestConsentPageUsesSameOriginPollingScriptWithStrictScriptCSP(t *testing.T)
 	request := <-events
 
 	csp := page.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
-		t.Fatalf("consent CSP permits unsafe scripts: %q", csp)
+	for _, directive := range []string{"default-src 'none'", "script-src 'self'", "connect-src 'self'", "style-src 'unsafe-inline'", "form-action 'self'", "base-uri 'none'", "frame-ancestors 'none'"} {
+		if !strings.Contains(csp, directive) {
+			t.Fatalf("consent CSP missing %q: %q", directive, csp)
+		}
 	}
-	if !strings.Contains(page.Body.String(), `<main id="consent" data-request-id="`+request.ID+`"`) || !strings.Contains(page.Body.String(), `<script src="/authorize/consent.js" defer></script>`) {
+	if strings.Contains(csp, "script-src 'unsafe-inline'") || strings.Contains(csp, "connect-src *") {
+		t.Fatalf("consent CSP permits unsafe scripts or external connections: %q", csp)
+	}
+	if !strings.Contains(page.Body.String(), `<main id="consent" data-request-id="`+request.ID+`"`) || !strings.Contains(page.Body.String(), `<script src="/authorize/consent.js" defer></script>`) || !strings.Contains(page.Body.String(), `<button id="continue-button" type="submit" disabled>Continuar</button>`) || !strings.Contains(page.Body.String(), `<noscript>`) {
 		t.Fatalf("consent page did not include request-bound polling bootstrap: %s", page.Body.String())
 	}
 
