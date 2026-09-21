@@ -87,6 +87,14 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - [CI #188](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35548396262) passou integralmente no SHA. Tentou-se um harness HTTPS local descartável com cookie e aprovação automática, mas o navegador integrado recusou o certificado autoassinado (`ERR_CERT_AUTHORITY_INVALID`); nenhum intersticial foi contornado e nenhum túnel público foi iniciado. A aceitação real de navegador permanece desconhecida/pendente.
 - PR #1 permanece draft, sem merge/deploy; `feat/frontend-oauth-consent` e os dois patches não rastreados do worktree foram preservados.
 
+## 20/09/2026 — aceite parcial no navegador via Quick Tunnel real (SS-BE-006)
+
+- Após autorização explícita do proprietário, `go run ./cmd/signalspace connect quick` iniciou `cloudflared` apontando somente para `http://127.0.0.1:7676`. A primeira sessão registrou `registered=true`, mas falhou fechada porque o DNS local não resolveu o hostname durante a janela; nenhuma URL foi anunciada como pronta e as portas foram liberadas.
+- Uma segunda sessão passou o preflight HTTPS público do SignalSpace e anunciou uma URL efêmera. Foi registrado um cliente OAuth descartável com callback permitido do ChatGPT; a API administrativa 7677 não foi iniciada nem tunelada.
+- No navegador integrado, a página `/authorize` carregou pela URL HTTPS pública sem intersticial. A evidência observada foi: botão `Continuar` inicialmente desabilitado, status PENDING, decisão `approve <id>` no terminal, status `Aprovação local confirmada. Você pode continuar.` e botão habilitado. Logs de console não apresentaram erros ou avisos CSP.
+- O botão não foi acionado: isso emitiria um código OAuth e redirecionaria para o callback do ChatGPT, uma concessão que exige autorização específica separada. `/authorize/complete` permanece coberto pelos testes Go/Node e continua sendo a autoridade final. DENIED/EXPIRED/403/404/429/5xx, JSON inválido e perda de rede têm cobertura funcional Node, mas não foram reproduzidos visualmente no navegador.
+- A aba descartável foi fechada, o túnel foi encerrado com Ctrl+C e não restaram listeners 7676/7677 nem processo `cloudflared`. O estado de SS-BE-006 permanece implementado não validado no inventário, com aceite visual HTTPS do caminho feliz comprovado e pendências negativas/final explícitas.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
