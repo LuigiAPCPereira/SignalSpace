@@ -148,3 +148,11 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
+
+## 20/09/2026 — retomada do MVP e fatia vertical de programação
+
+- Recuperação local: branch isolada `codex/mvp-vertical-programming` criada do backend HEAD `d7111c8`; `origin/feat/frontend-oauth-consent` foi apenas consultada em `3911c4e`; os dois patches não rastreados foram preservados. CI, túnel, grant OAuth, merge e deploy não foram usados.
+- Fontes: reabertos `AGENTS.md`, `DOCUMENTATION_AND_CONTINUITY.md`, PRODUCT, MVP, ROADMAP, TASKLIST, PROJECT_STATE, SESSION_LOG, contratos de autorização/workspace e o alinhamento frontend na ref correta. O kit canônico local v2.2 também foi lido nos documentos de continuidade, cenários, rastreabilidade, validação, distribuição/bootstrap e apresentação. A adaptação versionada do SignalSpace continua v2.0 e não foi tratada como cópia sincronizada do Project/Notion.
+- Implementação: `1db1ebd` adiciona `ReplaceText` com conteúdo esperado, limites, no-symlink, conflito, permissões e revoke; `d94915c` adiciona `go test ./...` fixo, limites/timeout, snapshot Git somente leitura e teste vertical; `9fdf575` adiciona UI administrativa same-origin em 7677 com sessão, pareamento, unlock, fila, decisão/reconciliação, refresh explícito e lock; `9e26c19` corrige CSRF bootstrap, nome do cliente, publicação atômica, retenção de FD e timeout do diff.
+- Validação focalizada: `go test ./internal/workspace ./internal/programming ./internal/admin -count=1` e `node --check internal/admin/ui/admin.js` passaram. A cobertura é local/automatizada; não valida navegador, CI, MCP remoto, sandbox de processo ou escritores externos.
+- Planejamento: ROADMAP recebeu M5/M6; TASKLIST recebeu SS-MVP-001…006; `docs/PROGRAMMING_TOOLS.md` define a fronteira local e seus limites; PROJECT_STATE foi vinculado a SS-MVP-006. SS-BE-006/007 permanecem nos estados anteriores.

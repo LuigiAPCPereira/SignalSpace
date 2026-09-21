@@ -9,7 +9,7 @@
 go run ./cmd/signalspace connect quick
 go run ./cmd/signalspace connect quick read
 
-# Liga apenas a API administrativa local, ainda SEM interface HTML integrada.
+# Liga a administração HTML/API local em 7677; a página é servida somente no loopback.
 go run ./cmd/signalspace connect quick panel
 go run ./cmd/signalspace connect quick read panel
 ```
@@ -34,6 +34,6 @@ Admin exige socket `127.0.0.1`, Host canônico `localhost:7677`, sessão própri
 - [CI #176](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35538258629): `quick_panel_failure_test.go` interrompe o `http.Server` administrativo real depois da prontidão em duas situações: durante a verificação pública, antes do anúncio, e depois de anunciar. Em ambas exige erro em vez de fallback e rebind das portas 7676/7677; a primeira também verifica ausência de URL e segredo no output. O ponto de injeção constrói `admin.NewServer` na produção e é inacessível pela CLI. O processo `cloudflared` permanece simulado no teste.
 - [CI #146](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35531123085) e [CI #152](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35532258138): OAuth/decisão, resposta perdida e revogação de grant validados apenas no harness HTTP local, não via rede Cloudflare.
 
-**Faltam os aceites operacionais SS-BE-002/006/007/008:** `cloudflared` real em ambiente descartável autorizado do proprietário, interface HTML/JS funcional em branch própria, CSP de script segura, navegador real, smoke da decisão e shutdown. O conector GitHub não executa o túnel na máquina do proprietário nem enxerga o worktree local. Não confundir CI de Go com execução da política CSP no browser.
+**Faltam os aceites operacionais SS-BE-002/006/007/008:** `cloudflared` real em ambiente descartável autorizado do proprietário, navegador real, smoke da decisão e shutdown. A UI HTML/JS local agora existe na branch `codex/mvp-vertical-programming`, mas foi validada somente por HTTP local, sintaxe e testes de roteamento; não houve integração da branch frontend nem aceite visual. O conector GitHub não executa o túnel na máquina do proprietário nem enxerga o worktree local. Não confundir CI de Go com execução da política CSP no browser.
 
-**Esta branch serve API, não painel visual.** `feat/frontend-oauth-consent` continua separada; integração de HTML exige confirmação do HEAD, propriedade dos arquivos e autorização específica. Não digitar segredo de pareamento em site externo. HTTP loopback não equivale a HTTPS, não protege contra proxy externo deliberadamente configurado nem garante segurança de produção; Quick Tunnel público/temporário não é deployment. Sem auditoria independente, merge ou deploy.
+**A administração local serve painel e API somente no loopback.** `feat/frontend-oauth-consent` continua separada; não houve integração de seus protótipos. Não digitar segredo de pareamento em site externo. HTTP loopback não equivale a HTTPS, não protege contra proxy externo deliberadamente configurado nem garante segurança de produção; Quick Tunnel público/temporário não é deployment. Sem auditoria independente, merge ou deploy.

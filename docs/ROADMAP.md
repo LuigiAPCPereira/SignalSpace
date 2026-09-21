@@ -14,3 +14,14 @@
 Na próxima fatia de código autorizada, completar **SS-BE-004** (`decided_at`, `COMPLETED`/`EXPIRED`, tombstones, retenção, método legado e reconciliação), depois revisar as dependências de SS-BE-002/003/005/006/007 e executar SS-BE-008 somente após os gates de segurança. Componentes já entregues não precisam ser recriados. Falhas de bind 7677, vazamento de endpoint admin para túnel, grant revogado, corrida ou resposta perdida devem falhar fechado e ser testadas. O PR permanece draft e sem merge até autorização específica.
 
 **Fora do escopo autorizado desta frente:** edição, Git, shell, aprovações individuais de ferramentas, HTML funcional e merge. O MVP de longo prazo contém outras fatias, mas este roadmap não as promove a trabalho autorizado nem inventa datas. Histórico de decisões e marcos em [`SESSION_LOG.md`](SESSION_LOG.md); checkpoint derivado em [`PROJECT_STATE.md`](PROJECT_STATE.md).
+
+## Reabertura do MVP — programação vertical local
+
+Esta seção registra a nova frente autorizada pela missão de 20/09/2026 sem apagar a fronteira histórica de M1–M4. A implementação ocorre na branch isolada `codex/mvp-vertical-programming`; a branch `feat/frontend-oauth-consent` não foi alterada.
+
+| Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
+| --- | --- | --- | --- | --- | --- |
+| M5 — integração administrativa local | Página funcional no listener 7677 consulta sessão, pareia/desbloqueia, lista e decide pedidos com cookie HttpOnly/CSRF em memória. | SS-BE-003/005; contrato frontend reaberto na branch frontend | SS-MVP-001 | implementada não validada | `internal/admin/ui/`, `internal/admin/ui.go`, `internal/admin/ui_test.go`, commits `9fdf575` e `9e26c19`; HTTP local, CSRF bootstrap e sintaxe JS passaram. Sem navegador real. |
+| M6 — programação vertical local | Concessão local, edição com conteúdo esperado, teste fixo, diff somente leitura e negação após revogação. | WORKSPACE_SECURITY; novo contrato `PROGRAMMING_TOOLS.md` | SS-MVP-002…006 | parcial por fronteira | commits `1db1ebd`, `d94915c` e `9e26c19`; `go test` focado passou. Não há exposição MCP/remota nem sandbox de processo. |
+
+O próximo marco não é publicar escrita/execução/Git: é definir e revisar o contrato de autorização por operação, com escopos separados e testes de revogação, antes de qualquer transporte remoto.

@@ -61,3 +61,13 @@ Na ref `f585188`, a implementação de `internal/admin/transport.go` foi reabert
 `TestAdminTransportRejectsForgedProxyHeadersOverLoopback` envia combinações de Host inválido/público, Origin cruzado, preflight e mutação sem Origin com cabeçalhos de proxy forjados para um servidor HTTP loopback. As rejeições retornam 403, não concedem CORS e não alcançam o handler; Host/origem válidos sem credenciais de transporte continuam alcançando a fronteira. `TestAdminTransportProxyHeadersDoNotBypassSessionOrCSRF` usa o `Gate` real e confirma `403 ACCESS_DENIED` para CSRF incorreto e `401 AUTH_REQUIRED` para sessão forjada, mesmo com proxy forjado.
 
 O resultado é cobertura automatizada local adicional, sem correção de produto. Não é prova operacional de DNS rebinding, proxy real ou host rewrite de implantação. SS-BE-007 permanece **em andamento**; CI não foi consultada e continua desconhecida, sem túnel, bypass TLS, OAuth, frontend, merge ou deploy.
+
+## Checkpoint atual — SS-MVP-006 — 20/09/2026
+
+**Ref observada:** branch `codex/mvp-vertical-programming`, código integrado até `9e26c19` (`1db1ebd` edição local, `d94915c` programação/teste/diff, `9fdf575` UI administrativa, `9e26c19` hardening). Os dois patches não rastreados `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` foram preservados. O checkpoint é derivado e não é lock, autorização de merge ou prova de publicação.
+
+**Resultado:** SS-MVP-003, SS-MVP-004, SS-MVP-005 e SS-MVP-006 estão validadas no escopo local automatizado; SS-MVP-001 está implementada não validada por falta de navegador; SS-MVP-002 permanece em andamento porque não há contrato de escopos de programação remoto/MCP. SS-BE-006 e SS-BE-007 mantêm seus estados anteriores e não foram artificialmente concluídas.
+
+**Evidência:** `internal/workspace/edit_test.go`, `internal/programming/*_test.go`, `internal/admin/ui_test.go`, `node --check internal/admin/ui/admin.js`; teste vertical executa leitura, edição, `go test ./...`, snapshot/diff, revoke e negação. Limites: sem CI, túnel, grant OAuth, navegador, MCP remoto ou sandbox de processo nesta missão.
+
+**Próxima ação vinculada:** SS-MVP-002 — revisar autorização separada por operação antes de qualquer exposição remota de escrita, execução ou Git. A branch frontend `feat/frontend-oauth-consent` e o PR #1 draft permanecem preservados, sem merge/deploy.

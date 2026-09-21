@@ -42,3 +42,21 @@
 **Gate documental:** matriz nove/nove com fonte adequada, TASKLIST por IDs e aceites, marcos, história, checkpoint SS-BE-004, entradas canônicas v2, links essenciais consultados, alterações documentais restritas, sem duas autoridades de tarefas. Resultado **ADOÇÃO CONCLUÍDA no repositório**, sujeito à conferência posterior de existência deste relatório e do HEAD; se não verificável, rebaixar para **ADOÇÃO PARCIAL** no handoff. Esse estado **não** significa operação integrada em outros ambientes.
 
 **Lacuna documental impeditiva:** nenhuma identificada nesta ref após verificação e reabertura do relatório. **Limites não impeditivos à adoção no repositório:** anexo Project não sincronizado com versão personalizada; worktree local/Codex/agendamentos não verificados; nenhum validador externo completo de links. **Próxima ação de desenvolvimento, somente mediante autorização aplicável:** `SS-BE-004` completar lifecycle, testar expiração/concorrência/revogação/perda de resposta; após validação avançar aos gates de SS-BE-002/003/005/006/007/008. PR permanece draft, sem merge ou frontend integrado.
+
+## Reabertura para o kit Agent Development Protocol v2.2 — 20/09/2026
+
+**Estado atual: ADOÇÃO PARCIAL.** O kit canônico v2.2 foi lido a partir de `/home/luigiapcp/Downloads/continuity-protocol-v2.0/continuity-protocol-v2.2/`, incluindo README, template de agentes, continuidade, cenários, rastreabilidade, validação, distribuição/bootstrap e apresentação. A ref do SignalSpace continua usando sua adaptação versionada v2.0; não há prova de publicação/aceite no Notion, sincronização com a cópia do Project, leitura por tarefa agendada ou integração automática. A conclusão histórica acima permanece registro da adoção v2 do repositório, não deve ser reinterpretada como publicação v2.2.
+
+| Função | Fonte na ref | Estado atual | Evidência e limite |
+| --- | --- | --- | --- |
+| 1. Identidade, visão, público e exclusões | `docs/PRODUCT.md`, `README.md` | EXISTENTE E VERIFICADA | Produto e exclusões preservados; não autoriza programação remota. |
+| 2. Requisitos e aceites | `docs/MVP.md`, contratos admin/workspace | EXISTENTE E VERIFICADA | Requisitos reabertos; programação local ganhou contrato separado. |
+| 3. Arquitetura e contratos | contratos, código, `docs/PROGRAMMING_TOOLS.md` | EXISTENTE E VERIFICADA | Fronteira local descrita; escopos remotos ainda pendentes. |
+| 4. Decisões duráveis | `PRODUCT.md`, contratos, `SESSION_LOG.md` | EXISTENTE E VERIFICADA | Decisões anteriores preservadas e nova fatia registrada. |
+| 5. Inventário de tarefas | `TASKLIST.md` | CRIADA E VERIFICADA | SS-MVP-001…006 têm estado, dependência, aceite e evidência. |
+| 6. Planejamento e marcos | `docs/ROADMAP.md` | CRIADA E VERIFICADA | M5/M6 adicionados sem apagar M1–M4. |
+| 7. Histórico recuperável | `docs/SESSION_LOG.md`, commits | CRIADA E VERIFICADA | Retomada e três commits locais registrados; sem CI/túnel nesta missão. |
+| 8. Checkpoint e próxima ação | `docs/PROJECT_STATE.md` | CRIADA E VERIFICADA | Checkpoint vinculado a SS-MVP-006; próxima ação SS-MVP-002. |
+| 9. Instruções e versão | `AGENTS.md`, `DOCUMENTATION_AND_CONTINUITY.md` | EXISTENTE E VERIFICADA | Entrada local v2.0 reaberta; kit v2.2 lido, mas não publicado/sincronizado. |
+
+**Limite de adoção:** nenhum estado “ADOÇÃO CONCLUÍDA v2.2” é declarado. O Project/Notion, Codex em outro ambiente e Tarefas Agendadas exigem verificação independente; seus acessos não foram inventados.

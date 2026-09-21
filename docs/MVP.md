@@ -2,6 +2,8 @@
 
 **Status:** especificação inicial. Nenhum dos requisitos abaixo foi implementado ou testado no SignalSpace até a criação deste documento.
 
+> **Reabertura 20/09/2026:** a frase acima é o status histórico da especificação. A fatia local atual está registrada em `TASKLIST.md` como SS-MVP-001…006 e em [`docs/PROGRAMMING_TOOLS.md`](PROGRAMMING_TOOLS.md); ela ainda não constitui integração ChatGPT Web, MCP remoto ou aceite de navegador.
+
 ## Objetivo
 
 Em uma conversa no ChatGPT Web, conectar ao SignalSpace em uma máquina do usuário, abrir um projeto autorizado, ler um arquivo, realizar uma alteração delimitada, executar um comando de teste e obter o diff/resultado verdadeiro.
