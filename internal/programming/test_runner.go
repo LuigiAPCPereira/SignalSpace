@@ -54,11 +54,16 @@ func RunPredefinedTest(ctx context.Context, session *workspace.Session, timeout 
 	if outputLimit < 1 || outputLimit > maxOutputLimit {
 		return TestResult{}, ErrInvalidTestExecution
 	}
-	dir, err := session.ProcessDir()
-	if err != nil {
-		return TestResult{}, err
-	}
+	var result TestResult
+	err := session.WithProcessDir(func(dir string) error {
+		var runErr error
+		result, runErr = runPredefinedTestInDir(ctx, dir, timeout, outputLimit)
+		return runErr
+	})
+	return result, err
+}
 
+func runPredefinedTestInDir(ctx context.Context, dir string, timeout time.Duration, outputLimit int) (TestResult, error) {
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	stdout := &limitedBuffer{limit: outputLimit}

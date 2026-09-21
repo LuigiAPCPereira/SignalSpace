@@ -66,7 +66,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	}
 	if panel {
 		confirmation += " PAINEL"
-		fmt.Fprintln(output, "API administrativa experimental: somente http://localhost:7677, com pareamento local. Não há página HTML integrada; nunca exponha a porta 7677 por proxy ou túnel.")
+		fmt.Fprintln(output, "Administração local: http://localhost:7677/ com pareamento local; nunca exponha a porta 7677 por proxy ou túnel.")
 	}
 	fmt.Fprintf(output, "Digite %s para iniciar o túnel. Qualquer outra resposta cancela.\n", confirmation)
 	reader := bufio.NewReader(input)
@@ -181,7 +181,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	default:
 	}
 	if panel {
-		fmt.Fprintln(output, "API administrativa local: http://localhost:7677/api/admin/v1/session (somente API, sem interface HTML).")
+		fmt.Fprintln(output, "Administração local: http://localhost:7677/ (a API permanece em /api/admin/v1; nunca publique a porta 7677 por proxy ou túnel).")
 		fmt.Fprintf(output, "Código de pareamento desta instância (somente neste terminal, expira em 5 minutos): %s\n", pairingCode)
 	}
 	fmt.Fprintf(output, "Diagnóstico HTTPS aprovado. Cole no ChatGPT Web: %s\n", resource)

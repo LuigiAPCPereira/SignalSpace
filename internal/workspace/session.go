@@ -19,13 +19,14 @@ import (
 const MaxTextBytes = 32 << 10
 
 var (
-	ErrInvalidRoot = errors.New("invalid workspace root")
-	ErrInvalidPath = errors.New("invalid relative file path")
-	ErrUnsafePath  = errors.New("symlink or non-directory path component")
-	ErrNotFile     = errors.New("path is not a regular file")
-	ErrNotText     = errors.New("file is not UTF-8 text")
-	ErrTooLarge    = errors.New("file exceeds reading limit")
-	ErrClosed      = errors.New("workspace session closed")
+	ErrInvalidRoot             = errors.New("invalid workspace root")
+	ErrInvalidPath             = errors.New("invalid relative file path")
+	ErrUnsafePath              = errors.New("symlink or non-directory path component")
+	ErrNotFile                 = errors.New("path is not a regular file")
+	ErrNotText                 = errors.New("file is not UTF-8 text")
+	ErrTooLarge                = errors.New("file exceeds reading limit")
+	ErrClosed                  = errors.New("workspace session closed")
+	ErrInvalidProcessOperation = errors.New("invalid workspace process operation")
 )
 
 // Session mantém a identidade e o descritor de uma raiz aprovada em outra
@@ -85,16 +86,20 @@ func normalizePathError(err error) error {
 // ID é opaco e permanece constante somente durante a sessão.
 func (s *Session) ID() string { return s.id }
 
-// ProcessDir devolve um diretório efêmero para o executor local usar como cwd.
-// Ele não é um sandbox: o processo continua com os privilégios do usuário e
-// pode acessar qualquer outro recurso permitido pelo sistema operacional.
-func (s *Session) ProcessDir() (string, error) {
+// WithProcessDir executa uma operação local com o descritor da raiz retido sob
+// o mutex da sessão. Isso impede que Close/Grant/Revogação feche e reutilize o
+// FD entre a resolução de /proc/self/fd e o início do processo. O diretório
+// não é um sandbox: o processo mantém os privilégios do usuário.
+func (s *Session) WithProcessDir(operation func(string) error) error {
+	if operation == nil {
+		return ErrInvalidProcessOperation
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return "", ErrClosed
+		return ErrClosed
 	}
-	return fmt.Sprintf("/proc/self/fd/%d", s.rootFD), nil
+	return operation(fmt.Sprintf("/proc/self/fd/%d", s.rootFD))
 }
 
 func validRelative(relative string) bool {

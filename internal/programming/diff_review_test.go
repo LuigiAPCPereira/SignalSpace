@@ -11,7 +11,7 @@ import (
 	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
 )
 
-func gitFixtureSession(t *testing.T) *workspace.Session {
+func gitFixture(t *testing.T) (*workspace.Session, string) {
 	t.Helper()
 	root := t.TempDir()
 	runGitFixture(t, root, "init", "-q")
@@ -33,7 +33,7 @@ func gitFixtureSession(t *testing.T) *workspace.Session {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
-	return session
+	return session, root
 }
 
 func runGitFixture(t *testing.T, dir string, args ...string) {
@@ -46,7 +46,7 @@ func runGitFixture(t *testing.T, dir string, args ...string) {
 }
 
 func TestGitSnapshotDistinguishesProducedEditWithoutMutatingRepository(t *testing.T) {
-	session := gitFixtureSession(t)
+	session, _ := gitFixture(t)
 	before, err := CaptureGitSnapshot(context.Background(), session, 8192)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestGitSnapshotDistinguishesProducedEditWithoutMutatingRepository(t *testin
 }
 
 func TestGitSnapshotRequiresLiveSessionAndValidLimit(t *testing.T) {
-	session := gitFixtureSession(t)
+	session, _ := gitFixture(t)
 	if _, err := CaptureGitSnapshot(context.Background(), session, maxOutputLimit+1); err != ErrInvalidDiffReview {
 		t.Fatalf("invalid output limit accepted: %v", err)
 	}

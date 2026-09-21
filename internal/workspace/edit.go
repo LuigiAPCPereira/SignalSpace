@@ -1,7 +1,10 @@
 package workspace
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -16,9 +19,10 @@ var ErrConflict = errors.New("workspace file changed since the expected version"
 // listagem e revogação dentro desta sessão; nenhum endpoint remoto cria uma
 // concessão ou amplia seu escopo.
 //
-// A substituição preserva o inode e as permissões existentes. O chamador deve
-// fornecer expected novamente em cada alteração, evitando overwrite silencioso
-// quando outra operação desta instância já modificou o arquivo.
+// A substituição é preparada em arquivo temporário no mesmo diretório e
+// publicada atomicamente, preservando as permissões existentes. O chamador
+// deve fornecer expected novamente em cada alteração, evitando overwrite
+// silencioso quando outra operação desta instância já modificou o arquivo.
 func (s *Session) ReplaceText(relative, expected, replacement string) error {
 	if !validRelative(relative) {
 		return ErrInvalidPath
@@ -37,21 +41,22 @@ func (s *Session) ReplaceText(relative, expected, replacement string) error {
 	}
 
 	parts := strings.Split(relative, "/")
-	fd := s.rootFD
+	parentFD := s.rootFD
 	for _, part := range parts[:len(parts)-1] {
-		next, err := syscall.Openat(fd, part, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
-		if fd != s.rootFD {
-			_ = syscall.Close(fd)
+		next, err := syscall.Openat(parentFD, part, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+		if parentFD != s.rootFD {
+			_ = syscall.Close(parentFD)
 		}
 		if err != nil {
 			return normalizePathError(err)
 		}
-		fd = next
+		parentFD = next
 	}
-	opened, err := syscall.Openat(fd, parts[len(parts)-1], syscall.O_RDWR|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
-	if fd != s.rootFD {
-		_ = syscall.Close(fd)
+	if parentFD != s.rootFD {
+		defer syscall.Close(parentFD)
 	}
+	name := parts[len(parts)-1]
+	opened, err := syscall.Openat(parentFD, name, syscall.O_RDWR|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return normalizePathError(err)
 	}
@@ -82,16 +87,69 @@ func (s *Session) ReplaceText(relative, expected, replacement string) error {
 		return ErrConflict
 	}
 
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
+	tempName, err := newEditTempName()
+	if err != nil {
 		return err
 	}
-	if err := file.Truncate(0); err != nil {
+	tempFD, err := syscall.Openat(parentFD, tempName, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(info.Mode().Perm()))
+	if err != nil {
 		return err
 	}
-	if err := writeAll(file, []byte(replacement)); err != nil {
+	temp := os.NewFile(uintptr(tempFD), "workspace-edit-temp")
+	removeTemp := true
+	defer func() {
+		if temp != nil {
+			_ = temp.Close()
+		}
+		if removeTemp {
+			_ = syscall.Unlinkat(parentFD, tempName)
+		}
+	}()
+	if err := syscall.Fchmod(int(temp.Fd()), uint32(info.Mode().Perm())); err != nil {
 		return err
 	}
+	if err := writeAll(temp, []byte(replacement)); err != nil {
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	temp = nil
+
+	// A troca externa do caminho entre a leitura e a publicação vira conflito
+	// quando observável; o rename nunca segue um symlink como diretório-alvo.
+	currentFD, err := syscall.Openat(parentFD, name, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return normalizePathError(err)
+	}
+	currentFile := os.NewFile(uintptr(currentFD), "workspace-current")
+	currentInfo, statErr := currentFile.Stat()
+	closeErr := currentFile.Close()
+	if statErr != nil {
+		return statErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if !os.SameFile(info, currentInfo) {
+		return ErrConflict
+	}
+	if err := syscall.Renameat(parentFD, tempName, parentFD, name); err != nil {
+		return err
+	}
+	removeTemp = false
 	return nil
+}
+
+func newEditTempName() (string, error) {
+	var nonce [12]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(".signalspace-edit-%s", hex.EncodeToString(nonce[:])), nil
 }
 
 func validTextContent(content string) bool {

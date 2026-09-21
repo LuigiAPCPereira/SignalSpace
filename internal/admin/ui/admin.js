@@ -37,8 +37,8 @@
     return readResponse(response);
   }
 
-  function clearAuthenticatedData() {
-    state.csrf = '';
+  function clearAuthenticatedData(clearCsrf = true) {
+    if (clearCsrf) state.csrf = '';
     state.session = null;
     requestsElement.replaceChildren();
     requestsStatus.textContent = '';
@@ -51,7 +51,9 @@
     byId('pair-section').hidden = session?.state !== 'UNPAIRED';
     byId('unlock-section').hidden = session?.state !== 'LOCKED';
     byId('authenticated-section').hidden = session?.state !== 'AUTHENTICATED';
-    if (session?.state !== 'AUTHENTICATED') clearAuthenticatedData();
+    // O CSRF de bootstrap continua necessário para pair/unlock; só dados
+    // privilegiados devem ser descartados ao renderizar UNPAIRED/LOCKED.
+    if (session?.state !== 'AUTHENTICATED') clearAuthenticatedData(false);
   }
 
   async function loadSession() {
@@ -88,7 +90,7 @@
 
   function requestLabel(item) {
     const scope = Array.isArray(item.scope) ? item.scope.join(', ') : String(item.scope || '');
-    return `${item.client_name || 'Cliente não atestado'} — ${scope} — versão ${item.version}`;
+    return `${item.client?.display_name || 'Cliente não atestado'} — ${scope} — versão ${item.version}`;
   }
 
   async function loadRequests() {

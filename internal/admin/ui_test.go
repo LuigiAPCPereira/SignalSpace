@@ -45,3 +45,23 @@ func TestAdminUIRejectsMutationWithoutSameOriginTransport(t *testing.T) {
 		t.Fatalf("POST without Origin reached UI: %d", response.Code)
 	}
 }
+
+func TestAdminUISourcePreservesBootstrapCSRFAndRegisteredClientName(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/admin.js", nil)
+	request.Host = "localhost:7677"
+	response := httptest.NewRecorder()
+	Handler(http.NotFoundHandler()).ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("admin.js status: %d", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "clearAuthenticatedData(false)") {
+		t.Fatal("bootstrap CSRF is not preserved for pair/unlock")
+	}
+	if !strings.Contains(body, "item.client?.display_name") {
+		t.Fatal("request UI does not use the registered client display name")
+	}
+	if strings.Contains(body, "localStorage") || strings.Contains(body, "sessionStorage") {
+		t.Fatal("admin UI introduced Web Storage")
+	}
+}

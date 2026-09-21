@@ -12,20 +12,12 @@ import (
 )
 
 func TestLocalProgrammingVerticalSliceReadEditTestDiffRevoke(t *testing.T) {
-	session := gitFixtureSession(t)
+	session, workingRoot := gitFixture(t)
 	grants, err := workspace.NewGrants("owner")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = grants.Close() })
-	root, err := session.ProcessDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	workingRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := os.WriteFile(filepath.Join(workingRoot, "workspace.txt"), []byte("original\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
