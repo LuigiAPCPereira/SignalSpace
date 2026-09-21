@@ -170,6 +170,11 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				},
 				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceWriteScope),
 			}
+			// A descoberta só anuncia a capacidade que o token atual pode
+			// solicitar; a concessão local continua sendo verificada na chamada.
+			if _, err := writeAccess.verify(r.Context()); err == nil {
+				writeAccess.advertise = true
+			}
 		}
 		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess)
 	}), nil

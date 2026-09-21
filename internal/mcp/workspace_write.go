@@ -19,6 +19,7 @@ type writeToolAccess struct {
 	writer    WorkspaceTextWriter
 	verify    func(context.Context) (VerifiedIdentity, error)
 	challenge string
+	advertise bool
 }
 
 func writeToolSchema() map[string]any {
@@ -64,15 +65,27 @@ func (a *writeToolAccess) authorizeWorkspaceCall(w http.ResponseWriter, ctx cont
 		fail(w, http.StatusOK, id, -32602, "Invalid params")
 		return VerifiedIdentity{}, "", "", "", "", false
 	}
-	var sessionID, relative, expected, replacement string
-	if json.Unmarshal(arguments["session_id"], &sessionID) != nil ||
-		json.Unmarshal(arguments["path"], &relative) != nil ||
-		json.Unmarshal(arguments["expected"], &expected) != nil ||
-		json.Unmarshal(arguments["replacement"], &replacement) != nil || sessionID == "" || relative == "" {
+	sessionID, sessionOK := requiredString(arguments, "session_id")
+	relative, pathOK := requiredString(arguments, "path")
+	expected, expectedOK := requiredString(arguments, "expected")
+	replacement, replacementOK := requiredString(arguments, "replacement")
+	if !sessionOK || !pathOK || !expectedOK || !replacementOK || sessionID == "" || relative == "" {
 		fail(w, http.StatusOK, id, -32602, "Invalid params")
 		return VerifiedIdentity{}, "", "", "", "", false
 	}
 	return identity, sessionID, relative, expected, replacement, true
+}
+
+func requiredString(arguments map[string]json.RawMessage, name string) (string, bool) {
+	raw, ok := arguments[name]
+	if !ok || string(raw) == "null" {
+		return "", false
+	}
+	var value string
+	if json.Unmarshal(raw, &value) != nil {
+		return "", false
+	}
+	return value, true
 }
 
 func (a *writeToolAccess) call(w http.ResponseWriter, ctx context.Context, id any, raw json.RawMessage) {

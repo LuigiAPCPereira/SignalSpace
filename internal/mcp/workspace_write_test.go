@@ -101,6 +101,14 @@ func TestWorkspaceWriteToolIsolatedAuthorizationBoundary(t *testing.T) {
 	if names := toolNames(t, result); len(names) != 2 || names[1] != writeToolName {
 		t.Fatalf("isolated write tool missing: %v", names)
 	}
+	diagnosticOnlyToken := signedWriteToken(t, key, clientID, diagnosticScope)
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", diagnosticOnlyToken, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("diagnostic-only tools/list status=%d", res.StatusCode)
+	}
+	if names := toolNames(t, result); len(names) != 1 || names[0] == writeToolName {
+		t.Fatalf("write tool advertised without write scope: %v", names)
+	}
 
 	sessionID, err := grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite)
 	if err != nil {
@@ -146,20 +154,25 @@ func TestWorkspaceWriteToolIsolatedAuthorizationBoundary(t *testing.T) {
 		t.Fatalf("token without write scope authorized write: %d %v", res.StatusCode, result)
 	}
 
-	if _, err := grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite); err != nil {
+	clientSession, err := grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite)
+	if err != nil {
 		t.Fatal(err)
 	}
-	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", signedWriteToken(t, key, otherClient, diagnosticScope+" "+workspaceWriteScope), writeCall(writeSession, "editable.txt", "before", "denied"), nil)
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", signedWriteToken(t, key, otherClient, diagnosticScope+" "+workspaceWriteScope), writeCall(clientSession, "editable.txt", "before", "denied"), nil)
 	text, isError = readResult(t, result)
 	if res.StatusCode != http.StatusOK || !isError || text == "Workspace text replaced." || fileText(t, target) != "before" {
 		t.Fatalf("different client reused write grant: %d %v", res.StatusCode, result)
 	}
 
+	ownerSession, err := grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ownerTokenClaims := defaultClaims()
 	ownerTokenClaims["client_id"] = clientID
 	ownerTokenClaims["scope"] = diagnosticScope + " " + workspaceWriteScope
 	ownerTokenClaims["sub"] = "other-owner"
-	res, _ = oauthRequest(t, server, http.MethodPost, "/mcp", makeAccessToken(t, key, ownerTokenClaims), writeCall(writeSession, "editable.txt", "before", "denied"), nil)
+	res, _ = oauthRequest(t, server, http.MethodPost, "/mcp", makeAccessToken(t, key, ownerTokenClaims), writeCall(ownerSession, "editable.txt", "before", "denied"), nil)
 	if res.StatusCode != http.StatusUnauthorized || fileText(t, target) != "before" {
 		t.Fatalf("different owner reached write boundary: %d", res.StatusCode)
 	}
@@ -220,6 +233,10 @@ func TestWorkspaceWriteToolIsolatedAuthorizationBoundary(t *testing.T) {
 				t.Fatalf("invalid token reached write: %d want %d", res.StatusCode, tc.want)
 			}
 		})
+	}
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"replace_text","arguments":{"session_id":"`+writeSession+`","path":"editable.txt","expected":null,"replacement":"denied"}}}`, nil)
+	if res.StatusCode != http.StatusOK || result["error"] == nil || fileText(t, target) != "before" {
+		t.Fatalf("null expected value accepted: %d %v", res.StatusCode, result)
 	}
 
 	writeSession, err = grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite)

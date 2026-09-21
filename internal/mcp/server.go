@@ -240,7 +240,7 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				tools = append(tools, listDirectoryToolDefinition())
 			}
 		}
-		if writeAccess != nil {
+		if writeAccess != nil && writeAccess.advertise {
 			tools = append(tools, writeToolDefinition())
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
