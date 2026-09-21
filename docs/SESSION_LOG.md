@@ -109,6 +109,7 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - O primeiro parecer do advisor viu o remoto em `cf06e53` porque a consulta ocorreu antes da publicação. O push normal subsequente retornou `cf06e53..9e93b65` na branch `feat/m1-local-mcp-diagnostic`.
 - Evidência local/remota reconsultada: HEAD completo `9e93b65a2e897cfb4c41539dd3fb65d3ccc576e1`; `git ls-remote origin refs/heads/feat/m1-local-mcp-diagnostic` retornou o mesmo SHA; `git diff origin/feat/m1-local-mcp-diagnostic..HEAD` e a diferença inversa ficaram vazias; status preservou somente os dois patches não rastreados.
 - A CI do SHA exato não foi consultada, conforme orientação do proprietário; não registrar PASS/FAIL remoto. Nenhum túnel, grant OAuth, merge ou deploy foi realizado.
+- Depois da reconciliação, o commit somente documental `66f2641` foi publicado normalmente; ele é o HEAD corrente da branch, enquanto `3deefc1` continua sendo o commit funcional e `9e93b65` o checkpoint anterior.
 
 ## Limites do registro
 
