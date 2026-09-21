@@ -14,6 +14,7 @@ import (
 
 const diagnosticScope = "signalspace:diagnostic"
 const workspaceReadScope = "signalspace:workspace.read"
+const workspaceWriteScope = "signalspace:workspace.write"
 const metadataPath = "/.well-known/oauth-protected-resource"
 
 var ErrInsufficientScope = errors.New("insufficient OAuth scope")
@@ -39,6 +40,9 @@ type OAuthConfig struct {
 	// WorkspaceLister é independente e só pode ser habilitado com WorkspaceReader.
 	// A composição local deve injetar a mesma concessão nas duas portas.
 	WorkspaceLister WorkspaceDirectoryLister
+	// workspaceWriter é deliberadamente não exportado: somente o harness de
+	// testes deste pacote pode compor a escrita sem publicá-la no entrypoint.
+	workspaceWriter WorkspaceTextWriter
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
@@ -66,10 +70,10 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		return nil, errors.New("workspace directory listing requires workspace reader")
 	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
-			return nil, errors.New("workspace reader requires verified OAuth client identity")
+			return nil, errors.New("workspace capabilities require verified OAuth client identity")
 		}
 	}
 	origin := "https://" + resource.Host
@@ -78,6 +82,9 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	scopes := []string{diagnosticScope}
 	if config.WorkspaceReader != nil {
 		scopes = append(scopes, workspaceReadScope)
+	}
+	if config.workspaceWriter != nil {
+		scopes = append(scopes, workspaceWriteScope)
 	}
 	metadata := map[string]any{
 		"resource":              config.ResourceURL,
@@ -146,7 +153,25 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceReadScope),
 			}
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess)
+		var writeAccess *writeToolAccess
+		if config.workspaceWriter != nil {
+			accessToken := strings.TrimPrefix(bearer, "Bearer ")
+			writeAccess = &writeToolAccess{
+				writer: config.workspaceWriter,
+				verify: func(ctx context.Context) (VerifiedIdentity, error) {
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceWriteScope, config.OwnerSubject)
+					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
+						if err == nil {
+							err = errInvalidToken
+						}
+						return VerifiedIdentity{}, err
+					}
+					return identity, nil
+				},
+				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceWriteScope),
+			}
+		}
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess)
 	}), nil
 }
 

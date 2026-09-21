@@ -136,12 +136,12 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		serveMCP(w, r, "local_diagnostic", nil, nil)
+		serveMCP(w, r, "local_diagnostic", nil, nil, nil)
 	}), nil
 }
 
 // serveMCP processa o protocolo somente após a fronteira de autenticação.
-func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess) {
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -190,7 +190,7 @@ func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent fu
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	handle(w, r, msg, id, mode, onMCPEvent, readAccess)
+	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess)
 }
 
 func isOversized(err error) bool {
@@ -198,7 +198,7 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess) {
+func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess) {
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -240,6 +240,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				tools = append(tools, listDirectoryToolDefinition())
 			}
 		}
+		if writeAccess != nil {
+			tools = append(tools, writeToolDefinition())
+		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"tools": tools,
 		}})
@@ -261,6 +264,10 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		}
 		if params.Name == listDirectoryToolName && readAccess != nil && readAccess.lister != nil {
 			readAccess.list(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == writeToolName && writeAccess != nil {
+			writeAccess.call(w, r.Context(), id, params.Arguments)
 			return
 		}
 		if params.Name != toolName {
