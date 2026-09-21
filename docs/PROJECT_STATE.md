@@ -131,3 +131,15 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Aceite visual em navegador:** **CONFIRMADO localmente em escopo descartável** via `http://localhost:7677`, fixture controlada, sem túnel, HTTPS, workspace ou grant real: pareamento, lista, detalhe, aprovação confirmada pelo servidor, foco no detalhe, lock e limpeza da fila foram observados. A matriz visual de erros negativos, viewport dedicado pequeno e fluxo operacional Quick/ChatGPT Web permanecem pendentes; não há evidência para declarar M4 completo.
 
 **Estado:** SS-MVP-001 **validada no escopo local**; integração da branch frontend permanece **PENDENTE** e não foi feita. SS-MVP-002 continua **em andamento/PARCIAL**, sem `workspace.write` público, Quick write, exec/shell/Git remoto ou alteração de capacidades. CI não foi consultada e permanece **DESCONHECIDA**. Próxima ação concreta: receber a próxima missão e, se ela exigir aceite visual negativo/viewport dedicado, repetir apenas essa matriz com fixture descartável.
+
+## Checkpoint atualizado — SS-MVP-001 / M4 aceite visual residual — 21/09/2026
+
+**Ref observada:** `codex/mvp-vertical-programming` após a correção de estado visual desta missão; `origin/codex/mvp-vertical-programming` foi sincronizada antes da alteração e será confirmada após o commit. `origin/feat/frontend-oauth-consent` permanece em `3911c4eae2ec514ff5f30d904a993cf103f9be32`. Os dois patches não rastreados permanecem preservados.
+
+**Implementação:** mudança mínima em `internal/admin/ui/admin.js`: a troca de geração/sessão limpa operações de decisão pendentes e bloqueios herdados. Regressão correspondente em `internal/admin/ui/admin_js_test.mjs`: **19/19**.
+
+**Aceite visual local:** fixture descartável somente em `http://localhost:7677`, sem túnel, HTTPS, workspace ou grant real. Foram observados 401, STALE_REQUEST, WORKSPACE_GRANT_REQUIRED, 503, falha de rede, 404 e 410; nenhum cenário produziu aprovação otimista ou fila vazia indevida. Firefox headless gerou screenshots locais de `390×844` e `320×844` para o pareamento, sem recorte observado; o navegador integrado confirmou textos longos na fila, o detalhe recebeu foco e Tab levou a `Recusar`. A fixture foi encerrada e removida do worktree; não restaram listeners/processos.
+
+**Reconciliação frontend:** pareamento, desbloqueio, lista, detalhe, permissões/escopos, decisões, erros/reconciliação, responsividade e acessibilidade estão **incorporados funcionalmente com adaptação ao backend real**. Os protótipos da branch `feat/frontend-oauth-consent` continuam demonstrativos e preservados; não há lacuna funcional que justifique copiar ou fazer merge. Integração formal de branches permanece **PENDENTE**.
+
+**Estado:** SS-MVP-001 permanece **validada no escopo local**; M4 permanece **PARCIAL** por depender de aceite operacional Quick/ChatGPT Web/HTTPS e de decisão formal sobre branches. SS-MVP-002 permanece **PARCIAL/em andamento** e o gate `SS-MVP-002-PROMOTION-GATE-001` não foi aprovado. CI permanece **DESCONHECIDA** e não foi consultada. Próxima ação: nova missão concreta vinculada à TASKLIST; não repetir a matriz visual já concluída.
