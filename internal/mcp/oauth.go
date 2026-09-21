@@ -46,6 +46,9 @@ type OAuthConfig struct {
 	// gitReviewer é deliberadamente não exportado: revisão Git só pode ser
 	// composta pelo harness automatizado deste pacote nesta etapa.
 	gitReviewer WorkspaceGitReviewer
+	// testRunner é deliberadamente não exportado: execução só pode ser
+	// composta pelo harness automatizado deste pacote nesta etapa.
+	testRunner WorkspaceTestRunner
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
@@ -73,7 +76,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		return nil, errors.New("workspace directory listing requires workspace reader")
 	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.gitReviewer != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.gitReviewer != nil || config.testRunner != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
 			return nil, errors.New("workspace capabilities require verified OAuth client identity")
@@ -91,6 +94,9 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	}
 	if config.gitReviewer != nil {
 		scopes = append(scopes, gitReviewScope)
+	}
+	if config.testRunner != nil {
+		scopes = append(scopes, testRunScope)
 	}
 	metadata := map[string]any{
 		"resource":              config.ResourceURL,
@@ -203,7 +209,28 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				gitAccess.advertise = true
 			}
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess)
+		var testAccess *testToolAccess
+		if config.testRunner != nil {
+			accessToken := strings.TrimPrefix(bearer, "Bearer ")
+			testAccess = &testToolAccess{
+				runner: config.testRunner,
+				verify: func(ctx context.Context) (VerifiedIdentity, error) {
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, testRunScope, config.OwnerSubject)
+					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
+						if err == nil {
+							err = errInvalidToken
+						}
+						return VerifiedIdentity{}, err
+					}
+					return identity, nil
+				},
+				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, testRunScope),
+			}
+			if _, err := testAccess.verify(r.Context()); err == nil {
+				testAccess.advertise = true
+			}
+		}
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess, testAccess)
 	}), nil
 }
 

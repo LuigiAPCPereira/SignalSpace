@@ -12,6 +12,7 @@ const (
 	ScopeRead  = "signalspace:workspace.read"
 	ScopeWrite = "signalspace:workspace.write"
 	ScopeGit   = "signalspace:git.review"
+	ScopeTest  = "signalspace:test.run"
 )
 
 // ProcessDirectory é a menor porta necessária para operações locais que
@@ -69,7 +70,7 @@ func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (strin
 	}
 	allowedScopes := make(map[string]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeWrite && scope != ScopeGit {
+		if scope != ScopeRead && scope != ScopeWrite && scope != ScopeGit && scope != ScopeTest {
 			return "", ErrNotAuthorized
 		}
 		allowedScopes[scope] = struct{}{}
@@ -116,6 +117,24 @@ func (g *Grants) WithAuthorizedGitProcessDir(owner, clientID, id string, operati
 		return ErrClosed
 	}
 	if !g.authorizedLocked(owner, clientID, id, ScopeGit) {
+		return ErrNotAuthorized
+	}
+	return operation(g.current)
+}
+
+// WithAuthorizedTestProcessDir autoriza a execução fixa de testes somente com
+// a concessão de teste corrente. A chamada permanece serializada com edição,
+// revisão Git e revogação; a porta não expõe Session, raiz ou descritor.
+func (g *Grants) WithAuthorizedTestProcessDir(owner, clientID, id string, operation func(ProcessDirectory) error) error {
+	if operation == nil {
+		return ErrNotAuthorized
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeTest) {
 		return ErrNotAuthorized
 	}
 	return operation(g.current)

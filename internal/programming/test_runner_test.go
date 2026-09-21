@@ -34,7 +34,7 @@ func TestRunPredefinedTestReturnsBoundedSuccessfulResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ExitCode != 0 || !result.Terminated || result.TimedOut || result.Canceled {
+	if result.ExitCode != 0 || result.Status() != TestPassed || !result.Terminated || result.TimedOut || result.Canceled {
 		t.Fatalf("unexpected successful result: %+v", result)
 	}
 	if len(result.Command) != 3 || result.Command[0] != "go" || result.Command[1] != "test" || result.Command[2] != "./..." {
@@ -51,11 +51,32 @@ func TestRunPredefinedTestReportsFailureWithoutTreatingItAsTransportError(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ExitCode == 0 || !result.Terminated || result.TimedOut || result.Canceled {
+	if result.ExitCode == 0 || result.Status() != TestFailed || !result.Terminated || result.TimedOut || result.Canceled {
 		t.Fatalf("unexpected failed result: %+v", result)
 	}
 	if result.Stdout == "" && result.Stderr == "" {
 		t.Fatal("failed test returned no bounded diagnostic output")
+	}
+}
+
+func TestRunPredefinedTestReportsOutputTruncationAndCancellation(t *testing.T) {
+	session := fixtureSession(t, "package fixture\n\nimport \"testing\"\n\nfunc TestFixture(t *testing.T) { t.Fatal(\"long diagnostic output\" + \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\") }\n")
+	truncated, err := RunPredefinedTest(context.Background(), session, 30*time.Second, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated.Status() != TestFailed || !truncated.OutputTruncated {
+		t.Fatalf("failure output was not bounded: %+v", truncated)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	canceled, err := RunPredefinedTest(ctx, session, time.Second, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if canceled.Status() != TestCanceled || !canceled.Canceled || !canceled.Terminated {
+		t.Fatalf("cancellation was not observed: %+v", canceled)
 	}
 }
 
@@ -65,7 +86,7 @@ func TestRunPredefinedTestStopsAtTimeoutAndRejectsInvalidBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.TimedOut || !result.Terminated || result.ExitCode == 0 {
+	if result.Status() != TestTimedOut || !result.TimedOut || !result.Terminated || result.ExitCode == 0 {
 		t.Fatalf("timeout was not reported: %+v", result)
 	}
 	if _, err := RunPredefinedTest(context.Background(), session, -time.Second, 4096); !errors.Is(err, ErrInvalidTestExecution) {

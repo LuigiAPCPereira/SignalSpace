@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +22,16 @@ const (
 
 var ErrInvalidTestExecution = errors.New("invalid local test execution")
 
+type TestStatus string
+
+const (
+	TestPassed           TestStatus = "TEST_PASSED"
+	TestFailed           TestStatus = "TEST_FAILED"
+	TestTimedOut         TestStatus = "TIMED_OUT"
+	TestCanceled         TestStatus = "CANCELED"
+	TestExecutionUnknown TestStatus = "UNKNOWN"
+)
+
 // TestResult registra somente o comando de teste fixo e sua saída limitada.
 // O comando não recebe shell, texto livre nem argumentos do MCP.
 type TestResult struct {
@@ -34,12 +45,12 @@ type TestResult struct {
 	Terminated      bool
 }
 
-// RunPredefinedTest executa apenas `go test ./...` no diretório da sessão.
-// A sessão deve ter sido criada e concedida localmente; a raiz não funciona
+// RunPredefinedTest executa apenas `go test ./...` no diretório autorizado.
+// A porta deve ter sido criada e concedida localmente; a raiz não funciona
 // como sandbox de processo, portanto o processo mantém os privilégios do
 // usuário. Falha de teste é devolvida em ExitCode, não como erro de transporte.
-func RunPredefinedTest(ctx context.Context, session *workspace.Session, timeout time.Duration, outputLimit int) (TestResult, error) {
-	if ctx == nil || session == nil {
+func RunPredefinedTest(ctx context.Context, directory workspace.ProcessDirectory, timeout time.Duration, outputLimit int) (TestResult, error) {
+	if ctx == nil || directory == nil {
 		return TestResult{}, ErrInvalidTestExecution
 	}
 	if timeout == 0 {
@@ -55,7 +66,7 @@ func RunPredefinedTest(ctx context.Context, session *workspace.Session, timeout 
 		return TestResult{}, ErrInvalidTestExecution
 	}
 	var result TestResult
-	err := session.WithProcessDir(func(dir string) error {
+	err := directory.WithProcessDir(func(dir string) error {
 		var runErr error
 		result, runErr = runPredefinedTestInDir(ctx, dir, timeout, outputLimit)
 		return runErr
@@ -71,6 +82,7 @@ func runPredefinedTestInDir(ctx context.Context, dir string, timeout time.Durati
 	command := []string{"go", "test", "./..."}
 	cmd := exec.Command("go", "test", "./...")
 	cmd.Dir = dir
+	cmd.Env = safeTestEnvironment(cmd.Environ())
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -130,3 +142,47 @@ func (b *limitedBuffer) Write(data []byte) (int, error) {
 }
 
 func (b *limitedBuffer) String() string { return string(b.data) }
+
+func (r TestResult) Status() TestStatus {
+	if r.TimedOut {
+		return TestTimedOut
+	}
+	if r.Canceled {
+		return TestCanceled
+	}
+	if !r.Terminated {
+		return TestExecutionUnknown
+	}
+	if r.ExitCode == 0 {
+		return TestPassed
+	}
+	return TestFailed
+}
+
+// safeTestEnvironment impede que configurações herdadas troquem o executor,
+// o arquivo de módulos ou promovam downloads automáticos durante a fixture.
+// Isso não é sandbox: o processo continua com os privilégios do usuário.
+func safeTestEnvironment(environment []string) []string {
+	blocked := map[string]struct{}{
+		"GOFLAGS":     {},
+		"GOTOOLCHAIN": {},
+		"GOPROXY":     {},
+		"GOSUMDB":     {},
+		"GONOSUMDB":   {},
+		"GOPRIVATE":   {},
+		"GONOPROXY":   {},
+		"GOMODCACHE":  {},
+		"GOTOOLDIR":   {},
+		"GOVCS":       {},
+		"GOWORK":      {},
+	}
+	filtered := make([]string, 0, len(environment)+3)
+	for _, entry := range environment {
+		key, _, _ := strings.Cut(entry, "=")
+		if _, ok := blocked[key]; ok {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return append(filtered, "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off")
+}
