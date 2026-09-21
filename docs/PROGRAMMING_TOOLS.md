@@ -5,7 +5,9 @@
 ## Fronteira de autorização
 
 - A edição exige a concessão existente de `owner`, `clientID` e `sessionID` em `workspace.Grants`; `Grants.Revoke` nega chamadas posteriores.
-- O contrato de autorização específico para escopos de programação ainda está **em andamento**. Nenhum escopo de escrita, execução ou Git foi adicionado ao OAuth/MCP nesta missão.
+- `Grants.Grant` permanece somente leitura. A fronteira local `Grants.GrantWithScopes` aceita apenas `signalspace:workspace.read` e `signalspace:workspace.write`; uma concessão read-only não pode editar, e uma concessão write-only não pode ler.
+- `Grants.ReplaceText` revalida owner, cliente, sessão ativa e `signalspace:workspace.write` a cada chamada, além das validações de arquivo. A revogação limpa os escopos e nega chamadas posteriores.
+- O contrato de autorização remoto específico para escopos de programação ainda está **em andamento**. Nenhum escopo de escrita, execução ou Git foi adicionado ao OAuth/MCP nesta missão; `GrantWithScopes` é uma fronteira local fechada para testes e composição futura.
 - A UI administrativa funcional serve somente em `localhost:7677`, usa a sessão administrativa existente, cookie HttpOnly e CSRF em memória. Ela não escolhe raízes nem publica ferramentas de programação.
 
 ## Edição segura inicial

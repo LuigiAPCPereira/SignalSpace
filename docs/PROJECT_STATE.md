@@ -71,3 +71,13 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Evidência:** `internal/workspace/edit_test.go`, `internal/programming/*_test.go`, `internal/admin/ui_test.go`, `node --check internal/admin/ui/admin.js`; teste vertical executa leitura, edição, `go test ./...`, snapshot/diff, revoke e negação. Limites: sem CI, túnel, grant OAuth, navegador, MCP remoto ou sandbox de processo nesta missão.
 
 **Próxima ação vinculada:** SS-MVP-002 — revisar autorização separada por operação antes de qualquer exposição remota de escrita, execução ou Git. A branch frontend `feat/frontend-oauth-consent` e o PR #1 draft permanecem preservados, sem merge/deploy.
+
+## Checkpoint atualizado — SS-MVP-002 — 21/09/2026
+
+**Ref observada:** `codex/mvp-vertical-programming` em `9067321` antes da nova mudança; a branch foi publicada por push normal e passou a ter upstream em `origin/codex/mvp-vertical-programming`. O pull foi não aplicável antes da publicação porque não havia upstream. Os dois patches não rastreados permanecem preservados.
+
+**Implementação local:** `workspace.Grants.Grant` agora cria concessão somente de leitura. `GrantWithScopes` aceita somente `signalspace:workspace.read` e `signalspace:workspace.write` no processo local; `ReadText`/`ListDirectory` exigem leitura e `ReplaceText` exige escrita, sempre revalidando owner, clientID, sessão e concessão ativa. Revogar ou fechar limpa os escopos.
+
+**Validação da fatia:** testes de workspace/programming/MCP e race de workspace/programming passaram; `cmd/signalspace` passou em execução serial observável. O primeiro comando agregado excedeu a janela de espera e deixou um teste próprio em 7676; os PIDs identificados foram encerrados e não restaram listeners. Não houve túnel, grant OAuth, alteração MCP, navegador, CI, merge ou deploy.
+
+**Estado:** SS-MVP-002 continua **em andamento**: a fronteira local de escrita está validada, mas a integração de escopo remoto OAuth/MCP, execução e Git por operação ainda não existe. Próxima ação: fechar os gates completos e atualizar a autorização remota somente após contrato próprio; não expor `workspace.write` nesta rodada.
