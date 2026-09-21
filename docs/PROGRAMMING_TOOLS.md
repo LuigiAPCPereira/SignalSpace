@@ -20,6 +20,16 @@
 - Os modos públicos continuam sem `signalspace:workspace.write`, `signalspace:git.review`, `signalspace:test.run`, sem configuração de programação em `cmd/signalspace` e sem `replace_text`, `review_git_changes` ou `run_workspace_tests` em `tools/list`/`tools/call`. A prova cobre o handler diagnóstico sem capacidade de programação e os modos de leitura existentes; não é aceite de transporte remoto.
 - A UI administrativa funcional serve somente em `localhost:7677`, usa a sessão administrativa existente, cookie HttpOnly e CSRF em memória. Ela não escolhe raízes nem publica ferramentas de programação.
 
+## Aprovação terminal-local experimental
+
+`workspace request <client-id> <absolute-path>` mantém seu significado anterior: cria, após confirmação local, somente uma concessão de leitura. A seleção de programação existe apenas quando o harness injeta explicitamente `workspace.CapabilityApproval`; a composição padrão, `cmd/signalspace`, `connect quick` e `connect quick read` não a instanciam.
+
+Na composição experimental, o terminal pode receber `workspace request-programming <client-id> <scope1,scope2,...> <absolute-path>`. O cliente precisa aparecer em `workspace clients`, que lista somente registros OAuth desta instância que já concluíram uma troca de token. A lista usa os escopos completos e independentes `signalspace:workspace.read`, `signalspace:workspace.write`, `signalspace:test.run` e `signalspace:git.review`; nenhum é adicionado implicitamente. Caminhos com espaços permanecem no restante da linha e são validados como raízes canônicas, sem raiz ampla, home, componente symlink ou controle.
+
+O pedido exibe nome declarado e ID OAuth, sem atestar o software, além dos efeitos: leitura de arquivos permitidos; escrita de arquivos permitidos; `go test ./...` com privilégios do usuário e sem sandbox; ou inspeção de status/diff Git potencialmente sensível, sem commit/push. Nenhuma concessão é criada nessa etapa. `workspace approve-programming <id>` consome o identificador de uso único somente se ainda válido, revalida o cliente elegível e chama `GrantWithScopes` com exatamente os escopos selecionados; `workspace cancel-programming <id>` descarta o pedido. O prazo é de dois minutos, e `workspace revoke <session-id>` continua revogando todas as capacidades da sessão.
+
+`CapabilityApproval` é a mesma lógica exercitada pelo console e pelo harness OAuth/MCP; o teste vertical deixou de chamar `GrantWithScopes` diretamente para criar a concessão de programação. A aprovação terminal-local continua distinta do consentimento OAuth: depois da confirmação, cada token e cada ferramenta ainda exigem seus escopos e a concessão corrente. A extensão não adiciona rotas administrativas, variáveis de ambiente, flags, comandos públicos, writers, executor ou Git reviewer aos entrypoints.
+
 ## Gate de promoção remota — decisão SS-MVP-002-PROMOTION-GATE-001
 
 **Estado global:** PENDENTE. A decisão abaixo fecha a fronteira necessária para uma futura promoção experimental, mas não autoriza nem implementa a publicação de `workspace.write`.
@@ -43,7 +53,7 @@ O transporte futuro mantém `7676` como listener público e `7677` exclusivament
 | Controle exigido | Estado | Evidência atual | Condição para eventual promoção |
 | --- | --- | --- | --- |
 | Consentimento e combinações exatas de escopos | CONFIRMADO no harness | `internal/auth/write_scope_test.go`; combinações canônicas e texto de modificação | Revalidar no transporte escolhido sem ampliar o padrão |
-| Escolha explícita do proprietário | CONFIRMADO para concessão local; PENDENTE para promoção | `workspaceConsole` exige comando local separado; OAuth não cria raiz | Definir e testar a confirmação terminal-local da composição remota |
+| Escolha explícita do proprietário | CONFIRMADO para concessão local experimental; PENDENTE para promoção | `CapabilityApproval` exige cliente emitido, seleção, resumo, identificador separado, confirmação única/expiração e chama `GrantWithScopes` somente depois; console padrão não injeta a dependência | Preservar a mesma confirmação na composição operacional futura, sem habilitar Quick/entrypoint |
 | Owner, cliente, workspace e sessão vinculados | CONFIRMADO local | `Grants.ReplaceText`, `AllowsClientScope` e testes MCP/OAuth | Preservar a mesma cadeia sem parâmetros JSON-RPC como autoridade |
 | Revogação antes da emissão e durante o uso | CONFIRMADO local | revalidação em authorize/complete/token e negativa com JWT válido | Aceitar explicitamente a semântica sem invalidação global do JWT |
 | Conflito e resposta perdida | CONFIRMADO para `ReplaceText`; PENDENTE operacional | conteúdo esperado, diff e testes de duplicação | Definir reconciliação no cliente/transporte antes de qualquer retry |
