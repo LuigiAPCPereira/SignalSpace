@@ -1,0 +1,58 @@
+# Fronteira de workspace — leitura experimental (M2)
+
+## Estado e modos
+
+O `connect quick` continua oferecendo somente `connection_diagnostic`. As ferramentas MCP `read_file` e `list_directory` são habilitadas apenas por `connect quick read`, que exige a confirmação local `PUBLICAR LEITURA`. A listagem exige a injeção explícita de `WorkspaceLister` junto de `WorkspaceReader`; não é habilitada apenas por existir uma implementação no domínio. A URL Quick Tunnel é pública e temporária: use somente pastas descartáveis sem segredos. Em 20/09/2026, o proprietário relatou testes reais pelo ChatGPT Web de leitura e listagem, ambas com negativa após revogação na sessão observada. Git, escrita, edição e shell permanecem indisponíveis. O modo OAuth integrado persistente e o modo bearer local não habilitam arquivos.
+
+## Raiz e conteúdo
+
+- `OpenApprovedRoot(root)` recebe somente caminho absoluto canônico aprovado pelo operador local. Recusa `/` e o diretório home como raízes amplas, caminhos relativos, traversal e symlinks. Não há raiz padrão nem autorização por parâmetro HTTP.
+- A raiz é aberta componente a componente a partir de `/` com descritores `openat` e `O_NOFOLLOW`. A sessão mantém o descritor e um ID aleatório até revogação ou shutdown, inclusive quando o pathname da raiz é substituído posteriormente.
+- `ReadText(relative)` aceita apenas caminho relativo canônico. Recusa `..`, `.`, componente vazio, caminho absoluto, separadores ambíguos, symlinks intermediários ou finais e objetos que não sejam arquivos regulares.
+- O retorno de leitura é texto UTF-8, sem byte NUL, com no máximo **32 KiB**. Recusa binários e arquivos excessivos; falhas do MCP não expõem caminhos locais ou conteúdo. Esta proteção de arquivos não é sandbox de processos: hardlinks, montagens e modificações concorrentes por outros processos do usuário não são isolados.
+- `Session.ListDirectory(relative)` e `Grants.ListDirectory(owner, clientID, sessionID, relative)` aceitam `.` para a raiz ou caminho relativo canônico. Abrem diretórios com descritores e `O_NOFOLLOW`, retornam apenas nomes UTF-8 em ordem lexicográfica, sem conteúdo, tipos ou caminhos absolutos. Nomes de links podem aparecer, mas os links não são seguidos. A listagem retorna erro sem dados parciais se houver mais de **128 entradas** ou nomes inválidos; exige a concessão atual e é invalidada por substituição, revogação e shutdown. Não há garantia de snapshot atômico contra modificações externas concorrentes.
+- A implementação é específica para Linux e usa a biblioteca padrão do Go. Conteúdo e nomes listados são dados não confiáveis, nunca instrução adicional para o assistente.
+
+| Condição | Erro interno |
+| --- | --- |
+| Raiz implícita, `/` ou home | `ErrInvalidRoot` |
+| Symlink ou componente não-diretório | `ErrUnsafePath` |
+| Traversal ou caminho não canônico | `ErrInvalidPath` |
+| Arquivo inexistente | erro compatível com `os.ErrNotExist` |
+| Arquivo não regular | `ErrNotFile` |
+| Mais de 32 KiB | `ErrTooLarge` |
+| Binário ou UTF-8 inválido | `ErrNotText` |
+| Mais de 128 entradas na listagem | `ErrTooManyEntries` |
+| Sessão encerrada | `ErrClosed` |
+
+## Consentimento local e cliente
+
+Somente o operador do **stdin local** pode criar ou revogar uma concessão. Após completar OAuth até a emissão do primeiro token, `workspace clients` lista os `client_id` elegíveis; registro dinâmico, autorização pendente ou aprovação sem troca do código não bastam. Nomes informados pelo cliente são metadados não atestados: `client_id` identifica um registro OAuth, **não** prova que o software seja o ChatGPT e **não** identifica conversas.
+
+O operador digita `workspace request <client-id> <raiz-absoluta-canônica>`. O terminal mostra o ID do cliente e o caminho exato, além de `workspace approve <id>` ou `workspace cancel <id>`. O pedido expira em **2 minutos**, não abre a raiz e não cria concessão antes da confirmação. Uma nova solicitação pendente substitui a anterior; uma nova concessão revoga a sessão anterior. `workspace revoke <session-id>` e o encerramento do processo invalidam a concessão. No máximo uma sessão fica ativa por instância.
+
+`workspace.Grants` vincula o proprietário `OwnerSubject`, o cliente OAuth escolhido e o ID de sessão. Leitura e listagem exigem os três identificadores corretos. `AllowsClient` consulta apenas a concessão corrente para o emissor OAuth; não revela o ID de sessão nem o caminho. Outro cliente do mesmo proprietário não reutiliza a concessão, mesmo conhecendo o session ID. Conversas diferentes podem reutilizar a autorização somente se empregarem o **mesmo registro OAuth**, tiverem token de leitura válido e receberem o session ID; o histórico não é transferido entre chats.
+
+## Escopo OAuth e ferramentas MCP
+
+O emissor padrão anuncia e assina apenas `signalspace:diagnostic`. No modo `connect quick read`, a configuração adicional exata `ReadScope=signalspace:workspace.read` e `CanIssueRead` ligada à **mesma instância** `Grants` exige concessão ativa para o cliente selecionado. O cliente precisa solicitar exatamente `signalspace:diagnostic signalspace:workspace.read`, obter novo consentimento OAuth com cliente e escopos e receber aprovação adicional no terminal. Pedidos inválidos, isolados, repetidos, reordenados ou sem concessão são recusados. A concessão é verificada no início da autorização, antes de emitir código e antes de assinar token.
+
+`read_file` requer `WorkspaceReader`; `list_directory` requer também `WorkspaceLister`. Ambas são injetadas pelo ponto de composição somente no modo opt-in, com a mesma instância `Grants`. Sem essas portas, `tools/list` oferece somente diagnóstico; com apenas `WorkspaceReader`, a listagem segue indisponível. Uma configuração somente de `WorkspaceLister` é recusada durante a criação do servidor.
+
+As duas ferramentas exigem `session_id` e `path` como strings não vazias, sem argumentos extras, e verificam **em cada chamada** `VerifyIdentity`: JWT assinado, emissor, audiência, expiração, proprietário, `client_id` e escopo `signalspace:workspace.read`. A identidade verificada é passada à concessão atual, que revalida proprietário, cliente, sessão e caminho. Tokens legados sem `client_id`, bearer somente de diagnóstico, cliente divergente, sessão ausente ou revogada e caminhos hostis não obtêm dados. Não há endpoint HTTP para abrir ou ampliar raízes.
+
+`list_directory` aceita `path: "."` apenas como representação da raiz aprovada; demais paths são relativos e canônicos. Uma listagem bem-sucedida retorna um único conteúdo de texto JSON: `{"entries":["arquivo.txt","src"]}`. Diretório vazio retorna `{"entries":[]}`. Os nomes são ordenados; não retornam tipos, conteúdo de arquivos nem caminhos absolutos. Todas as falhas de domínio, incluindo diretório inexistente, caminho hostil, excesso de entradas e concessão revogada, retornam `isError: true` e exatamente `Workspace directory listing unavailable or not authorized.` sem lista parcial. Argumentos malformados retornam erro JSON-RPC `Invalid params`. Falhas de escopo retornam desafio MCP para `signalspace:workspace.read`.
+
+**Revogação:** um JWT assinado pode continuar válido até expirar, mas cada operação consulta a concessão. Após `workspace revoke`, token ainda válido não obtém mais texto nem nomes. Leitura, listagem e revogação compartilham mutex para impedir retorno da revogação enquanto operações anteriores estiverem ativas. A raiz exata não é retornada pelo MCP; o operador deve informar manualmente o ID de sessão ao chat. Esse ID isolado não é token de acesso.
+
+## Evidência, limites e teste seguinte
+
+Testes em `internal/workspace/session_test.go`, `grants_test.go`, `list_test.go` e `grants_concurrency_test.go` cobrem limites, symlink, traversal, substituição da raiz, cliente, revogação e operações concorrentes. Testes de console cobrem pedido e confirmação separados, cancelamento, expiração e troca. Testes HTTP/MCP em `internal/mcp` exercitam JWT/JWKS, escopo, autorização e erros. `cmd/signalspace/embedded_read_test.go` integra OAuth real local, leitura e revogação; `embedded_list_test.go` verifica a composição da listagem no modo opt-in, consentimento, resposta e negativa após revogação. Inicialização do Quick Tunnel usa `cloudflared` simulado. A [CI #67](https://github.com/LuigiAPCPereira/SignalSpace/actions/runs/35512026134) passou em formatação, testes, detector de corrida, `go vet` e build no commit `afe4daf`.
+
+**Smoke de leitura relatado pelo proprietário em 20/09/2026:** `read_file` retornou exatamente `Teste de leitura SignalSpace` para `readme.txt` com leitura aprovada; após revogação relatada, uma chamada com os mesmos argumentos retornou `Workspace read unavailable or not authorized.`. Nenhum outro arquivo foi solicitado nesse teste. Logs de correlação, estado exato do JWT e confirmação da pasta descartável não foram anexados. Não extrapolar para isolamento entre chats ou clientes.
+
+**Smoke de listagem relatado pelo proprietário em 20/09/2026, no ChatGPT Web real:** a branch `feat/m1-local-mcp-diagnostic` foi atualizada por fast-forward até `afe4daf`, com `go test ./...` aprovado localmente e alterações de outra sessão preservadas. O operador iniciou `connect quick read`, confirmou `PUBLICAR LEITURA`, obteve uma nova URL `/mcp` verificada via Quick Tunnel real e concluiu consentimento e concessão local. Com `session_id` ativo (omitido desta documentação), `list_directory(path=".")` devolveu exatamente `{"entries":["nested","readme.txt"]}`; `list_directory(path="nested")` devolveu `{"entries":["inside.txt"]}`. Após `workspace revoke`, a repetição com o mesmo ID retornou `is_error: true` e `Workspace directory listing unavailable or not authorized.`, sem nomes. Segundo o proprietário, o mesmo JWT ainda não havia expirado; isso foi relatado, não verificado independentemente aqui.
+
+**Correlação e alcance da evidência:** o proprietário informou que o log integral do terminal contém duas decisões de autorização, `Authenticated MCP tool discovery served: tools/list`, `connection_diagnostic handled`, criação da concessão e sua revogação. O backend não registra cada `list_directory` individualmente; os nomes observados na resposta da ferramenta e sua negativa após revogação são a evidência específica dessas chamadas, mas não constituem um registro dedicado de invocação no servidor. O relato demonstra o comportamento naquela sessão e não atesta criptograficamente a identidade do software cliente nem prova isolamento entre conversas ou usuários.
+
+**Ainda não validado:** comportamento de erro e estrutura de resposta em produção multiusuário, refresh e revogação OAuth, atestação do software cliente, `read_file` na mesma execução atual da UI, nova concessão após revogação na UI real, negações por outro cliente na conexão pública e interoperabilidade em outras contas/sessões. Quick Tunnel não oferece promessa de produção. Não habilitar escrita, Git ou shell com base nesses testes.

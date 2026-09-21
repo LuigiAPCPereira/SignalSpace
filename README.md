@@ -2,50 +2,50 @@
 
 **Give ChatGPT a secure connection to your own machine and turn ChatGPT into Codex.**
 
-SignalSpace é um projeto independente para dar ao **ChatGPT Web** acesso operacional a projetos autorizados na máquina do usuário. A conversa permanece no ChatGPT; um serviço local expõe ferramentas de desenvolvimento por MCP, através de uma conexão HTTPS autenticada.
+SignalSpace é um projeto independente em **Go** para conectar ferramentas de desenvolvimento da máquina do usuário ao **ChatGPT Web** via MCP HTTPS autenticado. **Ainda está em desenvolvimento.** Por padrão, a única ferramenta pública é `connection_diagnostic`; existe um modo experimental de leitura explicitamente opt-in, sem edição, Git ou terminal. Em teste real em 19/09/2026, o proprietário correlacionou um `diagnosticID` da resposta no ChatGPT com o registro de uma chamada MCP autenticada no terminal. Isso comprova a execução do diagnóstico naquela sessão, mas não atesta criptograficamente a identidade do cliente.
 
-> **Estado:** fundação do repositório. Não existe servidor MCP, túnel, autenticação, execução de comandos ou integração funcional com o ChatGPT implementados neste commit. O primeiro objetivo é provar o fluxo completo de conexão e ferramentas reais.
+## Primeira experiência: Quick Tunnel experimental
 
-## Produto
+O comando `connect quick` usa o `cloudflared` instalado para criar um túnel gratuito **sem conta nem domínio Cloudflare**, com uma URL temporária. Ele só inicia após a confirmação `PUBLICAR`, usa credenciais OAuth isoladas em diretório temporário, verifica a conexão HTTPS pública e apresenta a URL MCP somente após passar no diagnóstico. Ao encerrar normalmente, fecha o processo filho e elimina o estado temporário. **Expor esse diagnóstico à internet ainda é experimental, não um serviço de produção.**
 
-O fluxo desejado é: iniciar o serviço na máquina → disponibilizar seu endpoint MCP por um túnel HTTPS controlado pelo usuário → conectar no ChatGPT Web e autorizar o cliente → abrir um workspace permitido → inspecionar código → editar arquivos → executar testes/comandos → revisar o resultado.
+Com Go 1.23+ e `cloudflared` instalado e disponível no `PATH`, na branch desta PR:
 
-**Capacidades centrais:** workspaces com raízes permitidas; leitura e edição; terminal/processos; Git e diffs; tratamento explícito de erros, desconexões e operações de longa duração. Continuidade entre conversas será uma evolução do produto, não uma promessa da primeira entrega.
-
-**Fora do escopo inicial:** interface que substitua o ChatGPT, modelo de IA próprio, subagentes, integrações com `agent-runtime` ou `agent-orchestrator`, fork ou reutilização de código do DevSpace, implementação própria de grafos de código. Graphify pode ser uma integração opcional posterior.
-
-## Arquitetura-alvo
-
-```text
-ChatGPT Web
-    |
-    | MCP
-    v
-HTTPS endpoint + authenticated client approval
-    |
-    v
-SignalSpace local service
-    +-- workspace authorization
-    +-- files and patches
-    +-- commands and process sessions
-    +-- Git and review
-    +-- operation records (later)
+```bash
+go test ./...
+go run ./cmd/signalspace connect quick
 ```
 
-O transporte e a autenticação do ChatGPT ainda precisam ser validados na prática. Uma URL local `127.0.0.1` não é, por si só, acessível ao ChatGPT Web; o túnel é um componente explícito da instalação. O projeto não afirmará compatibilidade com um plano ou modelo sem uma chamada real de ferramenta.
+O terminal aceita `workspace clients` e `workspace request <client-id> <absolute-path>`, com confirmação separada e revogação. No modo padrão, isso **não expõe arquivos ao MCP**. Para um teste exclusivamente com pasta descartável não sensível, existe `go run ./cmd/signalspace connect quick read`, que exige confirmação distinta `PUBLICAR LEITURA`, concessão local vinculada ao cliente e novo consentimento OAuth de leitura. Ainda não foi testado com ChatGPT Web. Consulte o [contrato de segurança de workspace](docs/WORKSPACE_SECURITY.md). Leia [passo a passo, consentimento e limites do Quick Tunnel](docs/QUICK_TUNNEL.md). O SignalSpace não instala executáveis automaticamente. A URL `trycloudflare.com` muda entre sessões; é necessário atualizar/recriar o conector no ChatGPT. A criação de um plugin personalizado e a chamada de diagnóstico foram observadas na conta utilizada no teste; isso não comprova disponibilidade em outras contas, planos ou sessões.
 
-## Segurança e limite deliberado do MVP
+## Diagnóstico local, sem publicar
 
-O usuário escolhe quais raízes podem ser abertas; ferramentas de arquivos devem validar caminhos e bloquear escapes. Conexões remotas exigirão autenticação. **O shell inicial poderá executar com os privilégios normais da conta local**, conforme decisão consciente de escopo: raízes de arquivos e worktrees **não** são um sandbox do terminal. Nenhum endpoint de execução será publicado antes de implementar e testar autenticação e autorização.
+```bash
+export SIGNALSPACE_LOCAL_TOKEN="$(openssl rand -hex 32)"
+go test ./...
+go vet ./...
+go run ./cmd/signalspace
+```
 
-## Primeira entrega verificável
+O endpoint `http://127.0.0.1:7676/mcp` oferece somente `connection_diagnostic` com bearer local. Não é uma conexão funcional do ChatGPT Web. Veja [diagnóstico local](docs/LOCAL_DIAGNOSTIC.md).
 
-Consultar [`docs/MVP.md`](docs/MVP.md) para critérios de aceitação e ordem de implementação. O principal gate é uma sessão real no ChatGPT Web que abra um workspace autorizado, leia e modifique um arquivo, execute um comando e devolva uma revisão verificável.
+## OAuth integrado e transporte persistente
 
-Instruções para agentes: [`AGENTS.md`](AGENTS.md). Contrato de produto: [`docs/PRODUCT.md`](docs/PRODUCT.md).
+O SignalSpace pode emitir tokens OAuth sem Auth0, com PKCE S256, registro dinâmico do cliente, aprovação local no terminal e verificação JWT. No modo integrado **persistente**, chave privada RSA e clientes ficam em diretório próprio com permissões restritas, vinculados à URL HTTPS exata; autorizações pendentes e códigos não persistem. O arquivo da chave não tem criptografia em repouso. Faltam refresh, revogação e revisão de segurança para exposição contínua; a evidência de conexão pelo ChatGPT se limita à sessão efêmera de diagnóstico, não ao modo persistente. Não confundir esse modo com o Quick Tunnel descartável. Consulte [autorização integrada](docs/EMBEDDED_OAUTH.md) e [diagnóstico e configuração HTTPS](docs/TRANSPORT.md).
 
-## Proveniência
+O uso de provedor OAuth externo é opcional, sem fallback para bearer local. Veja [servidor de recursos OAuth](docs/OAUTH_RESOURCE_SERVER.md), [diagnóstico do provedor](docs/OAUTH_PREFLIGHT.md) e [Auth0 opcional](docs/AUTH0_INTEGRATION.md).
 
-Projeto novo, inspirado apenas em aprendizados de engenharia e em padrões de ferramentas como [DevSpace](https://github.com/Waishnav/devspace) e [Graphify](https://github.com/Graphify-Labs/graphify). Nenhum código desses repositórios foi incorporado.
+## Produto e segurança
 
-Licença, linguagem, framework e distribuição permanecem decisões em aberto até haver necessidade concreta.
+Fluxo desejado: iniciar serviço → estabelecer HTTPS → conectar e autorizar ChatGPT Web → abrir workspace aprovado → inspecionar código → editar → executar testes/comandos → revisar alterações. A leitura MCP está disponível somente no modo experimental `connect quick read`, mediante consentimento OAuth separado e concessão local revogável; edição, terminal, Git, diffs e continuidade de histórico entre conversas são trabalhos futuros. Não planejamos frontend substituto do ChatGPT, IA própria, agent-runtime, agent-orchestrator, fork/dependência do DevSpace ou subagentes nesta fase.
+
+O processo escuta somente em loopback, embora o túnel permita acesso público explicitamente autorizado. Nenhuma ferramenta poderosa é exposta enquanto o vínculo do proprietário não for validado. **Quando implementado, o shell terá os privilégios do usuário local; uma allowlist de arquivos não é sandbox.** Uma chamada real da ferramenta de diagnóstico foi correlacionada no teste do proprietário; compatibilidade com outros planos e ferramentas de desenvolvimento não foi verificada.
+
+## Documentação
+
+- [Produto](docs/PRODUCT.md) e [MVP](docs/MVP.md)
+- [Quick Tunnel guiado](docs/QUICK_TUNNEL.md)
+- [Transporte HTTPS](docs/TRANSPORT.md)
+- [Autorização OAuth integrada](docs/EMBEDDED_OAUTH.md)
+- [Instruções para agentes](AGENTS.md)
+
+Projeto original; aprendizados conceituais de [DevSpace](https://github.com/Waishnav/devspace), sem incorporar seu código.

@@ -1,0 +1,39 @@
+name: Go
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Format
+        run: |
+          files="$(gofmt -l cmd internal)"
+          if [ -n "$files" ]; then
+            printf 'Unformatted Go files:\n%s\n' "$files"
+            gofmt -d cmd internal
+            exit 1
+          fi
+      - name: Test
+        run: go test ./...
+      - name: Test consent JavaScript
+        run: node --test internal/auth/consent_js_test.mjs
+      - name: Race
+        run: go test -race -count=1 ./internal/admin ./internal/auth ./internal/workspace ./internal/mcp ./cmd/signalspace
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
