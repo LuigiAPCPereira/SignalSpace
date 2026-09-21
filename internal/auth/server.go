@@ -24,6 +24,9 @@ import (
 )
 
 const (
+	diagnosticScope      = "signalspace:diagnostic"
+	workspaceReadScope   = "signalspace:workspace.read"
+	workspaceWriteScope  = "signalspace:workspace.write"
 	maxRegistrationBytes = 16 << 10
 	maxFormBytes         = 8 << 10
 	maxClients           = 128
@@ -53,7 +56,9 @@ var (
 <h1>Autorizar conexão</h1>
 <p>Solicitação de <strong>{{.Client}}</strong>.</p>
 <p>Registro OAuth: <code>{{.ClientID}}</code></p>
-{{if .Read}}<p><strong>Permissão adicional:</strong> ler arquivos de texto da pasta autorizada separadamente no terminal. Esta permissão não dá acesso a outras pastas, edição ou shell.</p>{{else}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
+{{if .Read}}<p><strong>Permissão adicional:</strong> ler arquivos de texto da pasta autorizada separadamente no terminal. Esta permissão não dá acesso a outras pastas, edição ou shell.</p>{{end}}
+{{if .Write}}<p><strong>Permissão adicional:</strong> modificar arquivos de texto dentro da pasta autorizada. Esta permissão não dá acesso a outras pastas, comandos ou Git.</p>{{end}}
+{{if and (not .Read) (not .Write)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
 <p>Escopos solicitados: <code>{{.Scope}}</code></p>
 <p>Destino do retorno: <code>{{.Redirect}}</code></p>
 <p id="authorization-status" role="status" aria-live="polite">Confirme na janela do terminal em que o SignalSpace está em execução.</p>
@@ -83,8 +88,12 @@ type Config struct {
 	// concessões locais. A configuração padrão permanece somente diagnóstico.
 	ReadScope    string
 	CanIssueRead func(clientID string) bool
-	StateDir     string
-	OnRequest    func(RequestInfo)
+	// WriteScope é uma extensão experimental: só pode ser configurado junto de
+	// um verificador local explícito. A composição padrão nunca o preenche.
+	WriteScope    string
+	CanIssueWrite func(clientID string) bool
+	StateDir      string
+	OnRequest     func(RequestInfo)
 	// OnRegistrationFailure recebe somente categorias fixas, nunca metadados do cliente.
 	OnRegistrationFailure func(string)
 }
@@ -143,8 +152,11 @@ func New(config Config) (*Server, error) {
 	if config.Issuer != "https://"+resource.Host || config.Scope == "" {
 		return nil, errors.New("embedded issuer must equal resource HTTPS origin and scope must be set")
 	}
-	if (config.ReadScope != "" && (config.Scope != "signalspace:diagnostic" || config.ReadScope != "signalspace:workspace.read" || config.CanIssueRead == nil || config.OnRequest == nil)) || (config.ReadScope == "" && config.CanIssueRead != nil) {
+	if (config.ReadScope != "" && (config.Scope != diagnosticScope || config.ReadScope != workspaceReadScope || config.CanIssueRead == nil || config.OnRequest == nil)) || (config.ReadScope == "" && config.CanIssueRead != nil) {
 		return nil, errors.New("workspace read scope requires an explicit local grant validator")
+	}
+	if (config.WriteScope != "" && (config.Scope != diagnosticScope || config.WriteScope != workspaceWriteScope || config.CanIssueWrite == nil || config.OnRequest == nil)) || (config.WriteScope == "" && config.CanIssueWrite != nil) {
+		return nil, errors.New("workspace write scope requires an explicit local grant validator")
 	}
 	store, key, kid, clients, err := openIdentity(config.StateDir, config)
 	if err != nil {
@@ -327,17 +339,41 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	if s.config.ReadScope != "" {
 		scopes = append(scopes, s.config.ReadScope)
 	}
+	if s.config.WriteScope != "" {
+		scopes = append(scopes, s.config.WriteScope)
+	}
 	jsonReply(w, 200, map[string]any{"issuer": i, "authorization_endpoint": i + "/authorize", "token_endpoint": i + "/token", "registration_endpoint": i + "/register", "jwks_uri": i + "/oauth/jwks", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": scopes, "authorization_response_iss_parameter_supported": true})
 }
 
-// readRequested exige a combinação exata: não há elevação por escopo ausente,
-// duplicado ou enviado numa ordem alternativa.
+// requestedCapabilities aceita somente combinações canônicas e explícitas.
+// A ordem é fixa: diagnóstico, leitura, escrita; não há elevação por escopo
+// ausente, duplicado, desconhecido ou reordenado.
+func (s *Server) requestedCapabilities(scope string) (read, write, ok bool) {
+	switch {
+	case scope == s.config.Scope:
+		return false, false, true
+	case s.config.ReadScope != "" && scope == s.config.Scope+" "+s.config.ReadScope:
+		return true, false, true
+	case s.config.WriteScope != "" && scope == s.config.Scope+" "+s.config.WriteScope:
+		return false, true, true
+	case s.config.ReadScope != "" && s.config.WriteScope != "" && scope == s.config.Scope+" "+s.config.ReadScope+" "+s.config.WriteScope:
+		return true, true, true
+	default:
+		return false, false, false
+	}
+}
+
 func (s *Server) readRequested(scope string) bool {
-	return s.config.ReadScope != "" && scope == s.config.Scope+" "+s.config.ReadScope
+	read, _, _ := s.requestedCapabilities(scope)
+	return read
 }
 
 func (s *Server) readAllowed(clientID string) bool {
 	return s.config.CanIssueRead != nil && s.config.CanIssueRead(clientID)
+}
+
+func (s *Server) writeAllowed(clientID string) bool {
+	return s.config.CanIssueWrite != nil && s.config.CanIssueWrite(clientID)
 }
 func (s *Server) jwks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -454,8 +490,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	requestedScope := q.Get("scope")
-	read := s.readRequested(requestedScope)
-	if len(r.URL.RawQuery) > maxFormBytes || q.Get("response_type") != "code" || (requestedScope != s.config.Scope && !read) || q.Get("resource") != s.config.ResourceURL || !pkceChallenge.MatchString(q.Get("code_challenge")) || q.Get("code_challenge_method") != "S256" || len(q.Get("state")) < 16 || len(q.Get("state")) > 512 {
+	read, write, supported := s.requestedCapabilities(requestedScope)
+	if len(r.URL.RawQuery) > maxFormBytes || q.Get("response_type") != "code" || !supported || q.Get("resource") != s.config.ResourceURL || !pkceChallenge.MatchString(q.Get("code_challenge")) || q.Get("code_challenge_method") != "S256" || len(q.Get("state")) < 16 || len(q.Get("state")) > 512 {
 		bad(w, 400, "invalid_request")
 		return
 	}
@@ -479,7 +515,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_redirect_uri")
 		return
 	}
-	if read && !s.readAllowed(id) {
+	if (read && !s.readAllowed(id)) || (write && !s.writeAllowed(id)) {
 		bad(w, 403, "access_denied")
 		return
 	}
@@ -520,8 +556,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = consentPage.Execute(w, struct {
 		ID, Client, ClientID, Redirect, CSRF, Scope string
-		Read                                        bool
-	}{pendingID, c.Name, id, redirect, csrf, requestedScope, read})
+		Read, Write                                 bool
+	}{pendingID, c.Name, id, redirect, csrf, requestedScope, read, write})
 }
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -559,7 +595,8 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		bad(w, 403, "access_denied")
 		return
 	}
-	if s.readRequested(p.Scope) && !s.readAllowed(p.ClientID) {
+	read, write, supported := s.requestedCapabilities(p.Scope)
+	if !supported || (read && !s.readAllowed(p.ClientID)) || (write && !s.writeAllowed(p.ClientID)) {
 		s.mu.Unlock()
 		bad(w, 403, "access_denied")
 		return
@@ -642,7 +679,8 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_grant")
 		return
 	}
-	if s.readRequested(g.Scope) && !s.readAllowed(g.ClientID) {
+	read, write, supported := s.requestedCapabilities(g.Scope)
+	if !supported || (read && !s.readAllowed(g.ClientID)) || (write && !s.writeAllowed(g.ClientID)) {
 		bad(w, 400, "invalid_grant")
 		return
 	}

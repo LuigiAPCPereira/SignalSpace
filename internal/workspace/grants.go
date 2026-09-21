@@ -94,12 +94,19 @@ func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (strin
 	return opened.ID(), nil
 }
 
-// AllowsClient só é usada pelo emissor OAuth para verificar a concessão corrente.
-// Não retorna o ID da sessão e não autoriza uma leitura por si só.
+// AllowsClient só é usada pelo emissor OAuth para verificar a concessão de
+// leitura corrente. Não retorna o ID da sessão e não autoriza uma leitura por si só.
 func (g *Grants) AllowsClient(clientID string) bool {
+	return g.AllowsClientScope(clientID, ScopeRead)
+}
+
+// AllowsClientScope verifica a capacidade exata da concessão atual sem
+// expor a raiz ou o ID da sessão. O emissor OAuth usa esta porta para
+// revalidar escopos experimentais antes de concluir e trocar o código.
+func (g *Grants) AllowsClientScope(clientID, scope string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && g.hasScopeLocked(ScopeRead)
+	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && g.hasScopeLocked(scope)
 }
 
 func (g *Grants) hasScopeLocked(scope string) bool {
