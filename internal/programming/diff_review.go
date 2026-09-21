@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,7 +33,7 @@ type DiffReview struct {
 	DiffChange   bool
 }
 
-func CaptureGitSnapshot(ctx context.Context, session *workspace.Session, outputLimit int) (GitSnapshot, error) {
+func CaptureGitSnapshot(ctx context.Context, session workspace.ProcessDirectory, outputLimit int) (GitSnapshot, error) {
 	if ctx == nil || session == nil || outputLimit < 1 || outputLimit > maxOutputLimit {
 		return GitSnapshot{}, ErrInvalidDiffReview
 	}
@@ -44,7 +45,7 @@ func CaptureGitSnapshot(ctx context.Context, session *workspace.Session, outputL
 		if readErr != nil {
 			return readErr
 		}
-		diff, diffTruncated, readErr := runGitRead(readCtx, dir, outputLimit, "diff", "--no-ext-diff", "--binary", "--")
+		diff, diffTruncated, readErr := runGitRead(readCtx, dir, outputLimit, "diff", "--no-ext-diff", "--no-textconv", "--binary", "--")
 		if readErr != nil {
 			return readErr
 		}
@@ -65,10 +66,16 @@ func CompareGitSnapshots(before, after GitSnapshot) DiffReview {
 }
 
 func runGitRead(ctx context.Context, dir string, outputLimit int, args ...string) (string, bool, error) {
-	cmdArgs := append([]string(nil), args...)
+	cmdArgs := []string{
+		"--no-optional-locks",
+		"-c", "core.fsmonitor=false",
+		"-c", "core.untrackedCache=false",
+		"-c", "core.preloadIndex=false",
+	}
+	cmdArgs = append(cmdArgs, args...)
 	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
 	cmd.Dir = dir
-	cmd.Env = append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = safeGitReadEnvironment(cmd.Environ())
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	output := &limitedBuffer{limit: outputLimit}
 	cmd.Stdout = output
@@ -87,4 +94,49 @@ func runGitRead(ctx context.Context, dir string, outputLimit int, args ...string
 		<-done
 		return output.String(), output.truncated, ctx.Err()
 	}
+}
+
+// safeGitReadEnvironment remove mecanismos ambientais que podem trocar a
+// configuração, o índice, os objetos ou um executor auxiliar da leitura.
+// Configuração local legítima continua disponível, mas as chaves executáveis
+// usadas por status/diff são neutralizadas nos argumentos acima.
+func safeGitReadEnvironment(environment []string) []string {
+	blocked := map[string]struct{}{
+		"GIT_EXTERNAL_DIFF":                {},
+		"GIT_DIFF_OPTS":                    {},
+		"GIT_DIR":                          {},
+		"GIT_WORK_TREE":                    {},
+		"GIT_COMMON_DIR":                   {},
+		"GIT_INDEX_FILE":                   {},
+		"GIT_OBJECT_DIRECTORY":             {},
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES": {},
+		"GIT_OBJECT_DIRECTORY_RELATIVE":    {},
+		"GIT_QUARANTINE_PATH":              {},
+		"GIT_EXEC_PATH":                    {},
+		"GIT_ASKPASS":                      {},
+		"SSH_ASKPASS":                      {},
+		"GIT_SSH":                          {},
+		"GIT_SSH_COMMAND":                  {},
+		"GIT_PAGER":                        {},
+		"GIT_EDITOR":                       {},
+		"GIT_SEQUENCE_EDITOR":              {},
+	}
+	filtered := make([]string, 0, len(environment)+5)
+	for _, entry := range environment {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "GIT_CONFIG_") || strings.HasPrefix(key, "GIT_ATTR_") {
+			continue
+		}
+		if _, ok := blocked[key]; ok {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return append(filtered,
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_OPTIONAL_LOCKS=0",
+	)
 }

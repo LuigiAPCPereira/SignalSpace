@@ -136,12 +136,12 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		serveMCP(w, r, "local_diagnostic", nil, nil, nil)
+		serveMCP(w, r, "local_diagnostic", nil, nil, nil, nil)
 	}), nil
 }
 
 // serveMCP processa o protocolo somente após a fronteira de autenticação.
-func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess) {
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -190,7 +190,7 @@ func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent fu
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess)
+	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess, gitAccess)
 }
 
 func isOversized(err error) bool {
@@ -198,7 +198,7 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess) {
+func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess) {
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -214,6 +214,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			if readAccess.lister != nil {
 				instructions = "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
 			}
+		}
+		if gitAccess != nil {
+			instructions += " Git review requires a separate OAuth Git review scope and active local Git review grant; it is read-only and never stages, commits or pushes."
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"protocolVersion": protocolVersion,
@@ -243,6 +246,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		if writeAccess != nil && writeAccess.advertise {
 			tools = append(tools, writeToolDefinition())
 		}
+		if gitAccess != nil && gitAccess.advertise {
+			tools = append(tools, gitReviewToolDefinition())
+		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"tools": tools,
 		}})
@@ -268,6 +274,10 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		}
 		if params.Name == writeToolName && writeAccess != nil {
 			writeAccess.call(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == gitReviewToolName && gitAccess != nil {
+			gitAccess.call(w, r.Context(), id, params.Arguments)
 			return
 		}
 		if params.Name != toolName {

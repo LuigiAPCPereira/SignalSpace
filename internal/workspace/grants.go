@@ -11,7 +11,15 @@ var ErrNotAuthorized = errors.New("workspace session not authorized")
 const (
 	ScopeRead  = "signalspace:workspace.read"
 	ScopeWrite = "signalspace:workspace.write"
+	ScopeGit   = "signalspace:git.review"
 )
+
+// ProcessDirectory é a menor porta necessária para operações locais que
+// precisam executar uma observação vinculada ao diretório aprovado. Ela não
+// expõe a raiz, o descritor ou o ID da sessão.
+type ProcessDirectory interface {
+	WithProcessDir(func(string) error) error
+}
 
 // Grants mantém, no máximo, uma raiz concedida pelo terminal ao proprietário e
 // ao cliente OAuth selecionado. Nenhuma entrada HTTP cria ou amplia a concessão.
@@ -61,7 +69,7 @@ func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (strin
 	}
 	allowedScopes := make(map[string]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeWrite {
+		if scope != ScopeRead && scope != ScopeWrite && scope != ScopeGit {
 			return "", ErrNotAuthorized
 		}
 		allowedScopes[scope] = struct{}{}
@@ -92,6 +100,25 @@ func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (strin
 	g.clientID = clientID
 	g.scopes = allowedScopes
 	return opened.ID(), nil
+}
+
+// WithAuthorizedGitProcessDir autoriza uma observação Git somente com a
+// concessão Git corrente e mantém a chamada serializada com edição e revogação.
+// A porta é deliberadamente específica: não há equivalente HTTP nem acesso
+// MCP direto à Session.
+func (g *Grants) WithAuthorizedGitProcessDir(owner, clientID, id string, operation func(ProcessDirectory) error) error {
+	if operation == nil {
+		return ErrNotAuthorized
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeGit) {
+		return ErrNotAuthorized
+	}
+	return operation(g.current)
 }
 
 // AllowsClient só é usada pelo emissor OAuth para verificar a concessão de

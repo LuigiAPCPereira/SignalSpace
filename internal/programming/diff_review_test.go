@@ -88,3 +88,31 @@ func TestGitSnapshotRequiresLiveSessionAndValidLimit(t *testing.T) {
 		t.Fatalf("closed session accepted: %v", err)
 	}
 }
+
+func TestGitSnapshotNeutralizesExecutableConfigAndEnvironment(t *testing.T) {
+	session, root := gitFixture(t)
+	marker := filepath.Join(t.TempDir(), "executed")
+	hook := filepath.Join(t.TempDir(), "git-hook.sh")
+	script := "#!/bin/sh\nprintf executed > '" + marker + "'\n"
+	if err := os.WriteFile(hook, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	runGitFixture(t, root, "config", "core.fsmonitor", hook)
+
+	// A configuração e o ambiente tentam instalar tanto um fsmonitor quanto
+	// um diff externo. A observação não deve executar nenhum deles.
+	t.Setenv("GIT_CONFIG_COUNT", "2")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.fsmonitor")
+	t.Setenv("GIT_CONFIG_VALUE_0", hook)
+	t.Setenv("GIT_CONFIG_KEY_1", "diff.external")
+	t.Setenv("GIT_CONFIG_VALUE_1", hook)
+	t.Setenv("GIT_EXTERNAL_DIFF", hook)
+	t.Setenv("GIT_INDEX_FILE", filepath.Join(t.TempDir(), "foreign-index"))
+
+	if _, err := CaptureGitSnapshot(context.Background(), session, 8192); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("git observation executed configured helper: %v", err)
+	}
+}

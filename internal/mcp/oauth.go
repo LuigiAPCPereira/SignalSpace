@@ -43,6 +43,9 @@ type OAuthConfig struct {
 	// workspaceWriter é deliberadamente não exportado: somente o harness de
 	// testes deste pacote pode compor a escrita sem publicá-la no entrypoint.
 	workspaceWriter WorkspaceTextWriter
+	// gitReviewer é deliberadamente não exportado: revisão Git só pode ser
+	// composta pelo harness automatizado deste pacote nesta etapa.
+	gitReviewer WorkspaceGitReviewer
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
@@ -70,7 +73,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		return nil, errors.New("workspace directory listing requires workspace reader")
 	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil || config.workspaceWriter != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.gitReviewer != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
 			return nil, errors.New("workspace capabilities require verified OAuth client identity")
@@ -85,6 +88,9 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	}
 	if config.workspaceWriter != nil {
 		scopes = append(scopes, workspaceWriteScope)
+	}
+	if config.gitReviewer != nil {
+		scopes = append(scopes, gitReviewScope)
 	}
 	metadata := map[string]any{
 		"resource":              config.ResourceURL,
@@ -176,7 +182,28 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				writeAccess.advertise = true
 			}
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess)
+		var gitAccess *gitToolAccess
+		if config.gitReviewer != nil {
+			accessToken := strings.TrimPrefix(bearer, "Bearer ")
+			gitAccess = &gitToolAccess{
+				reviewer: config.gitReviewer,
+				verify: func(ctx context.Context) (VerifiedIdentity, error) {
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitReviewScope, config.OwnerSubject)
+					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
+						if err == nil {
+							err = errInvalidToken
+						}
+						return VerifiedIdentity{}, err
+					}
+					return identity, nil
+				},
+				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, gitReviewScope),
+			}
+			if _, err := gitAccess.verify(r.Context()); err == nil {
+				gitAccess.advertise = true
+			}
+		}
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess)
 	}), nil
 }
 
