@@ -3,39 +3,132 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SignalSpace — administração local</title>
+  <meta name="color-scheme" content="light">
+  <title>SignalSpace: administração local</title>
+  <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
-  <main>
-    <h1>SignalSpace</h1>
-    <p id="session-status" role="status">Carregando sessão local…</p>
-    <p id="error" role="alert" hidden></p>
+  <div class="page-shell">
+    <header class="brand-bar">
+      <a class="brand" href="/" aria-label="SignalSpace, início da administração local">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span>SignalSpace</span>
+      </a>
+      <span class="brand-context">administração local</span>
+    </header>
 
-    <section id="pair-section" hidden>
-      <h2>Parear esta instância</h2>
-      <p>Use o código exibido pelo processo local e defina uma frase-senha.</p>
-      <form id="pair-form">
-        <label>Código de pareamento <input name="pairing_code" autocomplete="one-time-code" required></label>
-        <label>Frase-senha <input name="passphrase" type="password" autocomplete="new-password" required></label>
-        <button type="submit">Parear</button>
-      </form>
-    </section>
+    <div class="layout">
+      <main id="main-content">
+        <p class="eyebrow">Controle do proprietário · localhost:7677</p>
+        <h1 id="page-title">Verificando o acesso local</h1>
+        <p id="page-lead" class="lead">Consultando a sessão administrativa antes de exibir qualquer pedido.</p>
 
-    <section id="unlock-section" hidden>
-      <h2>Desbloquear instância</h2>
-      <form id="unlock-form">
-        <label>Frase-senha <input name="passphrase" type="password" autocomplete="current-password" required></label>
-        <button type="submit">Desbloquear</button>
-      </form>
-    </section>
+        <section id="state-panel" class="panel state-panel" aria-labelledby="page-title">
+          <div class="state-header">
+            <span id="session-badge" class="status-badge" data-tone="neutral">Carregando</span>
+            <p id="session-status" class="state-meta" role="status">Carregando sessão local…</p>
+          </div>
+          <p id="error" class="message message-error" role="alert" hidden></p>
 
-    <section id="authenticated-section" hidden>
-      <h2>Solicitações OAuth</h2>
-      <p><button id="refresh-session" type="button">Renovar sessão</button> <button id="lock-session" type="button">Bloquear</button></p>
-      <p id="requests-status" role="status"></p>
-      <ul id="requests"></ul>
-    </section>
-  </main>
+          <section id="loading-section" class="state-content" aria-labelledby="loading-title">
+            <h2 id="loading-title">Aguardando uma resposta confiável</h2>
+            <p>Nenhum dado administrativo será mostrado até o servidor confirmar o estado desta sessão.</p>
+          </section>
+
+          <section id="pair-section" class="state-content" aria-labelledby="pair-title" hidden>
+            <h2 id="pair-title">Parear esta instalação</h2>
+            <p>Use o código exibido pelo processo local e defina a frase-senha que protegerá os próximos desbloqueios.</p>
+            <form id="pair-form" class="credential-form">
+              <label for="pairing-code">Código exibido no terminal</label>
+              <input id="pairing-code" name="pairing_code" autocomplete="one-time-code" required>
+              <p class="field-help">O código é temporário e deve ser lido no terminal deste computador.</p>
+              <label for="pair-passphrase">Frase-senha administrativa</label>
+              <input id="pair-passphrase" name="passphrase" type="password" autocomplete="new-password" required>
+              <p class="field-help">Ela ficará somente no envio atual e não será guardada pelo navegador.</p>
+              <button class="button primary" type="submit">Parear e abrir painel</button>
+            </form>
+          </section>
+
+          <section id="unlock-section" class="state-content" aria-labelledby="unlock-title" hidden>
+            <h2 id="unlock-title">Desbloquear painel local</h2>
+            <p>Esta instalação já foi pareada. Informe somente a frase-senha administrativa para iniciar uma sessão nova.</p>
+            <form id="unlock-form" class="credential-form">
+              <label for="unlock-passphrase">Frase-senha administrativa</label>
+              <input id="unlock-passphrase" name="passphrase" type="password" autocomplete="current-password" required>
+              <p class="field-help">O código do terminal não é necessário para um desbloqueio normal.</p>
+              <button class="button primary" type="submit">Desbloquear painel</button>
+            </form>
+          </section>
+
+          <section id="unknown-section" class="state-content" aria-labelledby="unknown-title" hidden>
+            <h2 id="unknown-title">Resultado desconhecido</h2>
+            <p id="unknown-detail">A resposta não confirmou a operação. A interface não vai repetir credenciais nem uma decisão automaticamente.</p>
+            <button id="recheck-session" class="button" type="button">Verificar sessão novamente</button>
+          </section>
+
+          <section id="unavailable-section" class="state-content" aria-labelledby="unavailable-title" hidden>
+            <h2 id="unavailable-title">Serviço indisponível</h2>
+            <p id="unavailable-detail">Não foi possível obter uma resposta confiável do servidor local. Isso não significa sessão expirada nem fila vazia.</p>
+            <button id="retry-session" class="button" type="button">Tentar verificar novamente</button>
+          </section>
+
+          <section id="authenticated-section" class="authenticated-content" aria-labelledby="requests-title" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="section-kicker">Fila administrativa</p>
+                <h2 id="requests-title">Solicitações de conexão</h2>
+              </div>
+              <span id="request-count" class="count-badge">n/d</span>
+            </div>
+            <p class="section-intro">Revise os metadados fornecidos pelo solicitante. O nome exibido é declarado pelo cliente e não comprova sua identidade.</p>
+            <p id="requests-status" class="message" role="status" aria-live="polite">Consultando solicitações…</p>
+            <ol id="requests" class="request-list" aria-label="Solicitações OAuth"></ol>
+
+            <section id="request-detail" class="request-detail" aria-labelledby="detail-title" hidden>
+              <div class="detail-heading">
+                <div>
+                  <p class="section-kicker">Detalhes do pedido</p>
+                  <h3 id="detail-title" tabindex="-1">Selecione uma solicitação</h3>
+                </div>
+                <span id="detail-status" class="status-badge" data-tone="neutral">n/d</span>
+              </div>
+              <p id="detail-message" class="message" role="status" aria-live="polite"></p>
+              <dl class="detail-grid">
+                <div><dt>Cliente declarado</dt><dd id="detail-client-name">n/d</dd><small id="detail-client-note">Nome fornecido pelo cliente; não atestado pelo nome.</small></div>
+                <div><dt>Identificador OAuth</dt><dd id="detail-client-id" class="code-value">n/d</dd></div>
+                <div><dt>Destino de retorno</dt><dd id="detail-redirect" class="code-value">n/d</dd></div>
+                <div><dt>Escopo solicitado</dt><dd id="detail-scope" class="code-value">n/d</dd></div>
+                <div><dt>Concessão de workspace</dt><dd id="detail-grant">n/d</dd></div>
+                <div><dt>Versão</dt><dd id="detail-version">n/d</dd></div>
+                <div><dt>Prazo do servidor</dt><dd id="detail-expires">n/d</dd></div>
+                <div><dt>ID da solicitação</dt><dd id="detail-id" class="code-value">n/d</dd></div>
+              </dl>
+              <div id="decision-actions" class="decision-actions" hidden>
+                <button id="deny-request" class="button" type="button">Recusar</button>
+                <button id="approve-request" class="button primary" type="button">Aprovar</button>
+              </div>
+              <p id="decision-note" class="field-help">Uma decisão confirmada pelo servidor não implica emissão de token, conexão MCP ou concessão automática de workspace.</p>
+            </section>
+          </section>
+        </section>
+      </main>
+
+      <aside class="sidebar" aria-labelledby="sidebar-title">
+        <h2 id="sidebar-title">Acesso local</h2>
+        <p>Este painel conversa somente com a instância SignalSpace em <code>localhost:7677</code>.</p>
+        <dl class="session-facts">
+          <div><dt>Estado</dt><dd id="sidebar-state">Carregando</dd></div>
+          <div><dt>Inatividade até</dt><dd id="idle-expires">n/d</dd></div>
+          <div><dt>Prazo absoluto</dt><dd id="absolute-expires">n/d</dd></div>
+        </dl>
+        <div id="session-actions" class="sidebar-actions" hidden>
+          <button id="refresh-session" class="button" type="button">Renovar sessão</button>
+          <button id="lock-session" class="button danger-outline" type="button">Bloquear painel</button>
+        </div>
+        <p class="sidebar-note">Os prazos acima vêm do servidor. Consultar pedidos não renova a sessão; a renovação ocorre apenas por ação explícita.</p>
+      </aside>
+    </div>
+  </div>
   <script src="/admin.js" defer></script>
 </body>
 </html>

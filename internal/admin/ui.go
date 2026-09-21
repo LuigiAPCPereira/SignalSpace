@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-//go:embed ui/index.html ui/admin.js
+//go:embed ui/index.html ui/admin.css ui/admin.js
 var adminUI embed.FS
 
 func serveAdminUI(w http.ResponseWriter, r *http.Request) {
@@ -14,7 +14,10 @@ func serveAdminUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := "ui/index.html"
-	if r.URL.Path == "/admin.js" {
+	switch r.URL.Path {
+	case "/admin.css":
+		name = "ui/admin.css"
+	case "/admin.js":
 		name = "ui/admin.js"
 	}
 	data, err := adminUI.ReadFile(name)
@@ -22,9 +25,12 @@ func serveAdminUI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if name == "ui/admin.js" {
+	switch name {
+	case "ui/admin.js":
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	} else {
+	case "ui/admin.css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	default:
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	}
 	_, _ = w.Write(data)

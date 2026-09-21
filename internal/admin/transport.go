@@ -64,7 +64,7 @@ func Handler(api http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		w.Header().Set("Vary", "Origin")
 		if r.Host != "localhost:7677" || r.URL.IsAbs() || r.URL.RawPath != "" || strings.Contains(r.URL.Path, "//") {
 			w.WriteHeader(http.StatusForbidden)
@@ -78,11 +78,11 @@ func Handler(api http.Handler) http.Handler {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
-		if r.URL.Path != "/" && r.URL.Path != "/admin.js" && r.URL.Path != "/api/admin/v1" && !strings.HasPrefix(r.URL.Path, "/api/admin/v1/") {
+		if r.URL.Path != "/" && r.URL.Path != "/admin.css" && r.URL.Path != "/admin.js" && r.URL.Path != "/api/admin/v1" && !strings.HasPrefix(r.URL.Path, "/api/admin/v1/") {
 			http.NotFound(w, r)
 			return
 		}
-		if r.URL.Path == "/" || r.URL.Path == "/admin.js" {
+		if r.URL.Path == "/" || r.URL.Path == "/admin.css" || r.URL.Path == "/admin.js" {
 			serveAdminUI(w, r)
 			return
 		}

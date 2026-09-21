@@ -14,7 +14,8 @@ func TestAdminTransportServesFunctionalSameOriginUIWithoutExposingAPIData(t *tes
 		contentType string
 		contains    string
 	}{
-		{path: "/", contentType: "text/html; charset=utf-8", contains: "<script src=\"/admin.js\" defer></script>"},
+		{path: "/", contentType: "text/html; charset=utf-8", contains: "<link rel=\"stylesheet\" href=\"/admin.css\">"},
+		{path: "/admin.css", contentType: "text/css; charset=utf-8", contains: ".status-badge"},
 		{path: "/admin.js", contentType: "text/javascript; charset=utf-8", contains: "credentials: 'same-origin'"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
@@ -29,7 +30,7 @@ func TestAdminTransportServesFunctionalSameOriginUIWithoutExposingAPIData(t *tes
 				t.Fatalf("UI missing %q", tc.contains)
 			}
 			csp := response.Header().Get("Content-Security-Policy")
-			if !strings.Contains(csp, "script-src 'self'") || !strings.Contains(csp, "connect-src 'self'") {
+			if !strings.Contains(csp, "style-src 'self'") || !strings.Contains(csp, "script-src 'self'") || !strings.Contains(csp, "connect-src 'self'") {
 				t.Fatalf("UI CSP does not permit only same-origin script/API: %q", csp)
 			}
 		})
@@ -55,7 +56,7 @@ func TestAdminUISourcePreservesBootstrapCSRFAndRegisteredClientName(t *testing.T
 		t.Fatalf("admin.js status: %d", response.Code)
 	}
 	body := response.Body.String()
-	if !strings.Contains(body, "clearAuthenticatedData(false)") {
+	if !strings.Contains(body, "csrf_token") || !strings.Contains(body, "csrfOverride") {
 		t.Fatal("bootstrap CSRF is not preserved for pair/unlock")
 	}
 	if !strings.Contains(body, "item.client?.display_name") {
