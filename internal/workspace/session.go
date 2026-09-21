@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -83,6 +84,18 @@ func normalizePathError(err error) error {
 
 // ID é opaco e permanece constante somente durante a sessão.
 func (s *Session) ID() string { return s.id }
+
+// ProcessDir devolve um diretório efêmero para o executor local usar como cwd.
+// Ele não é um sandbox: o processo continua com os privilégios do usuário e
+// pode acessar qualquer outro recurso permitido pelo sistema operacional.
+func (s *Session) ProcessDir() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return "", ErrClosed
+	}
+	return fmt.Sprintf("/proc/self/fd/%d", s.rootFD), nil
+}
 
 func validRelative(relative string) bool {
 	if relative == "" || relative == "." || len(relative) > 4096 || filepath.IsAbs(relative) ||
