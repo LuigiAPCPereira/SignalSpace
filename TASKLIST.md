@@ -22,6 +22,7 @@
 - O teste funcional Node cobre deterministicamente `APPROVED → EXPIRED` antes do clique e JSON inválido por falha de parsing. O teste Go confirma que `/authorize/complete` rejeita a aprovação expirada sem emitir código.
 - Gates locais no HEAD `3deefc1`: formato, diff, `go test ./...`, `go test -race ./internal/auth ./cmd/signalspace`, `go vet ./...`, `go build ./...`, `node --check` e `node --test`: PASS.
 - O monitoramento/consulta da CI remota não foi realizado conforme orientação do proprietário; portanto a cobertura CI deste novo SHA é **desconhecida**. A validação visual negativa e a submissão final continuam pendentes; nenhum túnel novo foi aberto.
+- Reconciliação posterior: push normal concluído sem divergência; o remoto e o HEAD local apontam para `9e93b65a2e897cfb4c41539dd3fb65d3ccc576e1`. A diferença em relação ao remoto é vazia; os únicos itens fora do Git continuam sendo os dois patches preservados.
 
 **Smoke M3 real relatado como APROVADO pelo proprietário (revisão `bd60fc3`, 20/09/2026), restrito ao diagnóstico OAuth+MCP+API administrativa:** correlação `diagnosticID` ChatGPT/terminal, `tools/list` autenticado, portas isoladas e limpeza/encerramento observados. Esta sessão **não executou nem recebeu logs brutos desse smoke**; o relato não prova a matriz negativa completa, leitura M2 com painel, token/callback por evento ou segurança independente. Marcar SS-BE-002 e SS-BE-008 como validadas **nesse escopo**; SS-BE-007 permanece em andamento, SS-BE-006 está implementada não validada até o navegador.
 

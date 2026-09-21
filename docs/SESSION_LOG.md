@@ -104,6 +104,12 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - Validação local no SHA `3deefc1`: `gofmt -l cmd internal`, `git diff --check`, `go test ./...`, `go test -race ./internal/auth ./cmd/signalspace`, `go vet ./...`, `go build ./...`, `node --check internal/auth/consent.js` e `node --test internal/auth/consent_js_test.mjs`: PASS. Uma primeira execução paralela dos testes de processo colidiu nos listeners fixos 7676; a repetição sequencial passou e não deixou listeners/processos.
 - Conforme orientação do proprietário, a CI remota não foi consultada após este commit; o estado remoto é desconhecido. Não havia navegador/túnel descartável já autorizado para nova execução, então a evidência visual permanece apenas no caminho feliz Quick Tunnel já registrado. Nenhum grant OAuth foi emitido, nenhum túnel novo foi aberto, e branch frontend/patches/PR draft foram preservados.
 
+## 20/09/2026 — reconciliação do push de SS-BE-006
+
+- O primeiro parecer do advisor viu o remoto em `cf06e53` porque a consulta ocorreu antes da publicação. O push normal subsequente retornou `cf06e53..9e93b65` na branch `feat/m1-local-mcp-diagnostic`.
+- Evidência local/remota reconsultada: HEAD completo `9e93b65a2e897cfb4c41539dd3fb65d3ccc576e1`; `git ls-remote origin refs/heads/feat/m1-local-mcp-diagnostic` retornou o mesmo SHA; `git diff origin/feat/m1-local-mcp-diagnostic..HEAD` e a diferença inversa ficaram vazias; status preservou somente os dois patches não rastreados.
+- A CI do SHA exato não foi consultada, conforme orientação do proprietário; não registrar PASS/FAIL remoto. Nenhum túnel, grant OAuth, merge ou deploy foi realizado.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
