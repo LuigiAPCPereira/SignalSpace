@@ -81,3 +81,13 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Validação da fatia:** testes de workspace/programming/MCP e race de workspace/programming passaram; `cmd/signalspace` passou em execução serial observável. O primeiro comando agregado excedeu a janela de espera e deixou um teste próprio em 7676; os PIDs identificados foram encerrados e não restaram listeners. Não houve túnel, grant OAuth, alteração MCP, navegador, CI, merge ou deploy.
 
 **Estado:** SS-MVP-002 continua **em andamento**: a fronteira local de escrita está validada, mas a integração de escopo remoto OAuth/MCP, execução e Git por operação ainda não existe. Próxima ação: fechar os gates completos e atualizar a autorização remota somente após contrato próprio; não expor `workspace.write` nesta rodada.
+
+## Checkpoint atualizado — SS-MVP-002 MCP isolado — 21/09/2026
+
+**Ref observada:** `codex/mvp-vertical-programming` após `b46cda6` (`feat(mcp): test isolated workspace write authorization`). `git pull --ff-only` retornou `Already up to date` contra `origin/codex/mvp-vertical-programming` antes desta mudança; os dois patches não rastreados permanecem preservados.
+
+**Implementação:** `internal/mcp/workspace_write.go` liga identidade verificada, escopo `signalspace:workspace.write`, sessão e `WorkspaceTextWriter.ReplaceText` com resultado estruturado. A injeção é não exportada em `OAuthConfig`, ficando disponível somente dentro do pacote para o harness; `cmd/signalspace` não consegue registrar essa capacidade. Os modos de produção continuam sem emissor de escrita e sem `replace_text` em `tools/list`.
+
+**Validação:** `go test ./internal/mcp ./internal/workspace ./internal/programming ./cmd/signalspace -parallel=1 -count=1 -timeout=180s` passou. O teste MCP isolado cobre escrita autorizada, read-only/sem escopo, cliente/owner/sessão/workspace divergentes, revogação, tokens inválidos/expirados, path hostil, conflito, duplicação e ausência pública. Gates completos e paridade remota final ainda são pendentes nesta etapa documental.
+
+**Estado:** SS-MVP-002 continua **em andamento/PARCIAL**: a fronteira MCP de teste está confirmada, mas nenhum escopo de escrita foi adicionado ao OAuth emissor, ao Quick ou ao MCP público. Próxima ação: revisar contrato remoto por operação e decidir se/como um gate próprio de publicação será autorizado; não expor `workspace.write` por inferência.

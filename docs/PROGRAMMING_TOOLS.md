@@ -1,6 +1,6 @@
 # SignalSpace — contrato inicial de programação local
 
-**Estado:** fatia vertical implementada e validada somente localmente na branch `codex/mvp-vertical-programming`; não é autorização de publicar novas ferramentas MCP, abrir túnel ou conceder OAuth.
+**Estado:** fatia vertical implementada e validada somente localmente na branch `codex/mvp-vertical-programming`; a fronteira MCP de escrita existe apenas no harness isolado de testes. Isso não é autorização de publicar novas ferramentas MCP, abrir túnel ou conceder OAuth.
 
 ## Fronteira de autorização
 
@@ -8,6 +8,9 @@
 - `Grants.Grant` permanece somente leitura. A fronteira local `Grants.GrantWithScopes` aceita apenas `signalspace:workspace.read` e `signalspace:workspace.write`; uma concessão read-only não pode editar, e uma concessão write-only não pode ler.
 - `Grants.ReplaceText` revalida owner, cliente, sessão ativa e `signalspace:workspace.write` a cada chamada, além das validações de arquivo. A revogação limpa os escopos e nega chamadas posteriores.
 - O contrato de autorização remoto específico para escopos de programação ainda está **em andamento**. Nenhum escopo de escrita, execução ou Git foi adicionado ao OAuth/MCP nesta missão; `GrantWithScopes` é uma fronteira local fechada para testes e composição futura.
+- O commit `b46cda6` adiciona a porta interna `WorkspaceTextWriter` e a composição `replace_text` somente ao harness de testes do pacote MCP. A configuração que injeta essa porta é deliberadamente não exportada, portanto os entrypoints de produção não conseguem registrá-la por configuração normal.
+- Na composição isolada, cada chamada revalida identidade JWT assinada, owner, cliente, `signalspace:workspace.write`, sessão e concessão corrente antes de chamar `Grants.ReplaceText`. O resultado é estruturado e não revela caminhos ou detalhes do filesystem em falhas.
+- Os modos públicos continuam sem `signalspace:workspace.write`, sem emissor OAuth de escrita e sem `replace_text` em `tools/list`/`tools/call`. A prova cobre o handler diagnóstico sem capacidade de escrita e os modos de leitura existentes; não é aceite de transporte remoto.
 - A UI administrativa funcional serve somente em `localhost:7677`, usa a sessão administrativa existente, cookie HttpOnly e CSRF em memória. Ela não escolhe raízes nem publica ferramentas de programação.
 
 ## Edição segura inicial
@@ -26,4 +29,4 @@ Essa proteção é uma versão otimista local; outro processo externo pode alter
 
 ## Evidência e próximos limites
 
-O teste vertical descartável percorre leitura → edição → `go test ./...` → snapshot/diff → revogação → negação. Os testes não validam navegador, OAuth, MCP remoto, sandbox de processo, escritores externos ou integração com a branch `feat/frontend-oauth-consent`. A promoção dessas capacidades para transporte remoto requer contratos de escopo, autorização por operação, limites e testes adversariais próprios.
+O teste vertical descartável percorre leitura → edição → `go test ./...` → snapshot/diff → revogação → negação. `internal/mcp/workspace_write_test.go` acrescenta a composição isolada: escrita autorizada, token somente leitura/sem escopo, cliente e owner divergentes, sessão/workspace divergentes, revogação com JWT ainda válido, token inválido/expirado, traversal, conflito, duplicação e ausência da ferramenta nos modos públicos. Os testes não validam navegador, OAuth emissor de escrita, túnel, MCP remoto, sandbox de processo, escritores externos ou integração com a branch `feat/frontend-oauth-consent`. A promoção dessas capacidades para transporte remoto requer contrato de escopo, autorização por operação, limites e testes adversariais próprios.
