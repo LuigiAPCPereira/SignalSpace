@@ -23,7 +23,7 @@ func TestLocalProgrammingVerticalSliceReadEditTestDiffRevoke(t *testing.T) {
 	}
 	runGitFixture(t, workingRoot, "add", "workspace.txt")
 	runGitFixture(t, workingRoot, "commit", "-qm", "workspace baseline")
-	grantID, err := grants.Grant(workingRoot, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	grantID, err := grants.GrantWithScopes(workingRoot, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", workspace.ScopeRead, workspace.ScopeWrite)
 	if err != nil {
 		t.Fatal(err)
 	}

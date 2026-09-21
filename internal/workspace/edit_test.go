@@ -106,6 +106,13 @@ func TestGrantReplaceTextRequiresCurrentIdentityAndRevocation(t *testing.T) {
 	if err := grants.ReplaceText("owner", testClientB, id, "file.txt", "before", "after"); !errors.Is(err, ErrNotAuthorized) {
 		t.Fatalf("other client edited: %v", err)
 	}
+	if err := grants.ReplaceText("owner", testClientA, id, "file.txt", "before", "after"); !errors.Is(err, ErrNotAuthorized) {
+		t.Fatalf("read-only grant edited: %v", err)
+	}
+	id, err = grants.GrantWithScopes(root, testClientA, ScopeRead, ScopeWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := grants.ReplaceText("owner", testClientA, id, "file.txt", "before", "after"); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +134,7 @@ func TestConcurrentReplaceTextAllowsOnlyOneMatchingExpectedVersion(t *testing.T)
 	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("before"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	id, err := grants.Grant(root, testClientA)
+	id, err := grants.GrantWithScopes(root, testClientA, ScopeRead, ScopeWrite)
 	if err != nil {
 		t.Fatal(err)
 	}

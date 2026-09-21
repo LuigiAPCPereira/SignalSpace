@@ -67,6 +67,47 @@ func TestGrantsRequireOwnerAndExplicitGrant(t *testing.T) {
 	}
 }
 
+func TestGrantScopesKeepWriteIndependentFromRead(t *testing.T) {
+	g, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "file"), []byte("before"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	readOnly, err := g.Grant(root, testClientA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !g.AllowsClient(testClientA) {
+		t.Fatal("read scope was not retained")
+	}
+	if err := g.ReplaceText("local-owner", testClientA, readOnly, "file", "before", "after"); !errors.Is(err, ErrNotAuthorized) {
+		t.Fatalf("read scope authorized write: %v", err)
+	}
+
+	writeOnly, err := g.GrantWithScopes(root, testClientA, ScopeWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.AllowsClient(testClientA) {
+		t.Fatal("write-only grant exposed read scope")
+	}
+	if err := g.ReplaceText("local-owner", testClientA, writeOnly, "file", "before", "after"); err != nil {
+		t.Fatalf("write scope did not authorize edit: %v", err)
+	}
+	if _, err := g.ReadText("local-owner", testClientA, writeOnly, "file"); !errors.Is(err, ErrNotAuthorized) {
+		t.Fatalf("write-only grant authorized read: %v", err)
+	}
+
+	if _, err := g.GrantWithScopes(root, testClientA, "signalspace:workspace.unknown"); !errors.Is(err, ErrNotAuthorized) {
+		t.Fatalf("unknown scope accepted: %v", err)
+	}
+}
+
 func TestGrantsReplacementAndShutdownRevoke(t *testing.T) {
 	g, err := NewGrants("local-owner")
 	if err != nil {
