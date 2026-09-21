@@ -176,6 +176,15 @@ func TestQuickPublicListenerRejectsAdministrativeMatrix(t *testing.T) {
 	cases := []struct {
 		name, method, path, host string
 	}{
+		{"admin_root", http.MethodGet, "/admin", "localhost:7676"},
+		{"admin_root_slash", http.MethodPost, "/admin/", "localhost:7676"},
+		{"admin_duplicate_leading", http.MethodOptions, "//api/admin/v1/session", "localhost:7676"},
+		{"admin_duplicate_middle", http.MethodPatch, "/api//admin/v1/session", "localhost:7676"},
+		{"admin_dot_segment", http.MethodDelete, "/api/./admin/v1/session", "localhost:7676"},
+		{"admin_parent_segment", http.MethodPut, "/prefix/../api/admin/v1/session", "localhost:7676"},
+		{"admin_encoded_parent", http.MethodGet, "/api/%2e%2e/api/admin/v1/session", "localhost:7676"},
+		{"admin_encoded_slash", http.MethodGet, "/api%2fadmin/v1/session", "localhost:7676"},
+		{"admin_encoded_name", http.MethodGet, "/api/%61dmin/v1/session", "localhost:7676"},
 		{"session", http.MethodGet, "/api/admin/v1/session", "localhost:7676"},
 		{"pair", http.MethodPost, "/api/admin/v1/pair", "localhost:7677"},
 		{"request_detail", http.MethodGet, "/api/admin/v1/requests/abcdefghijklmnopqrstuv", "evil.example"},
@@ -199,8 +208,34 @@ func TestQuickPublicListenerRejectsAdministrativeMatrix(t *testing.T) {
 			if response.StatusCode != http.StatusNotFound {
 				t.Fatalf("public listener exposed administrative path: %s %s returned %d", tc.method, tc.path, response.StatusCode)
 			}
+			if response.Header.Get("Location") != "" {
+				t.Fatalf("public listener redirected administrative path: %s", response.Header.Get("Location"))
+			}
 			if len(response.Cookies()) != 0 {
 				t.Fatalf("public listener set administrative cookie for %s", tc.path)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name, method, path string
+	}{
+		{"mcp", http.MethodGet, "/mcp"},
+		{"authorize", http.MethodGet, "/authorize"},
+		{"token", http.MethodGet, "/token"},
+	} {
+		t.Run("public_"+tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, "http://"+public.Addr().String()+tc.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Host = "public.example"
+			response, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode == http.StatusNotFound || response.Header.Get("Location") != "" {
+				t.Fatalf("legitimate public route was blocked or redirected: %s returned %d location=%q", tc.path, response.StatusCode, response.Header.Get("Location"))
 			}
 		})
 	}

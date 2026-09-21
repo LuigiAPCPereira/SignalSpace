@@ -119,6 +119,13 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - Validação focada sequencial: matriz pública, isolamento Quick, testes negativos de `internal/admin`/`internal/auth` e testes de `internal/mcp`/`internal/workspace` passaram. CI remota não foi consultada por orientação do proprietário; nenhum túnel, TLS bypass, navegador, grant OAuth, frontend, merge ou deploy foi usado.
 - SS-BE-007 permanece em andamento: faltam evidências operacionais de DNS rebinding/proxy, restart completo, estados negativos visuais/externos e repetição de leitura/revogação no fluxo M3.
 
+## 20/09/2026 — revisão do isolamento público antes do ServeMux (SS-BE-007)
+
+- A revisão do commit local `b2ca6e4` confirmou que o bloqueio literal `/api/admin/` não cobria barras duplicadas no início/meio nem segmentos `.`/`..`. O teste ampliado reproduziu `307` em `//api/admin/v1/session`, `/api//admin/v1/session`, `/api/./admin/v1/session` e `/prefix/../api/admin/v1/session`; o problema foi a normalização do `http.ServeMux`, não acesso comprovado ao painel.
+- A correção mínima em `cmd/signalspace/main.go` passou a rejeitar qualquer segmento exatamente `admin` do `r.URL.Path` antes do mux. A matriz em `cmd/signalspace/quick_ports_test.go` cobre quinze variantes administrativas, incluindo `/admin`, caminhos codificados e métodos alternativos, exigindo `404`, ausência de `Location` e ausência de `Set-Cookie`.
+- O mesmo teste verifica que `GET /mcp`, `GET /authorize` e `GET /token` continuam alcançando seus handlers públicos sem `404` ou redirecionamento. O ambiente é HTTP loopback com somente o listener público; não há encaminhamento/handler admin em 7677.
+- A validação focalizada sequencial passou. O código e os testes permanecem locais até a publicação fast-forward; CI não foi consultada conforme orientação do proprietário e continua desconhecida. Nenhum túnel, bypass TLS, navegador, grant OAuth, alteração frontend, merge ou deploy foi realizado.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.

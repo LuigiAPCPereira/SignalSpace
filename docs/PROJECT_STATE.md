@@ -35,3 +35,11 @@
 Na ref atual, a comparação dos onze grupos de [`LOCAL_ADMIN_AUTHORIZATION.md`, §8](LOCAL_ADMIN_AUTHORIZATION.md) foi registrada na [TASKLIST](../TASKLIST.md). A lacuna de maior risco selecionada foi o isolamento do listener público: o roteador OAuth real, servido em HTTP loopback, respondia `307` para `OPTIONS /api/admin/v1//session` por normalização do `http.ServeMux`. A fronteira pública agora rejeita caminhos decodificados sob `/api/admin/` antes da normalização, e o teste `TestQuickPublicListenerRejectsAdministrativeMatrix` exige `404` sem `Set-Cookie` para sessão, pareamento, detalhe, decisão, caminho codificado e barras duplicadas.
 
 O resultado desta missão é **SS-BE-007 em andamento**, não validado integralmente. A evidência nova é automatizada e local; não houve CI, túnel, bypass TLS, navegador, grant OAuth, alteração da branch frontend, merge ou deploy. Permanecem pendentes DNS rebinding/proxy real, restart operacional completo, matriz visual/externa e repetição de leitura/revogação no fluxo M3.
+
+### Atualização SS-BE-007 — revisão do bloqueio antes do `ServeMux`
+
+Na revisão local da correção baseada em `b2ca6e4`, a matriz negativa foi ampliada para variantes de `/admin` e `/api/admin/v1/*` com barras duplicadas no início/meio, segmentos `.` e `..`, componentes codificados e métodos alternativos. A reprodução confirmou que a verificação literal anterior deixava quatro famílias chegarem ao `http.ServeMux`, que respondia `307`; não houve evidência de execução de handler administrativo, mas a resposta violava o contrato `404`.
+
+`rejectPublicAdministrativePaths` agora rejeita qualquer segmento exatamente `admin` em `r.URL.Path` antes do mux. O teste `TestQuickPublicListenerRejectsAdministrativeMatrix` exige `404`, sem `Location` e sem `Set-Cookie` para quinze casos administrativos, e verifica que `GET /mcp`, `GET /authorize` e `GET /token` continuam roteados publicamente sem `404` ou redirecionamento. É evidência automatizada em HTTP loopback, não smoke de túnel, navegador ou porta 7677.
+
+SS-BE-007 permanece **em andamento**. CI não foi consultada; o resultado remoto continua desconhecido. Não houve túnel, bypass TLS, grant OAuth, alteração frontend, merge ou deploy. Permanecem pendentes DNS rebinding/proxy real, restart operacional completo, matriz visual/externa e repetição de leitura/revogação no fluxo M3.

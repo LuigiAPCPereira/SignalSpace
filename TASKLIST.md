@@ -50,6 +50,7 @@ Em 20/09/2026, a matriz do contrato ([`docs/LOCAL_ADMIN_AUTHORIZATION.md`, §8](
 ### Lacuna selecionada e resultado
 
 - Grupo selecionado: **1**, isolamento do listener público contra rotas administrativas, por risco direto de exposição do painel.
-- Falha reproduzida: `OPTIONS /api/admin/v1//session` no roteador público real retornava `307` por normalização do `http.ServeMux`.
-- Correção mínima: `cmd/signalspace/main.go` rejeita caminhos decodificados sob `/api/admin/` antes do `ServeMux`, com `404`; `cmd/signalspace/quick_ports_test.go` fixa a regressão em seis variantes e exige ausência de `Set-Cookie`.
+- Revisão da correção: o bloqueio literal anterior cobria apenas `/api/admin/`; a matriz ampliada reproduziu `307` em `//api/admin/...`, `/api//admin/...`, `/api/./admin/...` e `/prefix/../api/admin/...` por normalização posterior do `http.ServeMux`.
+- Correção mínima: `cmd/signalspace/main.go` inspeciona os segmentos já decodificados de `r.URL.Path` e rejeita qualquer segmento exatamente `admin` antes do `ServeMux`, com `404`. Isso cobre `/admin`, `/api/admin/v1/*`, barras duplicadas, `.`/`..`, nomes/barras codificados e métodos alternativos sem alterar os handlers públicos.
+- Regressão em `cmd/signalspace/quick_ports_test.go`: quinze variantes administrativas exigem `404`, ausência de `Location` e ausência de `Set-Cookie`; `GET /mcp`, `GET /authorize` e `GET /token` continuam alcançando suas rotas públicas sem `404` ou redirecionamento. O servidor do teste expõe somente o listener público, portanto não há encaminhamento para 7677 nem handler administrativo registrado nessa fronteira.
 - SS-BE-007 permanece **em andamento**: a fatia automatizada local foi ampliada, mas a matriz operacional, visual e externa não foi concluída.

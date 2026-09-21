@@ -173,11 +173,14 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (h
 	return rejectPublicAdministrativePaths(mux), authorization, console, nil
 }
 
-// rejectPublicAdministrativePaths impede que o ServeMux normalize uma rota
-// administrativa pública e responda com redirecionamento em vez de 404.
+// rejectPublicAdministrativePaths rejeita segmentos administrativos antes que
+// o ServeMux normalize a rota pública e responda com redirecionamento.
 func rejectPublicAdministrativePaths(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/admin/") {
+		for _, segment := range strings.Split(r.URL.Path, "/") {
+			if segment != "admin" {
+				continue
+			}
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
