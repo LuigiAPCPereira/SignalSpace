@@ -95,6 +95,15 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - O botão não foi acionado: isso emitiria um código OAuth e redirecionaria para o callback do ChatGPT, uma concessão que exige autorização específica separada. `/authorize/complete` permanece coberto pelos testes Go/Node e continua sendo a autoridade final. DENIED/EXPIRED/403/404/429/5xx, JSON inválido e perda de rede têm cobertura funcional Node, mas não foram reproduzidos visualmente no navegador.
 - A aba descartável foi fechada, o túnel foi encerrado com Ctrl+C e não restaram listeners 7676/7677 nem processo `cloudflared`. O estado de SS-BE-006 permanece implementado não validado no inventário, com aceite visual HTTPS do caminho feliz comprovado e pendências negativas/final explícitas.
 
+## 20/09/2026 — regressões automatizadas de expiração do consentimento (SS-BE-006)
+
+- A missão seguinte exigiu fechar o gate JavaScript e investigar a aprovação que expira antes do clique, preservando `/authorize/complete` como autoridade.
+- O commit [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) adicionou `actions/setup-node@v4` com Node.js `22.14.0` e a etapa explícita `node --test internal/auth/consent_js_test.mjs` ao workflow, sem remover gates Go.
+- `consent.js` continua o polling depois de `APPROVED`, desabilita a conclusão em respostas inconclusivas e interrompe o timer ao submeter. O navegador não deriva validade pelo relógio local.
+- `consent_js_test.mjs` passou a simular parsing JSON inválido e a transição determinística `APPROVED → EXPIRED` antes do clique. `lifecycle_test.go` comprova que a conclusão expirada retorna negativa e não emite código.
+- Validação local no SHA `3deefc1`: `gofmt -l cmd internal`, `git diff --check`, `go test ./...`, `go test -race ./internal/auth ./cmd/signalspace`, `go vet ./...`, `go build ./...`, `node --check internal/auth/consent.js` e `node --test internal/auth/consent_js_test.mjs`: PASS. Uma primeira execução paralela dos testes de processo colidiu nos listeners fixos 7676; a repetição sequencial passou e não deixou listeners/processos.
+- Conforme orientação do proprietário, a CI remota não foi consultada após este commit; o estado remoto é desconhecido. Não havia navegador/túnel descartável já autorizado para nova execução, então a evidência visual permanece apenas no caminho feliz Quick Tunnel já registrado. Nenhum grant OAuth foi emitido, nenhum túnel novo foi aberto, e branch frontend/patches/PR draft foram preservados.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.

@@ -15,6 +15,14 @@
 
 ## Próxima seleção e fronteiras
 
+### Atualização SS-BE-006 — commit `3deefc1`
+
+- O gate versionado agora instala Node.js `22.14.0` e executa explicitamente `node --test internal/auth/consent_js_test.mjs`; os gates Go existentes foram preservados.
+- Após `APPROVED`, `consent.js` continua consultando o servidor até receber `EXPIRED`, desabilita a conclusão durante estados de consulta inconclusivos e cancela o polling ao submeter. O navegador não calcula nem concede validade.
+- O teste funcional Node cobre deterministicamente `APPROVED → EXPIRED` antes do clique e JSON inválido por falha de parsing. O teste Go confirma que `/authorize/complete` rejeita a aprovação expirada sem emitir código.
+- Gates locais no HEAD `3deefc1`: formato, diff, `go test ./...`, `go test -race ./internal/auth ./cmd/signalspace`, `go vet ./...`, `go build ./...`, `node --check` e `node --test`: PASS.
+- O monitoramento/consulta da CI remota não foi realizado conforme orientação do proprietário; portanto a cobertura CI deste novo SHA é **desconhecida**. A validação visual negativa e a submissão final continuam pendentes; nenhum túnel novo foi aberto.
+
 **Smoke M3 real relatado como APROVADO pelo proprietário (revisão `bd60fc3`, 20/09/2026), restrito ao diagnóstico OAuth+MCP+API administrativa:** correlação `diagnosticID` ChatGPT/terminal, `tools/list` autenticado, portas isoladas e limpeza/encerramento observados. Esta sessão **não executou nem recebeu logs brutos desse smoke**; o relato não prova a matriz negativa completa, leitura M2 com painel, token/callback por evento ou segurança independente. Marcar SS-BE-002 e SS-BE-008 como validadas **nesse escopo**; SS-BE-007 permanece em andamento, SS-BE-006 está implementada não validada até o navegador.
 
 **Próxima ação SS-BE-006:** completar, em ambiente HTTPS aprovado e descartável, a validação visual dos estados negativos e da expiração antes do clique; submeter `/authorize/complete` somente com autorização específica para o grant OAuth de teste. Depois decidir, com ownership/autorização próprios, se a integração visual da branch frontend `3911c4e` é necessária. Os protótipos `owner-pairing-flow.html` e `local-approval-flow-v2.html` continuam apenas referências, não código a copiar. **Não integrar branches, fazer merge ou deploy nesta atualização.** Percentual indeterminado sem denominador estável. Conector GitHub não vê worktree/stashes locais; conferir PR/HEAD e docs antes de continuar.
