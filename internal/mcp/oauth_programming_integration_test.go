@@ -23,6 +23,7 @@ import (
 type oauthProgrammingComposition struct {
 	authorization *auth.Server
 	grants        *workspace.Grants
+	approval      *workspace.CapabilityApproval
 	verifier      *JWKSVerifier
 	server        *httptest.Server
 	requests      chan auth.RequestInfo
@@ -104,12 +105,57 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 		t.Fatalf("OAuth created a pending approval without a local grant: %+v", request)
 	default:
 	}
+	// O mecanismo confiável de seleção só lista clientes que já concluíram
+	// OAuth. Obter o token diagnóstico não concede workspace nem capacidade de
+	// programação; apenas torna o cliente elegível para a decisão local.
+	diagnosticComposition := &oauthProgrammingComposition{authorization: authorization, verifier: verifier, server: registrationServer, requests: requests, clientID: clientID}
+	_, _, _ = issueOAuthProgrammingToken(t, diagnosticComposition, diagnosticScope)
+	issuedClients := authorization.IssuedClients()
+	if len(issuedClients) != 1 || issuedClients[0].ID != clientID {
+		registrationServer.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatal("diagnostic OAuth did not make the client eligible")
+	}
 	registrationServer.Close()
-	sessionID, err := grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeTest)
+	approval, err := workspace.NewCapabilityApproval(grants, func(candidate string) bool {
+		for _, issued := range authorization.IssuedClients() {
+			if issued.ID == candidate {
+				return true
+			}
+		}
+		return false
+	})
 	if err != nil {
 		_ = grants.Close()
 		_ = authorization.Close()
 		t.Fatal(err)
+	}
+	pending, err := approval.Request(root, clientID, workspace.ScopeWrite, workspace.ScopeTest, workspace.ScopeGit)
+	if err != nil {
+		approval.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatal(err)
+	}
+	if grants.AllowsClientScope(clientID, workspace.ScopeWrite) || grants.AllowsClientScope(clientID, workspace.ScopeTest) || grants.AllowsClientScope(clientID, workspace.ScopeGit) {
+		approval.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatal("programming request created a grant before local confirmation")
+	}
+	confirmed, sessionID, err := approval.Confirm(pending.ID)
+	if err != nil {
+		approval.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatal(err)
+	}
+	if confirmed.ID != pending.ID || len(confirmed.Scopes) != 3 || confirmed.Scopes[0] != workspace.ScopeWrite || confirmed.Scopes[1] != workspace.ScopeGit || confirmed.Scopes[2] != workspace.ScopeTest {
+		approval.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatalf("unexpected local programming approval: %+v", confirmed)
 	}
 	var baseline programming.GitSnapshot
 	err = grants.WithAuthorizedGitProcessDir(authorization.OwnerSubject(), clientID, sessionID, func(directory workspace.ProcessDirectory) error {
@@ -145,6 +191,7 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 	composition := &oauthProgrammingComposition{
 		authorization: authorization,
 		grants:        grants,
+		approval:      approval,
 		verifier:      verifier,
 		server:        httptest.NewServer(mux),
 		requests:      requests,
@@ -160,6 +207,9 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 func (c *oauthProgrammingComposition) Close() error {
 	if c.server != nil {
 		c.server.Close()
+	}
+	if c.approval != nil {
+		c.approval.Close()
 	}
 	if err := c.grants.Close(); err != nil {
 		return err
@@ -233,12 +283,13 @@ func issueOAuthProgrammingToken(t *testing.T, c *oauthProgrammingComposition, re
 	if claims["iss"] != oauthWriteIssuer || claims["aud"] != testResource || claims["sub"] != c.authorization.OwnerSubject() || claims["client_id"] != c.clientID || claims["scope"] != requestedScope {
 		t.Fatalf("issued OAuth claims changed or contain an unapproved scope: %v", claims)
 	}
-	requiredScope := workspaceWriteScope
+	requiredScope := diagnosticScope
 	if strings.Contains(requestedScope, gitReviewScope) {
 		requiredScope = gitReviewScope
-	}
-	if strings.Contains(requestedScope, testRunScope) {
+	} else if strings.Contains(requestedScope, testRunScope) {
 		requiredScope = testRunScope
+	} else if strings.Contains(requestedScope, workspaceWriteScope) {
+		requiredScope = workspaceWriteScope
 	}
 	if _, err := c.verifier.VerifyIdentity(context.Background(), token, oauthWriteIssuer, testResource, requiredScope, c.authorization.OwnerSubject()); err != nil {
 		t.Fatalf("real static JWT verifier rejected %q token: %v", requestedScope, err)

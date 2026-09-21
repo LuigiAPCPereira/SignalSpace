@@ -29,11 +29,12 @@ type pendingWorkspace struct {
 // workspaceConsole recebe somente comandos do stdin do processo local. O MCP
 // não recebe o objeto de concessões e não pode criar sessões por HTTP.
 type workspaceConsole struct {
-	mu            sync.Mutex
-	grants        *workspace.Grants
-	issuedClients func() []auth.ClientInfo
-	readEnabled   bool
-	pending       *pendingWorkspace
+	mu                  sync.Mutex
+	grants              *workspace.Grants
+	issuedClients       func() []auth.ClientInfo
+	readEnabled         bool
+	pending             *pendingWorkspace
+	programmingApproval *workspace.CapabilityApproval
 }
 
 func newWorkspaceConsole(authorization *auth.Server) (*workspaceConsole, error) {
@@ -48,6 +49,9 @@ func (c *workspaceConsole) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.pending = nil
+	if c.programmingApproval != nil {
+		c.programmingApproval.Close()
+	}
 	return c.grants.Close()
 }
 
@@ -80,6 +84,35 @@ func (c *workspaceConsole) isIssuedClient(id string) bool {
 	return false
 }
 
+func (c *workspaceConsole) issuedClient(id string) (auth.ClientInfo, bool) {
+	if c.issuedClients == nil {
+		return auth.ClientInfo{}, false
+	}
+	for _, client := range c.issuedClients() {
+		if client.ID == id {
+			return client, true
+		}
+	}
+	return auth.ClientInfo{}, false
+}
+
+func capabilityDescriptions(scopes []string) string {
+	descriptions := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		switch scope {
+		case workspace.ScopeRead:
+			descriptions = append(descriptions, "leitura: acesso aos arquivos permitidos")
+		case workspace.ScopeWrite:
+			descriptions = append(descriptions, "escrita: modificação de arquivos permitidos")
+		case workspace.ScopeGit:
+			descriptions = append(descriptions, "Git: inspeção de status/diff potencialmente sensíveis, sem commit/push")
+		case workspace.ScopeTest:
+			descriptions = append(descriptions, "execução: go test ./... com privilégios do usuário; não é sandbox")
+		}
+	}
+	return strings.Join(descriptions, "; ")
+}
+
 // handleWorkspaceCommand processa somente comandos de workspace no stdin local.
 // Retorna false para que a autorização OAuth trate a própria entrada.
 func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer) bool {
@@ -106,7 +139,11 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 		return true
 	}
 	if !hasArgument || argument == "" {
-		fmt.Fprintln(output, "use workspace clients | workspace request <client-id> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace revoke <session-id>")
+		if c.programmingApproval != nil {
+			fmt.Fprintln(output, "use workspace clients | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace revoke <session-id>")
+		} else {
+			fmt.Fprintln(output, "use workspace clients | workspace request <client-id> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace revoke <session-id>")
+		}
 		return true
 	}
 	switch operation {
@@ -133,6 +170,51 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 		if !c.readEnabled {
 			fmt.Fprintln(output, "Nenhuma ferramenta de arquivo foi habilitada no MCP.")
 		}
+	case "request-programming":
+		if c.programmingApproval == nil {
+			fmt.Fprintln(output, "workspace programming approval unavailable")
+			return true
+		}
+		clientID, rest, valid := strings.Cut(argument, " ")
+		scopeText, root, validRoot := strings.Cut(rest, " ")
+		if !valid || !validRoot || clientID == "" || scopeText == "" || root == "" {
+			fmt.Fprintln(output, "use workspace request-programming <client-id> <scope1,scope2,...> <absolute-path>")
+			return true
+		}
+		client, ok := c.issuedClient(clientID)
+		if !ok {
+			fmt.Fprintln(output, "workspace client rejected: complete OAuth and select an ID shown by workspace clients")
+			return true
+		}
+		requested := strings.Split(scopeText, ",")
+		pending, err := c.programmingApproval.Request(root, clientID, requested...)
+		if err != nil {
+			fmt.Fprintf(output, "workspace programming request rejected: %v\n", err)
+			return true
+		}
+		fmt.Fprintf(output, "Pasta solicitada para programação: %q\nCliente OAuth selecionado: %s (%s)\nCapacidades solicitadas: %s\nEfeitos: %s\n", root, client.Name, client.ID, strings.Join(pending.Scopes, ","), capabilityDescriptions(pending.Scopes))
+		fmt.Fprintf(output, "Confirme com workspace approve-programming %s ou cancele com workspace cancel-programming %s (expira em 2 minutos).\n", pending.ID, pending.ID)
+	case "approve-programming":
+		if c.programmingApproval == nil {
+			fmt.Fprintln(output, "workspace programming approval unavailable")
+			return true
+		}
+		pending, sessionID, err := c.programmingApproval.Confirm(argument)
+		if err != nil {
+			fmt.Fprintf(output, "workspace programming approval rejected: %v\n", err)
+			return true
+		}
+		fmt.Fprintf(output, "Local programming workspace grant created: session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", sessionID, pending.ClientID, strings.Join(pending.Scopes, ","), sessionID)
+	case "cancel-programming":
+		if c.programmingApproval == nil {
+			fmt.Fprintln(output, "workspace programming approval unavailable")
+			return true
+		}
+		if err := c.programmingApproval.Cancel(argument); err != nil {
+			fmt.Fprintf(output, "workspace programming cancellation rejected: %v\n", err)
+			return true
+		}
+		fmt.Fprintln(output, "workspace programming request canceled; no grant created")
 	case "approve", "cancel":
 		if c.pending == nil || argument != c.pending.id || time.Now().After(c.pending.expires) {
 			c.pending = nil

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -176,5 +177,64 @@ func TestWorkspaceConsoleRequiresIssuedClientAndDoesNotBindToChat(t *testing.T) 
 		if text, err := console.grants.ReadText("local-owner", testConsoleClient, id, "file"); err != nil || text != "shared" {
 			t.Fatalf("authorized client denied: %q %v", text, err)
 		}
+	}
+}
+
+func TestWorkspaceConsoleProgrammingApprovalIsExplicitAndIndependent(t *testing.T) {
+	grants, err := workspace.NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := workspace.NewCapabilityApproval(grants, func(clientID string) bool { return clientID == testConsoleClient })
+	if err != nil {
+		_ = grants.Close()
+		t.Fatal(err)
+	}
+	console := &workspaceConsole{
+		grants:              grants,
+		issuedClients:       func() []auth.ClientInfo { return []auth.ClientInfo{{ID: testConsoleClient, Name: "Cliente de teste"}} },
+		programmingApproval: approval,
+	}
+	t.Cleanup(func() { _ = console.Close() })
+	root := filepath.Join(t.TempDir(), "pasta com espacos")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	// A composição padrão não injeta esta dependência experimental.
+	defaultConsole := testWorkspaceConsole(t)
+	defaultConsole.handleWorkspaceCommand("workspace request-programming "+testConsoleClient+" "+workspace.ScopeWrite+","+workspace.ScopeTest+" "+root, &out)
+	if !strings.Contains(out.String(), "programming approval unavailable") {
+		t.Fatalf("default console exposed programming approval: %s", out.String())
+	}
+
+	out.Reset()
+	command := "workspace request-programming " + testConsoleClient + " " + workspace.ScopeWrite + "," + workspace.ScopeTest + "," + workspace.ScopeGit + " " + root
+	console.handleWorkspaceCommand(command, &out)
+	if !strings.Contains(out.String(), "Cliente de teste") || !strings.Contains(out.String(), "go test ./...") || !strings.Contains(out.String(), "sem commit/push") {
+		t.Fatalf("programming consent summary is incomplete: %s", out.String())
+	}
+	approvalID := regexp.MustCompile(`workspace approve-programming ([a-f0-9]{32})`).FindStringSubmatch(out.String())
+	if len(approvalID) != 2 {
+		t.Fatalf("missing programming approval identifier: %s", out.String())
+	}
+	if grants.AllowsClientScope(testConsoleClient, workspace.ScopeWrite) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeTest) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeGit) {
+		t.Fatal("programming request created a grant before confirmation")
+	}
+	console.handleWorkspaceCommand("workspace approve-programming wrong", &out)
+	if !strings.Contains(out.String(), "approval missing") {
+		t.Fatalf("invalid programming approval was not rejected: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace approve-programming "+approvalID[1], &out)
+	match := regexp.MustCompile(`Local programming workspace grant created: session=([a-f0-9]{32})`).FindStringSubmatch(out.String())
+	if len(match) != 2 {
+		t.Fatalf("programming grant was not created after confirmation: %s", out.String())
+	}
+	if !grants.AllowsClientScope(testConsoleClient, workspace.ScopeWrite) || !grants.AllowsClientScope(testConsoleClient, workspace.ScopeTest) || !grants.AllowsClientScope(testConsoleClient, workspace.ScopeGit) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeRead) {
+		t.Fatal("programming grant changed unselected capabilities")
+	}
+	console.handleWorkspaceCommand("workspace revoke "+match[1], &out)
+	if grants.AllowsClientScope(testConsoleClient, workspace.ScopeWrite) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeTest) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeGit) {
+		t.Fatal("revocation retained programming capabilities")
 	}
 }
