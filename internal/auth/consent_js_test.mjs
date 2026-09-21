@@ -11,7 +11,12 @@ function makeResponse(status, body, headers = {}) {
     status,
     ok: status >= 200 && status < 300,
     headers: { get(name) { return headers[name] ?? null; } },
-    async json() { return body; },
+    async json() {
+      if (body instanceof Error) {
+        throw body;
+      }
+      return body;
+    },
   };
 }
 
@@ -76,6 +81,22 @@ test("polls the own request and enables completion only after APPROVED", async (
   assert.equal(timer.delay, 2000);
   assert.equal(state.elements.button.disabled, false);
   assert.equal(state.elements.status.dataset.state, "approved");
+  assert.equal(state.timers.length, 1);
+});
+
+test("keeps approval current until the server reports expiry", async () => {
+  const state = await runScript([
+    makeResponse(200, { status: "APPROVED" }),
+    makeResponse(200, { status: "EXPIRED" }),
+  ]);
+  assert.equal(state.elements.button.disabled, false);
+  assert.equal(state.elements.status.dataset.state, "approved");
+  assert.equal(state.timers.length, 1);
+
+  const timer = await runNextTimer(state);
+  assert.equal(timer.delay, 2000);
+  assert.equal(state.elements.button.disabled, true);
+  assert.equal(state.elements.status.dataset.state, "expired");
   assert.equal(state.timers.length, 0);
 });
 
@@ -93,6 +114,7 @@ test("retries rate limits and transient or malformed responses without success",
     [makeResponse(429, {}, { "Retry-After": "3" }), 3000],
     [makeResponse(503, {}), 5000],
     [makeResponse(200, { status: "UNKNOWN" }), 5000],
+    [makeResponse(200, new Error("malformed JSON")), 5000],
     [new Error("network lost"), 5000],
   ]) {
     const state = await runScript([response]);

@@ -62,6 +62,7 @@
       });
 
       if (response.status === 429) {
+        button.disabled = true;
         setStatus("A consulta foi limitada temporariamente; tentando novamente.", "retry");
         schedule(retryAfterMs(response));
         return;
@@ -79,6 +80,7 @@
         return;
       }
       if (!response.ok) {
+        button.disabled = true;
         setStatus("Não foi possível consultar o estado agora; tentando novamente.", "retry");
         schedule(5000);
         return;
@@ -98,7 +100,8 @@
       if (data.status === "APPROVED") {
         button.disabled = false;
         setStatus("Aprovação local confirmada. Você pode continuar.", "approved");
-        stop();
+        // A aprovação não congela o prazo: o servidor continua sendo a autoridade.
+        schedule(2000);
         return;
       }
       if (data.status === "DENIED") {
@@ -119,6 +122,7 @@
 
   button.disabled = true;
   form.addEventListener("submit", () => {
+    stop();
     button.disabled = true;
     setStatus("Concluindo autorização…", "completing");
   });

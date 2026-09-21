@@ -73,7 +73,7 @@ func TestLifecycleDenialAndApprovedExpiryAreRetained(t *testing.T) {
 	if err != nil || denied.Status != "DENIED" || denied.Version != 2 || denied.DecidedAt == nil {
 		t.Fatalf("denied tombstone unavailable: %+v %v", denied, err)
 	}
-	_, cookie, _ = requestConsent(t, handler, clientID)
+	_, cookie, secondCSRF := requestConsent(t, handler, clientID)
 	second := <-events
 	if err := s.DecideTerminal(second.ID, true); err != nil {
 		t.Fatal(err)
@@ -89,6 +89,15 @@ func TestLifecycleDenialAndApprovedExpiryAreRetained(t *testing.T) {
 	}
 	if err := s.DecideVersioned(second.ID, 2, "deny"); !errors.Is(err, ErrOAuthRequestExpired) {
 		t.Fatalf("expired tombstone allowed decision: %v", err)
+	}
+	if result := complete(handler, second.ID, secondCSRF, cookie); result.Code != http.StatusForbidden {
+		t.Fatalf("expired approved request reached completion: %d", result.Code)
+	}
+	s.mu.Lock()
+	codes := len(s.codes)
+	s.mu.Unlock()
+	if codes != 0 {
+		t.Fatalf("expired approved request issued %d authorization codes", codes)
 	}
 	if result := statusCall(s.PublicStatusHandler(), second.ID, cookie); result.Code != http.StatusOK || statusValue(t, result)["status"] != "EXPIRED" {
 		t.Fatalf("expired public status not retained: %d", result.Code)

@@ -12,6 +12,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -26,6 +29,8 @@ jobs:
           fi
       - name: Test
         run: go test ./...
+      - name: Test consent JavaScript
+        run: node --test internal/auth/consent_js_test.mjs
       - name: Race
         run: go test -race -count=1 ./internal/admin ./internal/auth ./internal/workspace ./internal/mcp ./cmd/signalspace
       - name: Vet
