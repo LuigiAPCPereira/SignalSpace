@@ -16,6 +16,43 @@
 - Os modos públicos continuam sem `signalspace:workspace.write`, sem configuração de escrita em `cmd/signalspace` e sem `replace_text` em `tools/list`/`tools/call`. A prova cobre o handler diagnóstico sem capacidade de escrita e os modos de leitura existentes; não é aceite de transporte remoto.
 - A UI administrativa funcional serve somente em `localhost:7677`, usa a sessão administrativa existente, cookie HttpOnly e CSRF em memória. Ela não escolhe raízes nem publica ferramentas de programação.
 
+## Gate de promoção remota — decisão SS-MVP-002-PROMOTION-GATE-001
+
+**Estado global:** PENDENTE. A decisão abaixo fecha a fronteira necessária para uma futura promoção experimental, mas não autoriza nem implementa a publicação de `workspace.write`.
+
+**Decisão:** `workspace.write` continuará sendo uma capacidade por operação, nunca uma consequência de `client_id`, nome do cliente, confirmação exibida pelo ChatGPT, presença de um JWT, variável de ambiente, escopo anunciado ou configuração de teste. Uma futura composição remota só poderá ser criada depois de uma escolha explícita do proprietário no ponto local confiável já usado para concessões. Essa composição deverá ligar o emissor experimental, a concessão corrente e o handler MCP por uma dependência explícita; não será adicionada ao `cmd/signalspace`, ao `connect quick` ou ao `connect quick read` por configuração genérica. O desenho escolhido para esta proposta é terminal-local primeiro; uma UI ou fluxo remoto de ativação exige decisão própria e não fica implícito.
+
+### Unidade de autorização e lifecycle
+
+- A unidade é `owner` autenticado e verificado + cliente OAuth registrado + escopo exato aprovado + concessão local ativa do mesmo cliente/workspace + sessão correta + operação específica. OAuth e concessão de workspace são decisões distintas; `client_id` identifica registro e não atesta o software ChatGPT.
+- Escopo solicitado, escopo aprovado, escopo emitido, escopo presente na concessão, capacidade habilitada, anúncio em `tools/list` e autorização de cada `tools/call` são estados diferentes. Nenhuma camada pode ampliar outra silenciosamente. Leitura não implica escrita; escrita não implica leitura, execução ou Git.
+- Revogação antes de `/authorize`, `/authorize/complete` ou `/token` é revalidada pelo emissor e impede a etapa correspondente. Depois do token, cada chamada MCP consulta a concessão atual. O JWT pode permanecer criptograficamente válido até expirar; isso não mantém a capacidade após `workspace revoke`.
+- `Grants.ReplaceText` e revogação são serializados pelo mutex da instância. Se a edição já tiver adquirido a seção crítica, ela pode efetivar-se antes da revogação; não há preempção nem garantia exactly-once. Em resposta perdida, não repetir a mutação automaticamente: ler/reconciliar o conteúdo e o diff antes de decidir qualquer nova chamada.
+- Reinício/encerramento fecha a concessão local e os recursos temporários. O teste de lifecycle demonstra a negativa após fechamento, mas não é aceite de restart operacional HTTPS. Não afirmar invalidação global do JWT nem isolamento contra escritores externos ou sandbox de processo.
+
+### Transporte, limites e fronteira de outras operações
+
+O transporte futuro mantém `7676` como listener público e `7677` exclusivamente administrativo em loopback; o túnel nunca aponta para `7677`, e nenhuma rota administrativa é registrada no handler público. HTTPS operacional, navegador real, grant ao ChatGPT e escolha de ativação remota continuam fora deste gate. `workspace.write` não concede execução de testes, shell, inspeção Git ou mutação Git. `ReplaceText` continua limitado a caminho relativo seguro, arquivo regular, UTF-8, conteúdo esperado, publicação atômica local e limites já documentados; concorrência externa e perda de resposta permanecem limites explícitos.
+
+### Matriz do gate
+
+| Controle exigido | Estado | Evidência atual | Condição para eventual promoção |
+| --- | --- | --- | --- |
+| Consentimento e combinações exatas de escopos | CONFIRMADO no harness | `internal/auth/write_scope_test.go`; combinações canônicas e texto de modificação | Revalidar no transporte escolhido sem ampliar o padrão |
+| Escolha explícita do proprietário | CONFIRMADO para concessão local; PENDENTE para promoção | `workspaceConsole` exige comando local separado; OAuth não cria raiz | Definir e testar a confirmação terminal-local da composição remota |
+| Owner, cliente, workspace e sessão vinculados | CONFIRMADO local | `Grants.ReplaceText`, `AllowsClientScope` e testes MCP/OAuth | Preservar a mesma cadeia sem parâmetros JSON-RPC como autoridade |
+| Revogação antes da emissão e durante o uso | CONFIRMADO local | revalidação em authorize/complete/token e negativa com JWT válido | Aceitar explicitamente a semântica sem invalidação global do JWT |
+| Conflito e resposta perdida | CONFIRMADO para `ReplaceText`; PENDENTE operacional | conteúdo esperado, diff e testes de duplicação | Definir reconciliação no cliente/transporte antes de qualquer retry |
+| Isolamento dos listeners | CONFIRMADO na composição atual | `cmd/signalspace/quick_ports_test.go` e testes de painel | Repetir em aceite HTTPS sem publicar `7677` |
+| Ausência de exposição administrativa | CONFIRMADO local | testes de rotas públicas/admin e composição Quick | Manter roteadores e Host/Origin separados |
+| Ausência de ampliação read → write | CONFIRMADO | regressão `cmd/signalspace/promotion_gate_test.go` e `Grant` read-only | Nenhuma configuração pública deve injetar `workspaceWriter` |
+| Limites de conteúdo, caminho e operação | CONFIRMADO local | `internal/workspace/edit_test.go` e testes MCP | Transportar os limites sem prometer sandbox ou exactly-once |
+| Encerramento e reinício | PENDENTE para aceite remoto | fechamento local nega concessão; restart Quick tem testes separados | Exercitar ciclo completo no modo remoto descartável |
+| HTTPS e navegador operacional | BLOQUEADO nesta missão | harness usa HTTP local/Host simulado; nenhum túnel foi aberto | Nova autorização específica e aceite real sem bypass TLS |
+| Autorização para ativação remota | PENDENTE | não existe composição pública de escrita | Decisão explícita do proprietário e novo gate no SHA exato |
+
+O gate global não é aprovado por somar testes do harness. Enquanto qualquer linha necessária permanecer PENDENTE ou BLOQUEADA, `workspace.write` não deve ser publicado.
+
 ## Edição segura inicial
 
 `Session.ReplaceText` e `Grants.ReplaceText` aceitam apenas caminho relativo canônico, componentes sem symlink, arquivo regular, UTF-8 sem NUL e conteúdo até `MaxTextBytes`. A operação compara o conteúdo esperado exatamente antes de publicar um temporário no mesmo diretório, preserva as permissões e retorna conflito sem sobrescrever silenciosamente. Leitura, edição e revogação são serializadas na instância local.

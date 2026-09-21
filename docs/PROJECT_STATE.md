@@ -101,3 +101,13 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Evidência principal:** commit funcional `d84d0df`; `internal/mcp/oauth_write_integration_test.go` atravessa o emissor OAuth real, registro, PKCE, aprovação local, código, troca por JWT, verificador estático real, `tools/list`, `replace_text`, conteúdo alterado, revogação com JWT ainda válido, código de uso único e handler público sem `replace_text`. `internal/auth/write_scope_test.go` cobre opt-in, metadata, combinações canônicas, consentimento explícito e revogação antes de conclusão/troca.
 
 **Estado:** SS-MVP-002 permanece **PARCIAL/em andamento**. O fluxo OAuth→MCP de escrita está confirmado somente em harness automatizado local e a escrita continua indisponível nos modos públicos/Quick/ChatGPT Web. Navegador real, túnel, grant ao ChatGPT, CI, merge e deploy não foram usados. Execução e Git continuam capacidades separadas. Próxima ação vinculada: definir o gate de promoção remota sem habilitar `workspace.write` por inferência.
+
+## Checkpoint atualizado — SS-MVP-002 gate de promoção — 21/09/2026
+
+**Ref observada:** `codex/mvp-vertical-programming` em `4cdb878fa349a4c00c9d6c9eb7d290d356266afc`; `git fetch origin --prune` e `git pull --ff-only` retornaram sem divergência. Os dois patches não rastreados e a branch `feat/frontend-oauth-consent` permanecem preservados; PR #1 continua draft e sem merge.
+
+**Decisão:** `SS-MVP-002-PROMOTION-GATE-001` foi registrada em `docs/PROGRAMMING_TOOLS.md`. A promoção futura será por operação, com owner, cliente, escopo, concessão, sessão e workspace vinculados; a primeira composição autorizada deverá exigir escolha explícita terminal-local. Nenhuma variável, token, metadata ou confirmação do ChatGPT ativa escrita por si só. O gate global permanece PENDENTE.
+
+**Evidência executável:** `cmd/signalspace/promotion_gate_test.go` percorre as composições reais de diagnóstico e leitura usadas pelo entrypoint, confirma metadata sem `workspace.write`, `tools/list` sem `replace_text` e rejeição de `tools/call` para a ferramenta ausente. `quickModeArgs` rejeita `write` e a aprovação de workspace do console continua usando `Grants.Grant` read-only.
+
+**Limites:** a cadeia OAuth→MCP do harness já publicada permanece CONFIRMADA somente localmente. Não houve túnel, HTTPS operacional, navegador/grant real, workspace real, CI, merge ou deploy. Execução e Git continuam capacidades separadas. Próxima ação vinculada: implementar, somente após autorização específica, a composição remota futura e seu aceite operacional; não publicar `workspace.write` neste gate.
