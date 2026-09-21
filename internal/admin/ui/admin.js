@@ -32,6 +32,8 @@
     function nextGeneration() {
       state.generation += 1;
       abortRequestLoad();
+      state.decisionInFlight.clear();
+      state.blockedDecisions.clear();
       return state.generation;
     }
 

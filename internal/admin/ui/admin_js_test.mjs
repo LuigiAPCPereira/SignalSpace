@@ -228,6 +228,15 @@ test('resposta antiga de /requests após lock não restaura a lista', async () =
   assert.equal(element(h.documentRef, 'sidebar-state').textContent, 'Bloqueado');
 });
 
+test('mudança de sessão libera bloqueios de decisão da sessão anterior', () => {
+  const h = harness([]);
+  h.app.state.blockedDecisions.add('req-1');
+  h.app.state.decisionInFlight.add('req-1');
+  h.app.renderSession(authSession);
+  assert.equal(h.app.state.blockedDecisions.size, 0);
+  assert.equal(h.app.state.decisionInFlight.size, 0);
+});
+
 test('refresh não acontece automaticamente', async () => {
   const h = harness([jsonResponse(authSession), jsonResponse({ requests: [] })]);
   h.app.start(); await settle();
