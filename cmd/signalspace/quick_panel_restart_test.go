@@ -2,8 +2,11 @@ package main
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
@@ -94,6 +97,25 @@ func TestQuickInstanceRestartDropsAdministrativeAndWorkspaceAuthorizations(t *te
 	defer secondGate.Close()
 	if _, paired, err := secondGate.Bootstrap(""); err != nil || paired {
 		t.Fatalf("restarted instance inherited administrative pairing: paired=%t err=%v", paired, err)
+	}
+	private := httptest.NewServer(admin.NewServer(secondGate.Handler()).Handler)
+	defer private.Close()
+	status, body, cookies := adminHTTP(t, private.Client(), private.URL, "localhost:7677", http.MethodGet, "/api/admin/v1/session", "", "", "", &http.Cookie{
+		Name:  "signalspace_admin_session",
+		Value: adminSession.Cookie,
+	})
+	if status != http.StatusUnauthorized || !strings.Contains(body, `"AUTH_REQUIRED"`) {
+		t.Fatalf("old administrative cookie authenticated the restarted HTTP instance: %d %s", status, body)
+	}
+	clearedOldCookie := false
+	for _, cookie := range cookies {
+		if cookie.Name == "signalspace_admin_session" && cookie.MaxAge < 0 {
+			clearedOldCookie = true
+			break
+		}
+	}
+	if !clearedOldCookie {
+		t.Fatal("restarted HTTP instance did not clear the stale administrative cookie")
 	}
 	if secondConsole.grants.AllowsClient(clientID) {
 		t.Fatal("restarted instance inherited workspace authorization")

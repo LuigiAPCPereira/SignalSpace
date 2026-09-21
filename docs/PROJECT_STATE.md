@@ -42,6 +42,8 @@ Na continuação da fatia local, `internal/admin/transport_test.go` passou a cob
 
 `cmd/signalspace/quick_panel_restart_test.go` adiciona a composição local de reinício: uma instância cria sessão administrativa e concessão de workspace, o encerramento invalida ambas, e a composição seguinte inicia sem pareamento nem concessão herdada. O teste complementa, sem duplicar, a prova já existente de identidade OAuth persistente e descarte de pedidos/códigos efêmeros.
 
+O mesmo teste agora envia o cookie administrativo antigo por HTTP ao endpoint `/api/admin/v1/session` da nova `Gate` em servidor loopback. A resposta exige `401 AUTH_REQUIRED` e limpa o cookie obsoleto; portanto a verificação não depende somente da `Gate` antiga já encerrada.
+
 Validação da fatia: testes Go locais. Limites: sem túnel, navegador/rede, proxy real ou DNS rebinding; sem restart operacional completo. CI permanece desconhecida e não foi consultada. SS-BE-007 continua em andamento.
 
 ### Atualização SS-BE-007 — revisão do bloqueio antes do `ServeMux`

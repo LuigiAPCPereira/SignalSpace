@@ -139,6 +139,12 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - `TestQuickInstanceRestartDropsAdministrativeAndWorkspaceAuthorizations` exercitou a composição local do Quick sem túnel: uma sessão administrativa e uma concessão de workspace foram criadas, o encerramento invalidou ambas, e uma nova composição iniciou sem pareamento nem concessão herdada. A prova complementa `internal/auth/store_test.go`, que já cobre identidade OAuth persistente e descarte de pedidos/códigos.
 - Testes focados de `internal/admin` e `cmd/signalspace` passaram. A evidência permanece local/automatizada: não inclui túnel real, navegador/rede, DNS rebinding, proxy real ou restart operacional completo. CI não foi consultada e continua desconhecida.
 
+## 20/09/2026 — reforço HTTP do reinício e reconciliação da matriz (SS-BE-007)
+
+- `TestQuickInstanceRestartDropsAdministrativeAndWorkspaceAuthorizations` foi reforçado com servidor HTTP loopback da nova instância. O cookie administrativo emitido pela instância anterior é apresentado a `/api/admin/v1/session`; a nova `Gate` responde `401 AUTH_REQUIRED` e envia a limpeza do cookie obsoleto. A prova continua local e não representa restart operacional completo.
+- A tabela da `TASKLIST.md` foi reconciliada com a seção detalhada: o grupo 1 agora registra quinze variantes administrativas, não seis. Nenhuma alteração de produção foi necessária.
+- A evidência permanece sem túnel, navegador/rede, DNS rebinding ou proxy real; CI não foi consultada e continua desconhecida.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
