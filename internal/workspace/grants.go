@@ -91,6 +91,21 @@ func (g *Grants) ReadText(owner, clientID, id, relative string) (string, error) 
 	return g.current.ReadText(relative)
 }
 
+// ReplaceText exige a mesma identidade de proprietário, cliente e sessão da
+// leitura. O conteúdo esperado funciona como uma versão otimista local; a
+// operação não é exposta pelo MCP nesta etapa.
+func (g *Grants) ReplaceText(owner, clientID, id, relative, expected, replacement string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return ErrClosed
+	}
+	if owner != g.owner || !validClientID(clientID) || clientID != g.clientID || g.current == nil || id != g.current.ID() {
+		return ErrNotAuthorized
+	}
+	return g.current.ReplaceText(relative, expected, replacement)
+}
+
 // ListDirectory usa a mesma concessão e o mesmo mutex que a leitura de texto.
 // É uma operação interna: não cria ou publica nenhuma ferramenta MCP.
 func (g *Grants) ListDirectory(owner, clientID, id, relative string) ([]string, error) {
