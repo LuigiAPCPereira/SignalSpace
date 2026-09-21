@@ -85,6 +85,53 @@ func TestGitReviewMCPVerticalFlowUsesIndependentScopeAndRevoke(t *testing.T) {
 	if names := toolNames(t, list); len(names) != 2 || names[1] != gitReviewToolName {
 		t.Fatalf("Git tool was not discovered with its independent scope: %v", names)
 	}
+	for _, testCase := range []struct {
+		name  string
+		token string
+		want  string
+	}{
+		{name: "read-only scope", token: signedWriteToken(t, key, clientID, diagnosticScope+" "+workspaceReadScope), want: "Git review authorization required."},
+		{name: "write-only scope", token: writeToken, want: "Git review authorization required."},
+		{name: "client mismatch", token: signedWriteToken(t, key, strings.Repeat("H", 32), diagnosticScope+" "+gitReviewScope), want: "Git review unavailable or not authorized."},
+		{name: "session mismatch", token: gitToken, want: "Git review unavailable or not authorized."},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			session := sessionID
+			if testCase.name == "session mismatch" {
+				session = strings.Repeat("s", len(sessionID))
+			}
+			res, result := oauthRequest(t, server, http.MethodPost, "/mcp", testCase.token, gitReviewCall(session), nil)
+			text, isError := readResult(t, result)
+			if res.StatusCode != http.StatusOK || !isError || text != testCase.want {
+				t.Fatalf("unexpected Git authorization result: %d %v", res.StatusCode, result)
+			}
+		})
+	}
+	missingTokenResponse, _ := oauthRequest(t, server, http.MethodPost, "/mcp", "", gitReviewCall(sessionID), nil)
+	if missingTokenResponse.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("missing token reached Git tool: %d", missingTokenResponse.StatusCode)
+	}
+	invalidTokenResponse, _ := oauthRequest(t, server, http.MethodPost, "/mcp", "not-a-jwt-token-with-enough-length-0123456789", gitReviewCall(sessionID), nil)
+	if invalidTokenResponse.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("invalid token reached Git tool: %d", invalidTokenResponse.StatusCode)
+	}
+	otherOwnerClaims := defaultClaims()
+	otherOwnerClaims["sub"] = "other-owner"
+	otherOwnerClaims["client_id"] = clientID
+	otherOwnerClaims["scope"] = diagnosticScope + " " + gitReviewScope
+	otherOwnerResponse, _ := oauthRequest(t, server, http.MethodPost, "/mcp", makeAccessToken(t, key, otherOwnerClaims), gitReviewCall(sessionID), nil)
+	if otherOwnerResponse.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("other owner reached Git tool: %d", otherOwnerResponse.StatusCode)
+	}
+	extraParams, _ := json.Marshal(map[string]any{
+		"name":      gitReviewToolName,
+		"arguments": map[string]any{"session_id": sessionID, "extra": true},
+	})
+	extraRequest, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": json.RawMessage(extraParams)})
+	extraResponse, extraResult := oauthRequest(t, server, http.MethodPost, "/mcp", gitToken, string(extraRequest), nil)
+	if extraResponse.StatusCode != http.StatusOK || extraResult["error"] == nil {
+		t.Fatalf("extra Git argument was accepted: %d %v", extraResponse.StatusCode, extraResult)
+	}
 
 	editResponse, edit := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, writeCall(sessionID, "editable.txt", "before\n", "after\n"), nil)
 	if editResponse.StatusCode != http.StatusOK || edit["result"].(map[string]any)["isError"] != false || fileText(t, filepath.Join(root, "editable.txt")) != "after\n" {

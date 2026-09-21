@@ -116,3 +116,34 @@ func TestGitSnapshotNeutralizesExecutableConfigAndEnvironment(t *testing.T) {
 		t.Fatalf("git observation executed configured helper: %v", err)
 	}
 }
+
+func TestGitSnapshotReportsTruncationCancellationAndMissingRepository(t *testing.T) {
+	session, root := gitFixture(t)
+	if err := session.ReplaceText("file.txt", "before\n", strings.Repeat("changed\n", 40)); err != nil {
+		t.Fatal(err)
+	}
+	truncated, err := CaptureGitSnapshot(context.Background(), session, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated.OutputTruncated {
+		t.Fatalf("small output limit was not reported: %+v", truncated)
+	}
+
+	canceled := context.Background()
+	canceled, cancel := context.WithCancel(canceled)
+	cancel()
+	if _, err := CaptureGitSnapshot(canceled, session, 4096); err == nil {
+		t.Fatal("canceled Git observation unexpectedly succeeded")
+	}
+
+	nonRepositoryRoot := t.TempDir()
+	nonRepository, err := workspace.OpenApprovedRoot(nonRepositoryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nonRepository.Close()
+	if _, err := CaptureGitSnapshot(context.Background(), nonRepository, 4096); err == nil {
+		t.Fatalf("non-repository observation unexpectedly succeeded from %s", root)
+	}
+}
