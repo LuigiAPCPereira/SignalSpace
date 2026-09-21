@@ -70,6 +70,9 @@ func TestWorkspaceConsoleRequiresSeparateLocalConfirmation(t *testing.T) {
 	if text, err := console.grants.ReadText("local-owner", testConsoleClient, id, "file"); err != nil || text != "approved" {
 		t.Fatalf("approved read: %q, %v", text, err)
 	}
+	if err := console.grants.ReplaceText("local-owner", testConsoleClient, id, "file", "approved", "must remain read-only"); !errors.Is(err, workspace.ErrNotAuthorized) {
+		t.Fatalf("administrative workspace approval unexpectedly enabled writing: %v", err)
+	}
 	console.handleWorkspaceCommand("workspace revoke "+id, &out)
 	if _, err := console.grants.ReadText("local-owner", testConsoleClient, id, "file"); !errors.Is(err, workspace.ErrNotAuthorized) {
 		t.Fatalf("revoke failed: %v", err)

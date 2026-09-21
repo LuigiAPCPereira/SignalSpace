@@ -31,6 +31,8 @@ func TestQuickModeArgumentsRequireExplicitPanel(t *testing.T) {
 		{[]string{"connect", "quick", "read"}, true, false, true},
 		{[]string{"connect", "quick", "panel"}, false, true, true},
 		{[]string{"connect", "quick", "read", "panel"}, true, true, true},
+		{[]string{"connect", "quick", "write"}, false, false, false},
+		{[]string{"connect", "quick", "read", "write"}, false, false, false},
 		{[]string{"connect", "quick", "panel", "read"}, false, false, false},
 		{[]string{"connect", "quick", "read", "read"}, false, false, false},
 		{[]string{"connect", "quick", "other"}, false, false, false},
