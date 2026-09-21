@@ -27,6 +27,8 @@ const (
 	diagnosticScope      = "signalspace:diagnostic"
 	workspaceReadScope   = "signalspace:workspace.read"
 	workspaceWriteScope  = "signalspace:workspace.write"
+	gitReviewScope       = "signalspace:git.review"
+	testRunScope         = "signalspace:test.run"
 	maxRegistrationBytes = 16 << 10
 	maxFormBytes         = 8 << 10
 	maxClients           = 128
@@ -58,7 +60,9 @@ var (
 <p>Registro OAuth: <code>{{.ClientID}}</code></p>
 {{if .Read}}<p><strong>Permissão adicional:</strong> ler arquivos de texto da pasta autorizada separadamente no terminal. Esta permissão não dá acesso a outras pastas, edição ou shell.</p>{{end}}
 {{if .Write}}<p><strong>Permissão adicional:</strong> modificar arquivos de texto dentro da pasta autorizada. Esta permissão não dá acesso a outras pastas, comandos ou Git.</p>{{end}}
-{{if and (not .Read) (not .Write)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
+{{if .Test}}<p><strong>Permissão adicional:</strong> executar o teste predefinido do projeto autorizado. Os testes podem executar código com os privilégios do usuário. O workspace não é sandbox.</p>{{end}}
+{{if .Git}}<p><strong>Permissão adicional:</strong> inspecionar status e diff Git do workspace. O diff pode conter conteúdo sensível. Esta permissão não autoriza commit ou push.</p>{{end}}
+{{if and (not .Read) (not .Write) (not .Test) (not .Git)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
 <p>Escopos solicitados: <code>{{.Scope}}</code></p>
 <p>Destino do retorno: <code>{{.Redirect}}</code></p>
 <p id="authorization-status" role="status" aria-live="polite">Confirme na janela do terminal em que o SignalSpace está em execução.</p>
@@ -92,8 +96,16 @@ type Config struct {
 	// um verificador local explícito. A composição padrão nunca o preenche.
 	WriteScope    string
 	CanIssueWrite func(clientID string) bool
-	StateDir      string
-	OnRequest     func(RequestInfo)
+	// GitScope é uma extensão experimental: só pode ser oferecida junto de um
+	// verificador local explícito. A configuração padrão nunca a preenche.
+	GitScope    string
+	CanIssueGit func(clientID string) bool
+	// TestScope é uma extensão experimental: só pode ser oferecida junto de um
+	// verificador local explícito. A configuração padrão nunca a preenche.
+	TestScope    string
+	CanIssueTest func(clientID string) bool
+	StateDir     string
+	OnRequest    func(RequestInfo)
 	// OnRegistrationFailure recebe somente categorias fixas, nunca metadados do cliente.
 	OnRegistrationFailure func(string)
 }
@@ -157,6 +169,12 @@ func New(config Config) (*Server, error) {
 	}
 	if (config.WriteScope != "" && (config.Scope != diagnosticScope || config.WriteScope != workspaceWriteScope || config.CanIssueWrite == nil || config.OnRequest == nil)) || (config.WriteScope == "" && config.CanIssueWrite != nil) {
 		return nil, errors.New("workspace write scope requires an explicit local grant validator")
+	}
+	if (config.GitScope != "" && (config.Scope != diagnosticScope || config.GitScope != gitReviewScope || config.CanIssueGit == nil || config.OnRequest == nil)) || (config.GitScope == "" && config.CanIssueGit != nil) {
+		return nil, errors.New("Git review scope requires an explicit local grant validator")
+	}
+	if (config.TestScope != "" && (config.Scope != diagnosticScope || config.TestScope != testRunScope || config.CanIssueTest == nil || config.OnRequest == nil)) || (config.TestScope == "" && config.CanIssueTest != nil) {
+		return nil, errors.New("test execution scope requires an explicit local grant validator")
 	}
 	store, key, kid, clients, err := openIdentity(config.StateDir, config)
 	if err != nil {
@@ -342,30 +360,79 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	if s.config.WriteScope != "" {
 		scopes = append(scopes, s.config.WriteScope)
 	}
+	if s.config.GitScope != "" {
+		scopes = append(scopes, s.config.GitScope)
+	}
+	if s.config.TestScope != "" {
+		scopes = append(scopes, s.config.TestScope)
+	}
 	jsonReply(w, 200, map[string]any{"issuer": i, "authorization_endpoint": i + "/authorize", "token_endpoint": i + "/token", "registration_endpoint": i + "/register", "jwks_uri": i + "/oauth/jwks", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": scopes, "authorization_response_iss_parameter_supported": true})
 }
 
-// requestedCapabilities aceita somente combinações canônicas e explícitas.
-// A ordem é fixa: diagnóstico, leitura, escrita; não há elevação por escopo
-// ausente, duplicado, desconhecido ou reordenado.
-func (s *Server) requestedCapabilities(scope string) (read, write, ok bool) {
-	switch {
-	case scope == s.config.Scope:
-		return false, false, true
-	case s.config.ReadScope != "" && scope == s.config.Scope+" "+s.config.ReadScope:
-		return true, false, true
-	case s.config.WriteScope != "" && scope == s.config.Scope+" "+s.config.WriteScope:
-		return false, true, true
-	case s.config.ReadScope != "" && s.config.WriteScope != "" && scope == s.config.Scope+" "+s.config.ReadScope+" "+s.config.WriteScope:
-		return true, true, true
-	default:
-		return false, false, false
+type capabilities struct {
+	Read  bool
+	Write bool
+	Git   bool
+	Test  bool
+}
+
+// requestedCapabilities aceita qualquer subconjunto explicitamente configurado
+// na ordem canônica da metadata: diagnóstico, leitura, escrita, Git, teste.
+// Escopos desconhecidos, duplicados, não configurados ou reordenados falham
+// fechado e a string precisa ser a serialização canônica sem whitespace extra.
+func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
+	parts := strings.Fields(scope)
+	if len(parts) == 0 || strings.Join(parts, " ") != scope || parts[0] != s.config.Scope {
+		return capabilities{}, false
 	}
+	configured := make([]string, 0, 5)
+	configured = append(configured, s.config.Scope)
+	if s.config.ReadScope != "" {
+		configured = append(configured, s.config.ReadScope)
+	}
+	if s.config.WriteScope != "" {
+		configured = append(configured, s.config.WriteScope)
+	}
+	if s.config.GitScope != "" {
+		configured = append(configured, s.config.GitScope)
+	}
+	if s.config.TestScope != "" {
+		configured = append(configured, s.config.TestScope)
+	}
+	if len(parts) > len(configured) {
+		return capabilities{}, false
+	}
+	last := 0
+	result := capabilities{}
+	for index, part := range parts {
+		position := -1
+		for candidate, allowed := range configured {
+			if allowed == part {
+				position = candidate
+				break
+			}
+		}
+		if position < 0 || (index > 0 && position <= last) {
+			return capabilities{}, false
+		}
+		last = position
+		switch part {
+		case s.config.ReadScope:
+			result.Read = true
+		case s.config.WriteScope:
+			result.Write = true
+		case s.config.GitScope:
+			result.Git = true
+		case s.config.TestScope:
+			result.Test = true
+		}
+	}
+	return result, true
 }
 
 func (s *Server) readRequested(scope string) bool {
-	read, _, _ := s.requestedCapabilities(scope)
-	return read
+	requested, _ := s.requestedCapabilities(scope)
+	return requested.Read
 }
 
 func (s *Server) readAllowed(clientID string) bool {
@@ -374,6 +441,14 @@ func (s *Server) readAllowed(clientID string) bool {
 
 func (s *Server) writeAllowed(clientID string) bool {
 	return s.config.CanIssueWrite != nil && s.config.CanIssueWrite(clientID)
+}
+
+func (s *Server) gitAllowed(clientID string) bool {
+	return s.config.CanIssueGit != nil && s.config.CanIssueGit(clientID)
+}
+
+func (s *Server) testAllowed(clientID string) bool {
+	return s.config.CanIssueTest != nil && s.config.CanIssueTest(clientID)
 }
 func (s *Server) jwks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -490,7 +565,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	requestedScope := q.Get("scope")
-	read, write, supported := s.requestedCapabilities(requestedScope)
+	requested, supported := s.requestedCapabilities(requestedScope)
 	if len(r.URL.RawQuery) > maxFormBytes || q.Get("response_type") != "code" || !supported || q.Get("resource") != s.config.ResourceURL || !pkceChallenge.MatchString(q.Get("code_challenge")) || q.Get("code_challenge_method") != "S256" || len(q.Get("state")) < 16 || len(q.Get("state")) > 512 {
 		bad(w, 400, "invalid_request")
 		return
@@ -515,7 +590,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_redirect_uri")
 		return
 	}
-	if (read && !s.readAllowed(id)) || (write && !s.writeAllowed(id)) {
+	if (requested.Read && !s.readAllowed(id)) || (requested.Write && !s.writeAllowed(id)) || (requested.Git && !s.gitAllowed(id)) || (requested.Test && !s.testAllowed(id)) {
 		bad(w, 403, "access_denied")
 		return
 	}
@@ -556,8 +631,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = consentPage.Execute(w, struct {
 		ID, Client, ClientID, Redirect, CSRF, Scope string
-		Read, Write                                 bool
-	}{pendingID, c.Name, id, redirect, csrf, requestedScope, read, write})
+		Read, Write, Test, Git                      bool
+	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git})
 }
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -595,8 +670,8 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		bad(w, 403, "access_denied")
 		return
 	}
-	read, write, supported := s.requestedCapabilities(p.Scope)
-	if !supported || (read && !s.readAllowed(p.ClientID)) || (write && !s.writeAllowed(p.ClientID)) {
+	requested, supported := s.requestedCapabilities(p.Scope)
+	if !supported || (requested.Read && !s.readAllowed(p.ClientID)) || (requested.Write && !s.writeAllowed(p.ClientID)) || (requested.Git && !s.gitAllowed(p.ClientID)) || (requested.Test && !s.testAllowed(p.ClientID)) {
 		s.mu.Unlock()
 		bad(w, 403, "access_denied")
 		return
@@ -679,8 +754,8 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_grant")
 		return
 	}
-	read, write, supported := s.requestedCapabilities(g.Scope)
-	if !supported || (read && !s.readAllowed(g.ClientID)) || (write && !s.writeAllowed(g.ClientID)) {
+	requested, supported := s.requestedCapabilities(g.Scope)
+	if !supported || (requested.Read && !s.readAllowed(g.ClientID)) || (requested.Write && !s.writeAllowed(g.ClientID)) || (requested.Git && !s.gitAllowed(g.ClientID)) || (requested.Test && !s.testAllowed(g.ClientID)) {
 		bad(w, 400, "invalid_grant")
 		return
 	}

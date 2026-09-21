@@ -153,16 +153,25 @@ func TestWriteScopeIsAbsentFromDefaultAndRejectsUnsafeConfiguration(t *testing.T
 	if result, _, _ := requestWriteConsent(t, handler, client, scope+" signalspace:test.run"); result.Code != http.StatusBadRequest {
 		t.Fatalf("default issuer accepted test execution scope: %d", result.Code)
 	}
+	if result, _, _ := requestWriteConsent(t, handler, client, scope+" signalspace:git.review"); result.Code != http.StatusBadRequest {
+		t.Fatalf("default issuer accepted Git review scope: %d", result.Code)
+	}
 
 	for _, bad := range []Config{
 		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, WriteScope: writeScope, StateDir: t.TempDir()},
 		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, CanIssueWrite: func(string) bool { return true }, StateDir: t.TempDir()},
 		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, WriteScope: "untrusted:scope", CanIssueWrite: func(string) bool { return true }, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
 		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, WriteScope: writeScope, CanIssueWrite: func(string) bool { return true }, StateDir: t.TempDir()},
+		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, GitScope: gitReviewScope, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
+		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, CanIssueGit: func(string) bool { return true }, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
+		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, GitScope: "untrusted:scope", CanIssueGit: func(string) bool { return true }, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
+		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, TestScope: testRunScope, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
+		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, CanIssueTest: func(string) bool { return true }, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
+		{ResourceURL: resourceURL, Issuer: "https://signalspace.example", Scope: scope, TestScope: "untrusted:scope", CanIssueTest: func(string) bool { return true }, StateDir: t.TempDir(), OnRequest: func(RequestInfo) {}},
 	} {
 		if server, err := New(bad); err == nil {
 			_ = server.Close()
-			t.Fatal("unsafe write scope configuration accepted")
+			t.Fatal("unsafe programming scope configuration accepted")
 		}
 	}
 }

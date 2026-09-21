@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/programming"
@@ -19,11 +20,15 @@ type harnessGitReviewer struct {
 	grants      *workspace.Grants
 	before      programming.GitSnapshot
 	outputLimit int
+	starts      *atomic.Int32
 }
 
 func (r *harnessGitReviewer) ReviewGit(ctx context.Context, owner, clientID, sessionID string) (programming.DiffReview, error) {
 	var after programming.GitSnapshot
 	err := r.grants.WithAuthorizedGitProcessDir(owner, clientID, sessionID, func(directory workspace.ProcessDirectory) error {
+		if r.starts != nil {
+			r.starts.Add(1)
+		}
 		var err error
 		after, err = programming.CaptureGitSnapshot(ctx, directory, r.outputLimit)
 		return err
