@@ -1,12 +1,28 @@
 package admin
 
 import (
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func forgedProxyHeaders() map[string]string {
+	return map[string]string{
+		"Forwarded":         "for=203.0.113.10;host=evil.example;proto=https",
+		"X-Forwarded-Host":  "evil.example",
+		"X-Forwarded-Proto": "https",
+		"X-Forwarded-For":   "203.0.113.10",
+	}
+}
+
+func applyHeaders(request *http.Request, headers map[string]string) {
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
+}
 
 func TestAdminTransportRejectsUnexpectedOriginsAndPaths(t *testing.T) {
 	calls := 0
@@ -51,6 +67,143 @@ func TestAdminTransportRejectsUnexpectedOriginsAndPaths(t *testing.T) {
 				t.Fatal("unexpected response headers")
 			}
 		})
+	}
+}
+
+func TestAdminTransportRejectsForgedProxyHeadersOverLoopback(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	defer server.Close()
+	client := server.Client()
+
+	cases := []struct {
+		name, method, path, host, origin, body string
+		wantCode                               int
+		wantCall                               bool
+	}{
+		{"valid_host_without_transport_credentials", http.MethodGet, "/api/admin/v1/session", "localhost:7677", "", "", http.StatusNoContent, true},
+		{"invalid_host_forwarded_to_canonical", http.MethodGet, "/api/admin/v1/session", "evil.example", "", "", http.StatusForbidden, false},
+		{"public_host_forwarded_to_canonical", http.MethodGet, "/api/admin/v1/session", "localhost:7676", "", "", http.StatusForbidden, false},
+		{"cross_origin_forwarded_host", http.MethodGet, "/api/admin/v1/session", "localhost:7677", "https://evil.example", "", http.StatusForbidden, false},
+		{"preflight_cannot_become_same_origin", http.MethodOptions, "/api/admin/v1/session", "localhost:7677", AdminOrigin, "", http.StatusForbidden, false},
+		{"post_without_origin", http.MethodPost, "/api/admin/v1/pair", "localhost:7677", "", `{}`, http.StatusForbidden, false},
+		{"same_origin_post_with_forged_proxy", http.MethodPost, "/api/admin/v1/pair", "localhost:7677", AdminOrigin, `{}`, http.StatusNoContent, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			request, err := http.NewRequest(tc.method, server.URL+tc.path, strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Host = tc.host
+			if tc.origin != "" {
+				request.Header.Set("Origin", tc.origin)
+			}
+			applyHeaders(request, forgedProxyHeaders())
+			before := calls
+			response, err := client.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			_, _ = io.Copy(io.Discard, response.Body)
+			if response.StatusCode != tc.wantCode {
+				t.Fatalf("got %d, want %d", response.StatusCode, tc.wantCode)
+			}
+			if (calls != before) != tc.wantCall {
+				t.Fatalf("API call reached transport boundary: calls=%d before=%d want=%t", calls, before, tc.wantCall)
+			}
+			if response.Header.Get("Access-Control-Allow-Origin") != "" {
+				t.Fatal("forged origin received a CORS grant")
+			}
+		})
+	}
+}
+
+func TestAdminTransportProxyHeadersDoNotBypassSessionOrCSRF(t *testing.T) {
+	gate, code, err := NewGate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gate.Close()
+	server := httptest.NewServer(Handler(gate.Handler()))
+	defer server.Close()
+	client := server.Client()
+
+	bootstrap, _, err := gate.Bootstrap("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pairRequest, err := http.NewRequest(http.MethodPost, server.URL+"/api/admin/v1/pair", strings.NewReader(`{"pairing_code":"`+code+`","passphrase":"`+testPassphrase+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pairRequest.Host = "localhost:7677"
+	pairRequest.Header.Set("Origin", AdminOrigin)
+	pairRequest.Header.Set("Content-Type", "application/json")
+	pairRequest.Header.Set("X-CSRF-Token", bootstrap.CSRF)
+	applyHeaders(pairRequest, forgedProxyHeaders())
+	pairRequest.AddCookie(&http.Cookie{Name: bootstrapCookie, Value: bootstrap.Cookie})
+	paired, err := client.Do(pairRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer paired.Body.Close()
+	if paired.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(paired.Body)
+		t.Fatalf("pairing did not reach the authenticated API path: %d %s", paired.StatusCode, body)
+	}
+	var sessionCookie *http.Cookie
+	for _, cookie := range paired.Cookies() {
+		if cookie.Name == adminCookie {
+			sessionCookie = cookie
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("pairing did not return an administrative session cookie")
+	}
+
+	refresh := func(cookie *http.Cookie, csrf string) (*http.Response, error) {
+		request, err := http.NewRequest(http.MethodPost, server.URL+"/api/admin/v1/session/refresh", strings.NewReader("{}"))
+		if err != nil {
+			return nil, err
+		}
+		request.Host = "localhost:7677"
+		request.Header.Set("Origin", AdminOrigin)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-CSRF-Token", csrf)
+		applyHeaders(request, forgedProxyHeaders())
+		if cookie != nil {
+			request.AddCookie(cookie)
+		}
+		return client.Do(request)
+	}
+
+	wrongCSRF, err := refresh(sessionCookie, "forged-csrf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrongCSRF.Body.Close()
+	wrongBody, _ := io.ReadAll(wrongCSRF.Body)
+	if wrongCSRF.StatusCode != http.StatusForbidden || !strings.Contains(string(wrongBody), `"ACCESS_DENIED"`) {
+		t.Fatalf("forged proxy headers bypassed CSRF: %d %s", wrongCSRF.StatusCode, wrongBody)
+	}
+	if wrongCSRF.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("authenticated response granted CORS")
+	}
+
+	staleSession, err := refresh(&http.Cookie{Name: adminCookie, Value: "forged-session"}, sessionCookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer staleSession.Body.Close()
+	staleBody, _ := io.ReadAll(staleSession.Body)
+	if staleSession.StatusCode != http.StatusUnauthorized || !strings.Contains(string(staleBody), `"AUTH_REQUIRED"`) {
+		t.Fatalf("forged proxy headers bypassed session authentication: %d %s", staleSession.StatusCode, staleBody)
 	}
 }
 

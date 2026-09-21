@@ -43,3 +43,11 @@ Na revisão local da correção baseada em `b2ca6e4`, a matriz negativa foi ampl
 `rejectPublicAdministrativePaths` agora rejeita qualquer segmento exatamente `admin` em `r.URL.Path` antes do mux. O teste `TestQuickPublicListenerRejectsAdministrativeMatrix` exige `404`, sem `Location` e sem `Set-Cookie` para quinze casos administrativos, e verifica que `GET /mcp`, `GET /authorize` e `GET /token` continuam roteados publicamente sem `404` ou redirecionamento. É evidência automatizada em HTTP loopback, não smoke de túnel, navegador ou porta 7677.
 
 SS-BE-007 permanece **em andamento**. CI não foi consultada; o resultado remoto continua desconhecido. Não houve túnel, bypass TLS, grant OAuth, alteração frontend, merge ou deploy. Permanecem pendentes DNS rebinding/proxy real, restart operacional completo, matriz visual/externa e repetição de leitura/revogação no fluxo M3.
+
+### Atualização SS-BE-007 — grupo 2, Host/Origin e cabeçalhos de proxy
+
+Na ref `f585188`, a implementação de `internal/admin/transport.go` foi reaberta e não precisou de alteração: `Host` canônico e `Origin` continuam sendo verificados diretamente, e `Forwarded`/`X-Forwarded-*` não são consultados como autoridade. A cobertura nova está em `internal/admin/transport_test.go`.
+
+`TestAdminTransportRejectsForgedProxyHeadersOverLoopback` envia combinações de Host inválido/público, Origin cruzado, preflight e mutação sem Origin com cabeçalhos de proxy forjados para um servidor HTTP loopback. As rejeições retornam 403, não concedem CORS e não alcançam o handler; Host/origem válidos sem credenciais de transporte continuam alcançando a fronteira. `TestAdminTransportProxyHeadersDoNotBypassSessionOrCSRF` usa o `Gate` real e confirma `403 ACCESS_DENIED` para CSRF incorreto e `401 AUTH_REQUIRED` para sessão forjada, mesmo com proxy forjado.
+
+O resultado é cobertura automatizada local adicional, sem correção de produto. Não é prova operacional de DNS rebinding, proxy real ou host rewrite de implantação. SS-BE-007 permanece **em andamento**; CI não foi consultada e continua desconhecida, sem túnel, bypass TLS, OAuth, frontend, merge ou deploy.

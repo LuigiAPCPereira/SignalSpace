@@ -126,6 +126,13 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - O mesmo teste verifica que `GET /mcp`, `GET /authorize` e `GET /token` continuam alcançando seus handlers públicos sem `404` ou redirecionamento. O ambiente é HTTP loopback com somente o listener público; não há encaminhamento/handler admin em 7677.
 - A validação focalizada sequencial passou. O código e os testes permanecem locais até a publicação fast-forward; CI não foi consultada conforme orientação do proprietário e continua desconhecida. Nenhum túnel, bypass TLS, navegador, grant OAuth, alteração frontend, merge ou deploy foi realizado.
 
+## 20/09/2026 — negativos de Host, Origin e proxy no loopback (SS-BE-007)
+
+- Reaberta a implementação de `internal/admin/transport.go`: a fronteira exige `Host: localhost:7677`, recusa Origin externo/ausente em mutações e não consulta `Forwarded` nem `X-Forwarded-*`. Não foi necessário corrigir código de produção.
+- `TestAdminTransportRejectsForgedProxyHeadersOverLoopback` adicionou servidor HTTP loopback com handler sentinela. Host inválido/público, Origin cruzado, preflight e POST sem Origin permanecem em `403`, sem chamada ao API e sem `Access-Control-Allow-Origin`, mesmo com `Forwarded`, `X-Forwarded-Host`, `X-Forwarded-Proto` e `X-Forwarded-For` forjados. Host/origem válidos continuam alcançando a fronteira de transporte sem credenciais.
+- `TestAdminTransportProxyHeadersDoNotBypassSessionOrCSRF` atravessa o `Gate` real: pareamento válido com proxy forjado funciona na camada esperada; refresh com sessão válida e CSRF forjado retorna `403 ACCESS_DENIED`; sessão forjada retorna `401 AUTH_REQUIRED`. Isso separa transporte válido de autenticação/sessão/CSRF.
+- A evidência é automatizada em loopback; não demonstra DNS rebinding, proxy real ou host rewrite operacional. CI não foi consultada conforme orientação do proprietário; patches, branch frontend e restrições de túnel/OAuth/merge/deploy foram preservados.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
