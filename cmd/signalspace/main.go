@@ -165,7 +165,7 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (h
 	mux.Handle("/mcp", protected)
 	mux.Handle("/.well-known/oauth-protected-resource", protected)
 	mux.Handle("/.well-known/oauth-protected-resource/mcp", protected)
-	for _, path := range []string{"/.well-known/oauth-authorization-server", "/oauth/jwks", "/register", "/authorize", "/authorize/complete", "/token"} {
+	for _, path := range []string{"/.well-known/oauth-authorization-server", "/oauth/jwks", "/register", "/authorize", "/authorize/consent.js", "/authorize/complete", "/token"} {
 		mux.Handle(path, authorization.Handler())
 	}
 	// Consulta pública apenas do próprio pedido OAuth; nenhum handler administrativo.

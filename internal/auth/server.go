@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,14 +34,45 @@ const (
 	tokenTTL             = 15 * time.Minute
 	ownerSubject         = "local-owner"
 	quotaWindow          = time.Minute
+	consentScriptPath    = "/authorize/consent.js"
 )
 
 var (
 	pkceChallenge = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 	pkceVerifier  = regexp.MustCompile(`^[A-Za-z0-9._~-]{43,128}$`)
 	requestID     = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
-	consentPage   = template.Must(template.New("consent").Parse(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar SignalSpace</title></head><body style="font:16px system-ui;max-width:38rem;margin:10vh auto;padding:1rem;line-height:1.5"><main><h1>Autorizar conexão</h1><p>Solicitação de <strong>{{.Client}}</strong>.</p><p>Registro OAuth: <code>{{.ClientID}}</code></p>{{if .Read}}<p><strong>Permissão adicional:</strong> ler arquivos de texto da pasta autorizada separadamente no terminal. Esta permissão não dá acesso a outras pastas, edição ou shell.</p>{{else}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}<p>Escopos solicitados: <code>{{.Scope}}</code></p><p>Destino do retorno: <code>{{.Redirect}}</code></p><p>Confirme na janela do terminal em que o SignalSpace está em execução:</p><pre>approve {{.ID}}</pre><p>Depois clique em Continuar. Para recusar, digite <code>deny {{.ID}}</code> no terminal.</p><form method="post" action="/authorize/complete"><input type="hidden" name="request" value="{{.ID}}"><input type="hidden" name="csrf" value="{{.CSRF}}"><button type="submit">Continuar</button></form><p>Esta solicitação expira em cinco minutos. Nenhum acesso é concedido antes da aprovação local.</p></main></body></html>`))
+	consentPage   = template.Must(template.New("consent").Parse(`<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Autorizar SignalSpace</title>
+</head>
+<body style="font:16px system-ui;max-width:38rem;margin:10vh auto;padding:1rem;line-height:1.5">
+<main id="consent" data-request-id="{{.ID}}">
+<h1>Autorizar conexão</h1>
+<p>Solicitação de <strong>{{.Client}}</strong>.</p>
+<p>Registro OAuth: <code>{{.ClientID}}</code></p>
+{{if .Read}}<p><strong>Permissão adicional:</strong> ler arquivos de texto da pasta autorizada separadamente no terminal. Esta permissão não dá acesso a outras pastas, edição ou shell.</p>{{else}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
+<p>Escopos solicitados: <code>{{.Scope}}</code></p>
+<p>Destino do retorno: <code>{{.Redirect}}</code></p>
+<p id="authorization-status" role="status" aria-live="polite">Confirme na janela do terminal em que o SignalSpace está em execução.</p>
+<pre>approve {{.ID}}</pre>
+<p>Depois que a aprovação local for confirmada, clique em Continuar. Para recusar, digite <code>deny {{.ID}}</code> no terminal.</p>
+<form id="authorization-complete-form" method="post" action="/authorize/complete">
+<input type="hidden" name="request" value="{{.ID}}">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<button id="continue-button" type="submit">Continuar</button>
+</form>
+<p>Esta solicitação expira em cinco minutos. Nenhum acesso é concedido antes da aprovação local.</p>
+</main>
+<script src="/authorize/consent.js" defer></script>
+</body>
+</html>`))
 )
+
+//go:embed consent.js
+var consentScript []byte
 
 type Config struct {
 	ResourceURL string
@@ -226,6 +258,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/oauth/jwks", s.jwks)
 	mux.HandleFunc("/register", s.register)
 	mux.HandleFunc("/authorize", s.authorize)
+	mux.HandleFunc(consentScriptPath, s.consentScript)
 	mux.HandleFunc("/authorize/complete", s.complete)
 	mux.HandleFunc("/token", s.token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +274,20 @@ func (s *Server) Handler() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) consentScript(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	_, _ = w.Write(consentScript)
 }
 
 // allowPublicRequest usa um mapa fixo: nenhuma chave vem de IP ou entrada remota.
@@ -464,7 +511,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: "signalspace_auth", Value: session, Path: "/authorize", MaxAge: int(pendingTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if s.config.OnRequest != nil {

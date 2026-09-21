@@ -43,7 +43,7 @@ func startAuth(t *testing.T) (*Server, http.Handler, <-chan RequestInfo) {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", protected)
-	for _, path := range []string{"/.well-known/oauth-authorization-server", "/oauth/jwks", "/register", "/authorize", "/authorize/complete", "/token"} {
+	for _, path := range []string{"/.well-known/oauth-authorization-server", "/oauth/jwks", "/register", "/authorize", "/authorize/consent.js", "/authorize/complete", "/token"} {
 		mux.Handle(path, s.Handler())
 	}
 	return s, mux, events
