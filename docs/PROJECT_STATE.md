@@ -111,3 +111,11 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Evidência executável:** `cmd/signalspace/promotion_gate_test.go` percorre as composições reais de diagnóstico e leitura usadas pelo entrypoint, confirma metadata sem `workspace.write`, `tools/list` sem `replace_text` e rejeição de `tools/call` para a ferramenta ausente. `quickModeArgs` rejeita `write` e a aprovação de workspace do console continua usando `Grants.Grant` read-only.
 
 **Limites:** a cadeia OAuth→MCP do harness já publicada permanece CONFIRMADA somente localmente. Não houve túnel, HTTPS operacional, navegador/grant real, workspace real, CI, merge ou deploy. Execução e Git continuam capacidades separadas. Próxima ação vinculada: implementar, somente após autorização específica, a composição remota futura e seu aceite operacional; não publicar `workspace.write` neste gate.
+
+## Checkpoint atualizado — SS-MVP-002 lifecycle local — 21/09/2026
+
+**Ref observada:** `codex/mvp-vertical-programming` após `f5dd8cf` (`test(mcp): verify OAuth write grant lifecycle across recreation`). O worktree mantém somente os dois patches não rastreados previamente preservados; nenhuma alteração foi feita na branch frontend ou no PR #1 draft.
+
+**Evidência:** `TestOAuthWriteLocalCompositionLifecycleDropsPriorGrant` usa o emissor OAuth, PKCE, JWT assinado, `NewStaticJWTVerifier` e handler MCP reais. A edição funciona antes do fechamento; após fechar servidor, `Grants` e identidade, uma nova composição reabre a chave/clientes persistidos, verifica o JWT antigo, mas nega o token com sessão/grant antigos sem modificar o arquivo. Uma concessão e sessão novas autorizam a operação compatível; a sessão antiga continua negada. O recurso fechado também rejeita `ReplaceText` com `workspace.ErrClosed`.
+
+**Estado e limites:** lifecycle da composição local **CONFIRMADO localmente**; restart operacional remoto/HTTPS, navegador, túnel, grant ao ChatGPT, ativação pública de `workspace.write`, CI, merge e deploy permanecem não validados ou fora do escopo. O gate global `SS-MVP-002-PROMOTION-GATE-001` continua PENDENTE. Próxima ação vinculada: preservar a composição pública sem escrita e selecionar nova fatia somente após instrução do ChatGPT Web.
