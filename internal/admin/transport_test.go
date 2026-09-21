@@ -9,13 +9,17 @@ import (
 	"testing"
 )
 
-func forgedProxyHeaders() map[string]string {
+func forgedProxyHeadersForHost(host string) map[string]string {
 	return map[string]string{
-		"Forwarded":         "for=203.0.113.10;host=evil.example;proto=https",
-		"X-Forwarded-Host":  "evil.example",
+		"Forwarded":         "for=203.0.113.10;host=" + host + ";proto=https",
+		"X-Forwarded-Host":  host,
 		"X-Forwarded-Proto": "https",
 		"X-Forwarded-For":   "203.0.113.10",
 	}
+}
+
+func forgedProxyHeaders() map[string]string {
+	return forgedProxyHeadersForHost("evil.example")
 }
 
 func applyHeaders(request *http.Request, headers map[string]string) {
@@ -81,16 +85,17 @@ func TestAdminTransportRejectsForgedProxyHeadersOverLoopback(t *testing.T) {
 
 	cases := []struct {
 		name, method, path, host, origin, body string
+		headers                                map[string]string
 		wantCode                               int
 		wantCall                               bool
 	}{
-		{"valid_host_without_transport_credentials", http.MethodGet, "/api/admin/v1/session", "localhost:7677", "", "", http.StatusNoContent, true},
-		{"invalid_host_forwarded_to_canonical", http.MethodGet, "/api/admin/v1/session", "evil.example", "", "", http.StatusForbidden, false},
-		{"public_host_forwarded_to_canonical", http.MethodGet, "/api/admin/v1/session", "localhost:7676", "", "", http.StatusForbidden, false},
-		{"cross_origin_forwarded_host", http.MethodGet, "/api/admin/v1/session", "localhost:7677", "https://evil.example", "", http.StatusForbidden, false},
-		{"preflight_cannot_become_same_origin", http.MethodOptions, "/api/admin/v1/session", "localhost:7677", AdminOrigin, "", http.StatusForbidden, false},
-		{"post_without_origin", http.MethodPost, "/api/admin/v1/pair", "localhost:7677", "", `{}`, http.StatusForbidden, false},
-		{"same_origin_post_with_forged_proxy", http.MethodPost, "/api/admin/v1/pair", "localhost:7677", AdminOrigin, `{}`, http.StatusNoContent, true},
+		{"valid_host_without_transport_credentials", http.MethodGet, "/api/admin/v1/session", "localhost:7677", "", "", nil, http.StatusNoContent, true},
+		{"invalid_host_forwarded_to_canonical", http.MethodGet, "/api/admin/v1/session", "evil.example", "", "", forgedProxyHeadersForHost("localhost:7677"), http.StatusForbidden, false},
+		{"public_host_forwarded_to_canonical", http.MethodGet, "/api/admin/v1/session", "localhost:7676", "", "", nil, http.StatusForbidden, false},
+		{"cross_origin_forwarded_host", http.MethodGet, "/api/admin/v1/session", "localhost:7677", "https://evil.example", "", nil, http.StatusForbidden, false},
+		{"preflight_cannot_become_same_origin", http.MethodOptions, "/api/admin/v1/session", "localhost:7677", AdminOrigin, "", nil, http.StatusForbidden, false},
+		{"post_without_origin", http.MethodPost, "/api/admin/v1/pair", "localhost:7677", "", `{}`, nil, http.StatusForbidden, false},
+		{"same_origin_post_with_forged_proxy", http.MethodPost, "/api/admin/v1/pair", "localhost:7677", AdminOrigin, `{}`, nil, http.StatusNoContent, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,7 +107,11 @@ func TestAdminTransportRejectsForgedProxyHeadersOverLoopback(t *testing.T) {
 			if tc.origin != "" {
 				request.Header.Set("Origin", tc.origin)
 			}
-			applyHeaders(request, forgedProxyHeaders())
+			headers := tc.headers
+			if headers == nil {
+				headers = forgedProxyHeaders()
+			}
+			applyHeaders(request, headers)
 			before := calls
 			response, err := client.Do(request)
 			if err != nil {

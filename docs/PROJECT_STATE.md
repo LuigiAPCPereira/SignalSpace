@@ -36,6 +36,14 @@ Na ref atual, a comparação dos onze grupos de [`LOCAL_ADMIN_AUTHORIZATION.md`,
 
 O resultado desta missão é **SS-BE-007 em andamento**, não validado integralmente. A evidência nova é automatizada e local; não houve CI, túnel, bypass TLS, navegador, grant OAuth, alteração da branch frontend, merge ou deploy. Permanecem pendentes DNS rebinding/proxy real, restart operacional completo, matriz visual/externa e repetição de leitura/revogação no fluxo M3.
 
+### Atualização SS-BE-007 — grupo 2 e grupo 10
+
+Na continuação da fatia local, `internal/admin/transport_test.go` passou a cobrir literalmente `Host: evil.example` com `Forwarded` e `X-Forwarded-Host` apontando para `localhost:7677`; a fronteira rejeita a tentativa em loopback com `403` e o handler não é executado. Não houve alteração de produção.
+
+`cmd/signalspace/quick_panel_restart_test.go` adiciona a composição local de reinício: uma instância cria sessão administrativa e concessão de workspace, o encerramento invalida ambas, e a composição seguinte inicia sem pareamento nem concessão herdada. O teste complementa, sem duplicar, a prova já existente de identidade OAuth persistente e descarte de pedidos/códigos efêmeros.
+
+Validação da fatia: testes Go locais. Limites: sem túnel, navegador/rede, proxy real ou DNS rebinding; sem restart operacional completo. CI permanece desconhecida e não foi consultada. SS-BE-007 continua em andamento.
+
 ### Atualização SS-BE-007 — revisão do bloqueio antes do `ServeMux`
 
 Na revisão local da correção baseada em `b2ca6e4`, a matriz negativa foi ampliada para variantes de `/admin` e `/api/admin/v1/*` com barras duplicadas no início/meio, segmentos `.` e `..`, componentes codificados e métodos alternativos. A reprodução confirmou que a verificação literal anterior deixava quatro famílias chegarem ao `http.ServeMux`, que respondia `307`; não houve evidência de execução de handler administrativo, mas a resposta violava o contrato `404`.

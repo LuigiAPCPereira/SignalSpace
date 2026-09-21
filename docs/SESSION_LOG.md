@@ -133,6 +133,12 @@ Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https
 - `TestAdminTransportProxyHeadersDoNotBypassSessionOrCSRF` atravessa o `Gate` real: pareamento válido com proxy forjado funciona na camada esperada; refresh com sessão válida e CSRF forjado retorna `403 ACCESS_DENIED`; sessão forjada retorna `401 AUTH_REQUIRED`. Isso separa transporte válido de autenticação/sessão/CSRF.
 - A evidência é automatizada em loopback; não demonstra DNS rebinding, proxy real ou host rewrite operacional. CI não foi consultada conforme orientação do proprietário; patches, branch frontend e restrições de túnel/OAuth/merge/deploy foram preservados.
 
+## 20/09/2026 — lacuna literal de Host canônico e reinício local (SS-BE-007)
+
+- `TestAdminTransportRejectsForgedProxyHeadersOverLoopback` passou a cobrir literalmente `Host: evil.example` com `Forwarded` e `X-Forwarded-Host` apontando para `localhost:7677`. A resposta continuou `403`, sem execução do handler e sem alteração de produção.
+- `TestQuickInstanceRestartDropsAdministrativeAndWorkspaceAuthorizations` exercitou a composição local do Quick sem túnel: uma sessão administrativa e uma concessão de workspace foram criadas, o encerramento invalidou ambas, e uma nova composição iniciou sem pareamento nem concessão herdada. A prova complementa `internal/auth/store_test.go`, que já cobre identidade OAuth persistente e descarte de pedidos/códigos.
+- Testes focados de `internal/admin` e `cmd/signalspace` passaram. A evidência permanece local/automatizada: não inclui túnel real, navegador/rede, DNS rebinding, proxy real ou restart operacional completo. CI não foi consultada e continua desconhecida.
+
 ## Limites do registro
 
 Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree/stashes locais**. Datas acima pertencem a registros observados; não inventar tempos de teste. Documento não substitui contratos, TASKLIST, Git/CI ou versões reais do Project/Codex/agendamentos.
