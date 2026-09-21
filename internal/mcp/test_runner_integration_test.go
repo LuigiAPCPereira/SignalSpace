@@ -140,6 +140,36 @@ func TestRunWorkspaceTestsMCPVerticalFlowAndIndependentRevocation(t *testing.T) 
 		t.Fatalf("unexpected failing result: %+v", failed)
 	}
 
+	noTestSession, err := grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", testToken, testWorkspaceCall(noTestSession), nil)
+	if text, isError := readResult(t, result); res.StatusCode != http.StatusOK || !isError || text != "Test execution unavailable or not authorized." {
+		t.Fatalf("grant without test scope remained usable: %d %v", res.StatusCode, result)
+	}
+	if runner.starts.Load() != 2 {
+		t.Fatalf("grant without test scope started a process: %d", runner.starts.Load())
+	}
+	sessionID, err = grants.GrantWithScopes(root, clientID, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeTest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res, _ := oauthRequest(t, server, http.MethodPost, "/mcp", "", testWorkspaceCall(sessionID), nil); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("missing token reached test tool: %d", res.StatusCode)
+	}
+	if res, _ := oauthRequest(t, server, http.MethodPost, "/mcp", "not-a-jwt-token-with-enough-length-0123456789", testWorkspaceCall(sessionID), nil); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("invalid token reached test tool: %d", res.StatusCode)
+	}
+	ownerClaims := defaultClaims()
+	ownerClaims["sub"] = "other-owner"
+	ownerClaims["client_id"] = clientID
+	ownerClaims["scope"] = diagnosticScope + " " + testRunScope
+	if res, _ := oauthRequest(t, server, http.MethodPost, "/mcp", makeAccessToken(t, key, ownerClaims), testWorkspaceCall(sessionID), nil); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("different owner reached test tool: %d", res.StatusCode)
+	}
+
 	if runner.starts.Load() != 2 {
 		t.Fatalf("unexpected process start count before negatives: %d", runner.starts.Load())
 	}
@@ -170,6 +200,17 @@ func TestRunWorkspaceTestsMCPVerticalFlowAndIndependentRevocation(t *testing.T) 
 	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", testToken, extraRequest, nil)
 	if res.StatusCode != http.StatusOK || result["error"] == nil {
 		t.Fatalf("extra argument was accepted: %d %v", res.StatusCode, result)
+	}
+	for name, arguments := range map[string]map[string]any{
+		"null session":    {"session_id": nil},
+		"numeric session": {"session_id": 42},
+	} {
+		t.Run("invalid arguments/"+name, func(t *testing.T) {
+			res, result := oauthRequest(t, server, http.MethodPost, "/mcp", testToken, testWorkspaceCallWithArguments(arguments), nil)
+			if res.StatusCode != http.StatusOK || result["error"] == nil {
+				t.Fatalf("invalid argument was accepted: %d %v", res.StatusCode, result)
+			}
+		})
 	}
 	if runner.starts.Load() != 2 {
 		t.Fatalf("negative calls started a process: %d", runner.starts.Load())

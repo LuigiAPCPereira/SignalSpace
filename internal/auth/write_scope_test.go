@@ -71,6 +71,7 @@ func TestWriteScopeRequiresExplicitOptInAndRevocationAtOAuthBoundaries(t *testin
 		writeScope + " " + scope,
 		wanted + " " + writeScope,
 		"signalspace:workspace.unknown",
+		"signalspace:test.run",
 	} {
 		result, _, _ := requestWriteConsent(t, handler, client, rejected)
 		if result.Code != http.StatusBadRequest {
@@ -142,12 +143,15 @@ func TestWriteScopeIsAbsentFromDefaultAndRejectsUnsafeConfiguration(t *testing.T
 	_, handler, _ := startAuth(t)
 	client := register(t, handler)
 	metadata := invoke(handler, "GET", "/.well-known/oauth-authorization-server", "", "", nil)
-	if strings.Contains(metadata.Body.String(), writeScope) {
-		t.Fatal("default OAuth metadata advertised write scope")
+	if strings.Contains(metadata.Body.String(), writeScope) || strings.Contains(metadata.Body.String(), "signalspace:test.run") {
+		t.Fatal("default OAuth metadata advertised an unpublished programming scope")
 	}
 	params := scope + " " + writeScope
 	if result, _, _ := requestWriteConsent(t, handler, client, params); result.Code != http.StatusBadRequest {
 		t.Fatalf("default issuer accepted write scope: %d", result.Code)
+	}
+	if result, _, _ := requestWriteConsent(t, handler, client, scope+" signalspace:test.run"); result.Code != http.StatusBadRequest {
+		t.Fatalf("default issuer accepted test execution scope: %d", result.Code)
 	}
 
 	for _, bad := range []Config{
