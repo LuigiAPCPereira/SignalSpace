@@ -92,6 +92,10 @@ function jsonResponse(body, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
+function invalidJSONResponse(status = 200) {
+  return { ok: status >= 200 && status < 300, status, json: async () => { throw new SyntaxError('truncated response'); } };
+}
+
 function harness(plans) {
   const documentRef = new FakeDocument();
   const calls = [];
@@ -140,6 +144,34 @@ test('LOCKED permite desbloquear somente com frase-senha', async () => {
   assert.equal(h.calls[1].path, '/api/admin/v1/unlock');
   assert.equal(JSON.parse(h.calls[1].options.body).passphrase, 'disposable-passphrase');
   assert.equal(JSON.parse(h.calls[1].options.body).pairing_code, undefined);
+});
+
+test('resposta perdida no pareamento reconcilia por sessão sem repetir POST', async () => {
+  for (const lost of [new Error('connection lost'), invalidJSONResponse(201)]) {
+    const h = harness([jsonResponse(unpairedSession), lost, jsonResponse(lockedSession)]);
+    h.app.start(); await settle();
+    const form = element(h.documentRef, 'pair-form');
+    form.formValues = { pairing_code: 'terminal-code', passphrase: 'disposable-passphrase' };
+    form.dispatch('submit'); await settle();
+    assert.deepEqual(h.calls.map((call) => call.path), ['/api/admin/v1/session', '/api/admin/v1/pair', '/api/admin/v1/session']);
+    assert.equal(h.calls.filter((call) => call.path === '/api/admin/v1/pair').length, 1);
+    assert.equal(element(h.documentRef, 'unlock-section').hidden, false);
+    assert.equal(h.app.state.session.state, 'LOCKED');
+  }
+});
+
+test('resposta perdida no desbloqueio reconcilia por sessão sem repetir POST', async () => {
+  for (const lost of [new Error('connection lost'), invalidJSONResponse(200)]) {
+    const h = harness([jsonResponse(lockedSession), lost, jsonResponse(authSession), jsonResponse({ requests: [] })]);
+    h.app.start(); await settle();
+    const form = element(h.documentRef, 'unlock-form');
+    form.formValues = { passphrase: 'disposable-passphrase' };
+    form.dispatch('submit'); await settle();
+    assert.deepEqual(h.calls.map((call) => call.path), ['/api/admin/v1/session', '/api/admin/v1/unlock', '/api/admin/v1/session', '/api/admin/v1/requests']);
+    assert.equal(h.calls.filter((call) => call.path === '/api/admin/v1/unlock').length, 1);
+    assert.equal(element(h.documentRef, 'authenticated-section').hidden, false);
+    assert.equal(h.app.state.session.state, 'AUTHENTICATED');
+  }
 });
 
 test('AUTHENTICATED carrega pedidos reais da API', async () => {
