@@ -109,7 +109,7 @@ func readToolCall(t *testing.T, handler http.Handler, bearer, session, path stri
 }
 
 func TestEmbeddedCompositionSharesLocalGrantAcrossOAuthAndMCP(t *testing.T) {
-	handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), true)
+	handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), compositionRead)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestReadModeRequiresDistinctLocalPublication(t *testing.T) {
 		err := runQuickWithMode(context.Background(), strings.NewReader(input), &output, func(context.Context) (*tunnel.Quick, error) {
 			called = true
 			return nil, fmt.Errorf("unexpected tunnel")
-		}, nil, true)
+		}, nil, compositionRead)
 		if err != nil || called || !strings.Contains(output.String(), "Conexão cancelada") {
 			t.Fatalf("read mode published with input %q: %v", input, err)
 		}
@@ -249,7 +249,7 @@ func TestQuickReadModePublishesOnlyAfterExplicitConsent(t *testing.T) {
 			}
 			tested <- err
 			return mcp.TransportReport{ResourceURL: resource}, err
-		}, true)
+		}, compositionRead)
 	}()
 	select {
 	case err := <-tested:

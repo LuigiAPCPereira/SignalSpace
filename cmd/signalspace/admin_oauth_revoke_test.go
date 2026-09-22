@@ -22,7 +22,7 @@ import (
 // Uma concessão criada pelo terminal precisa ser revalidada pelo mesmo emissor
 // OAuth que serve a API administrativa. Revogar nunca cria um novo código.
 func TestAdminOAuthHTTPReadGrantRevocation(t *testing.T) {
-	publicHandler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), true)
+	publicHandler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), compositionRead)
 	if err != nil {
 		t.Fatal(err)
 	}

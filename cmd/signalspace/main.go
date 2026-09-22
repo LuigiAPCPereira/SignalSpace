@@ -21,10 +21,10 @@ import (
 
 func main() {
 	if len(os.Args) != 1 {
-		if read, panel, ok := quickModeArgs(os.Args[1:]); ok {
+		if mode, panel, ok := quickModeArgs(os.Args[1:]); ok {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer stop()
-			if err := runQuickModePanel(ctx, os.Stdin, os.Stdout, read, panel); err != nil {
+			if err := runQuickModePanel(ctx, os.Stdin, os.Stdout, mode, panel); err != nil {
 				log.Fatal(err)
 			}
 			return
@@ -99,23 +99,38 @@ func main() {
 
 // embeddedHandler preserva a composição de diagnóstico sem concessões de arquivos.
 func embeddedHandler(resource, stateDir string) (http.Handler, *auth.Server, error) {
-	handler, authorization, _, err := embeddedHandlerWithWorkspace(resource, stateDir, false)
+	handler, authorization, _, err := embeddedHandlerWithWorkspace(resource, stateDir, compositionDiagnostic)
 	return handler, authorization, err
 }
 
-// embeddedHandlerWithWorkspace cria uma única concessão compartilhada entre
-// terminal, emissor OAuth e recurso MCP; a opção precisa vir do operador local.
-func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (http.Handler, *auth.Server, *workspaceConsole, error) {
+// embeddedHandlerWithWorkspace só compõe os modos fechados definidos pela política.
+func embeddedHandlerWithWorkspace(resource, stateDir string, mode compositionMode) (http.Handler, *auth.Server, *workspaceConsole, error) {
+	plan, err := planComposition(mode)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return embeddedHandlerForPlan(resource, stateDir, plan)
+}
+
+func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (http.Handler, *auth.Server, *workspaceConsole, error) {
+	closedPlan, err := planComposition(plan.mode)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if plan != closedPlan {
+		return nil, nil, nil, errors.New("composition plan does not match the closed SignalSpace policy")
+	}
+	plan = closedPlan
 	issuer := strings.TrimSuffix(resource, "/mcp")
 	var grants *workspace.Grants
-	authConfig := auth.Config{ResourceURL: resource, Issuer: issuer, Scope: "signalspace:diagnostic", StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
+	authConfig := auth.Config{ResourceURL: resource, Issuer: issuer, Scope: plan.oauthScope, StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
 		log.Printf("Authorization requested: %s; client: %s; client_id: %s; redirect: %s; scope: %s; type approve %s or deny %s", info.ID, info.Client, info.ClientID, info.Redirect, info.Scope, info.ID, info.ID)
 	}, OnRegistrationFailure: func(reason string) {
 		// Categoria fixa: não registrar corpos nem credenciais OAuth.
 		log.Printf("OAuth client registration rejected: %s (client metadata omitted)", reason)
 	}}
-	if enableRead {
-		authConfig.ReadScope = "signalspace:workspace.read"
+	if plan.workspaceReadScope != "" {
+		authConfig.ReadScope = plan.workspaceReadScope
 		authConfig.CanIssueRead = func(clientID string) bool {
 			// Falhar fechado se a composição não terminou ou a concessão foi revogada.
 			return grants != nil && grants.AllowsClient(clientID)
@@ -133,7 +148,7 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (h
 		return nil, nil, nil, err
 	}
 	var console *workspaceConsole
-	if enableRead {
+	if plan.consoleMode == workspaceConsoleRead {
 		grants, err = workspace.NewGrants(authorization.OwnerSubject())
 		if err != nil {
 			return closeFailure(err)
@@ -152,7 +167,7 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, enableRead bool) (h
 			log.Printf("Authenticated MCP connection_diagnostic handled: diagnosticID=%s (caller identity not attested)", diagnosticID)
 		}
 	}}
-	if enableRead {
+	if plan.workspaceReadScope != "" {
 		// Ambas as ferramentas usam a mesma concessão revogável do terminal.
 		mcpConfig.WorkspaceReader = grants
 		mcpConfig.WorkspaceLister = grants

@@ -40,7 +40,7 @@ func embeddedDirectoryCall(t *testing.T, handler http.Handler, bearer, session, 
 }
 
 func TestEmbeddedDirectoryListingRequiresLocalConsentAndRevokes(t *testing.T) {
-	handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), true)
+	handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), compositionRead)
 	if err != nil {
 		t.Fatal(err)
 	}

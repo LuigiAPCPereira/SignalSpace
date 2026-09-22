@@ -24,23 +24,24 @@ import (
 
 func TestQuickModeArgumentsRequireExplicitPanel(t *testing.T) {
 	for _, tc := range []struct {
-		args            []string
-		read, panel, ok bool
+		args      []string
+		mode      compositionMode
+		panel, ok bool
 	}{
-		{[]string{"connect", "quick"}, false, false, true},
-		{[]string{"connect", "quick", "read"}, true, false, true},
-		{[]string{"connect", "quick", "panel"}, false, true, true},
-		{[]string{"connect", "quick", "read", "panel"}, true, true, true},
-		{[]string{"connect", "quick", "write"}, false, false, false},
-		{[]string{"connect", "quick", "read", "write"}, false, false, false},
-		{[]string{"connect", "quick", "panel", "read"}, false, false, false},
-		{[]string{"connect", "quick", "read", "read"}, false, false, false},
-		{[]string{"connect", "quick", "other"}, false, false, false},
-		{[]string{"doctor", "transport"}, false, false, false},
+		{[]string{"connect", "quick"}, compositionDiagnostic, false, true},
+		{[]string{"connect", "quick", "read"}, compositionRead, false, true},
+		{[]string{"connect", "quick", "panel"}, compositionDiagnostic, true, true},
+		{[]string{"connect", "quick", "read", "panel"}, compositionRead, true, true},
+		{[]string{"connect", "quick", "write"}, compositionInvalid, false, false},
+		{[]string{"connect", "quick", "read", "write"}, compositionInvalid, false, false},
+		{[]string{"connect", "quick", "panel", "read"}, compositionInvalid, false, false},
+		{[]string{"connect", "quick", "read", "read"}, compositionInvalid, false, false},
+		{[]string{"connect", "quick", "other"}, compositionInvalid, false, false},
+		{[]string{"doctor", "transport"}, compositionInvalid, false, false},
 	} {
-		read, panel, ok := quickModeArgs(tc.args)
-		if read != tc.read || panel != tc.panel || ok != tc.ok {
-			t.Fatalf("arguments %q => read=%t panel=%t ok=%t", tc.args, read, panel, ok)
+		mode, panel, ok := quickModeArgs(tc.args)
+		if mode != tc.mode || panel != tc.panel || ok != tc.ok {
+			t.Fatalf("arguments %q => mode=%d panel=%t ok=%t", tc.args, mode, panel, ok)
 		}
 	}
 }
@@ -52,7 +53,7 @@ func TestQuickPanelRequiresSeparateConfirmationAndFailsBeforeTunnelOnBind(t *tes
 		called = true
 		return nil, errors.New("tunnel must not start")
 	}
-	if err := runQuickWithOptions(context.Background(), strings.NewReader("PUBLICAR\n"), &output, starter, nil, false, true); err != nil || called || !strings.Contains(output.String(), "Conexão cancelada") {
+	if err := runQuickWithOptions(context.Background(), strings.NewReader("PUBLICAR\n"), &output, starter, nil, compositionDiagnostic, true); err != nil || called || !strings.Contains(output.String(), "Conexão cancelada") {
 		t.Fatalf("legacy confirmation enabled panel: err=%v called=%t", err, called)
 	}
 	occupied, err := net.Listen("tcp4", admin.AdminAddress)
@@ -61,7 +62,7 @@ func TestQuickPanelRequiresSeparateConfirmationAndFailsBeforeTunnelOnBind(t *tes
 	}
 	defer occupied.Close()
 	output.Reset()
-	if err := runQuickWithOptions(context.Background(), strings.NewReader("PUBLICAR PAINEL\n"), &output, starter, nil, false, true); err == nil || called || strings.Contains(output.String(), "Código de pareamento") || strings.Contains(output.String(), "Cole no ChatGPT Web") {
+	if err := runQuickWithOptions(context.Background(), strings.NewReader("PUBLICAR PAINEL\n"), &output, starter, nil, compositionDiagnostic, true); err == nil || called || strings.Contains(output.String(), "Código de pareamento") || strings.Contains(output.String(), "Cole no ChatGPT Web") {
 		t.Fatalf("admin bind failure allowed tunnel or leaked pairing: err=%v called=%t", err, called)
 	}
 	public, err := net.Listen("tcp4", admin.PublicAddress)
@@ -127,7 +128,7 @@ func TestQuickPanelServesLocalAPIWithoutPublishingIt(t *testing.T) {
 			}
 			close(verified)
 			return mcp.TransportReport{ResourceURL: resource}, nil
-		}, false, true)
+		}, compositionDiagnostic, true)
 	}()
 	select {
 	case <-verified:

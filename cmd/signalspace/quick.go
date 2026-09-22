@@ -22,43 +22,47 @@ type quickVerifier func(context.Context, string) (mcp.TransportReport, error)
 
 // runQuick só apresenta o endereço quando a URL pública passa no diagnóstico.
 func runQuick(ctx context.Context, input io.Reader, output io.Writer) error {
-	return runQuickMode(ctx, input, output, false)
+	return runQuickMode(ctx, input, output, compositionDiagnostic)
 }
 
-func runQuickMode(ctx context.Context, input io.Reader, output io.Writer, read bool) error {
-	return runQuickModePanel(ctx, input, output, read, false)
+func runQuickMode(ctx context.Context, input io.Reader, output io.Writer, mode compositionMode) error {
+	return runQuickModePanel(ctx, input, output, mode, false)
 }
 
-func runQuickModePanel(ctx context.Context, input io.Reader, output io.Writer, read, panel bool) error {
+func runQuickModePanel(ctx context.Context, input io.Reader, output io.Writer, mode compositionMode, panel bool) error {
 	return runQuickWithOptions(ctx, input, output, tunnel.Start, func(ctx context.Context, resource string) (mcp.TransportReport, error) {
 		return mcp.CheckEmbeddedTransport(ctx, resource, nil)
-	}, read, panel)
+	}, mode, panel)
 }
 
 func runQuickWith(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier) error {
-	return runQuickWithMode(ctx, input, output, start, verify, false)
+	return runQuickWithMode(ctx, input, output, start, verify, compositionDiagnostic)
 }
 
-func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read bool) error {
-	return runQuickWithOptions(ctx, input, output, start, verify, read, false)
+func runQuickWithMode(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, mode compositionMode) error {
+	return runQuickWithOptions(ctx, input, output, start, verify, mode, false)
 }
 
 // runQuickWithOptions só liga a API administrativa em modo panel explícito.
 // A origem cloudflared permanece fixa em 127.0.0.1:7676, nunca na porta 7677.
-func runQuickWithOptions(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read, panel bool) error {
-	return runQuickWithAdminFactory(ctx, input, output, start, verify, read, panel, admin.NewServer)
+func runQuickWithOptions(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, mode compositionMode, panel bool) error {
+	return runQuickWithAdminFactory(ctx, input, output, start, verify, mode, panel, admin.NewServer)
 }
 
 // runQuickWithAdminFactory permite testar a saída do servidor administrativo.
 // A execução normal sempre fornece admin.NewServer; a fábrica não é configurável pela CLI.
-func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, read, panel bool, adminServerFactory func(http.Handler) *http.Server) error {
+func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Writer, start quickStarter, verify quickVerifier, mode compositionMode, panel bool, adminServerFactory func(http.Handler) *http.Server) error {
+	plan, err := planComposition(mode)
+	if err != nil {
+		return err
+	}
 	for _, name := range []string{"SIGNALSPACE_AUTH_MODE", "SIGNALSPACE_RESOURCE_URL", "SIGNALSPACE_OAUTH_ISSUER", "SIGNALSPACE_JWKS_URL", "SIGNALSPACE_OAUTH_OWNER_SUBJECT", "SIGNALSPACE_LOCAL_TOKEN", "SIGNALSPACE_STATE_DIR"} {
 		if os.Getenv(name) != "" {
 			return fmt.Errorf("connect quick requires %s to be unset (isolated OAuth state)", name)
 		}
 	}
 	confirmation := "PUBLICAR"
-	if read {
+	if plan.workspaceReadScope != "" {
 		confirmation = "PUBLICAR LEITURA"
 		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública. read_file poderá ler texto de uma pasta aprovada para um cliente OAuth; nunca use pastas com segredos nesta fase. Sem edição, Git ou shell.")
 	} else {
@@ -108,16 +112,18 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	}
 	defer os.RemoveAll(stateDir)
 	resource := quick.URL + "/mcp"
-	handler, authorization, console, err := embeddedHandlerWithWorkspace(resource, stateDir, read)
+	handler, authorization, console, err := embeddedHandlerForPlan(resource, stateDir, plan)
 	if err != nil {
 		return err
 	}
 	defer authorization.Close()
-	if !read {
+	if plan.consoleMode == workspaceConsoleApprovalsOnly {
 		console, err = newWorkspaceConsole(authorization)
 		if err != nil {
 			return err
 		}
+	} else if plan.consoleMode != workspaceConsoleRead || console == nil {
+		return errors.New("composition plan has no supported workspace console")
 	}
 	defer console.Close()
 
@@ -190,7 +196,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	} else {
 		fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
 	}
-	if read {
+	if plan.workspaceReadScope != "" {
 		fmt.Fprintln(output, "Leitura experimental: conclua OAuth de diagnóstico; workspace clients; workspace request <client-id> <absolute-path>; workspace approve <id>. Uma nova autorização OAuth com escopo de leitura é obrigatória; informe o session ID da concessão ao chat somente se quiser usar a ferramenta.")
 	} else {
 		fmt.Fprintln(output, "Workspace local: workspace clients; workspace request <client-id> <absolute-path> (aprovação posterior; nenhuma leitura MCP habilitada).")

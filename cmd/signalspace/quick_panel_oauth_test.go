@@ -59,7 +59,7 @@ func TestQuickPanelOAuthDecisionAcrossActualListeners(t *testing.T) {
 			}
 			close(verified)
 			return mcp.TransportReport{ResourceURL: got}, nil
-		}, false, true)
+		}, compositionDiagnostic, true)
 	}()
 	select {
 	case <-verified:

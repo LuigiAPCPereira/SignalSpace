@@ -22,7 +22,7 @@ func TestQuickInstanceRestartDropsAdministrativeAndWorkspaceAuthorizations(t *te
 	const clientID = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
 	const passphrase = "a-long-local-passphrase"
 
-	_, firstAuthorization, firstConsole, err := embeddedHandlerWithWorkspace(resource, stateDir, true)
+	_, firstAuthorization, firstConsole, err := embeddedHandlerWithWorkspace(resource, stateDir, compositionRead)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestQuickInstanceRestartDropsAdministrativeAndWorkspaceAuthorizations(t *te
 		t.Fatalf("workspace authorization survived instance shutdown: %v", err)
 	}
 
-	_, secondAuthorization, secondConsole, err := embeddedHandlerWithWorkspace(resource, stateDir, true)
+	_, secondAuthorization, secondConsole, err := embeddedHandlerWithWorkspace(resource, stateDir, compositionRead)
 	if err != nil {
 		t.Fatal(err)
 	}

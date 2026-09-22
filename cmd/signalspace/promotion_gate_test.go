@@ -12,13 +12,18 @@ import (
 )
 
 func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
-	for _, enableRead := range []bool{false, true} {
-		name := "diagnostic"
-		if enableRead {
-			name = "read"
-		}
+	for _, tc := range []struct {
+		name       string
+		mode       compositionMode
+		wantScopes []string
+		wantTools  []string
+	}{
+		{"diagnostic", compositionDiagnostic, []string{"signalspace:diagnostic"}, []string{"connection_diagnostic"}},
+		{"read", compositionRead, []string{"signalspace:diagnostic", "signalspace:workspace.read"}, []string{"connection_diagnostic", "read_file", "list_directory"}},
+	} {
+		name := tc.name
 		t.Run(name, func(t *testing.T) {
-			handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), enableRead)
+			handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), tc.mode)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -39,17 +44,16 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 			if err := json.Unmarshal(metadataResponse.Body.Bytes(), &metadata); err != nil {
 				t.Fatal(err)
 			}
-			for _, scope := range metadata.Scopes {
+			if len(metadata.Scopes) != len(tc.wantScopes) {
+				t.Fatalf("public %s composition announced unexpected scopes: %v", name, metadata.Scopes)
+			}
+			for index, scope := range metadata.Scopes {
+				if scope != tc.wantScopes[index] {
+					t.Fatalf("public %s composition announced unexpected scopes: %v", name, metadata.Scopes)
+				}
 				if scope == "signalspace:workspace.write" {
 					t.Fatalf("public %s composition announced workspace.write: %v", name, metadata.Scopes)
 				}
-			}
-			wantScopes := 1
-			if enableRead {
-				wantScopes = 2
-			}
-			if len(metadata.Scopes) != wantScopes {
-				t.Fatalf("public %s composition announced unexpected scopes: %v", name, metadata.Scopes)
 			}
 
 			registration := `{"client_name":"Promotion gate test","redirect_uris":["` + readTestCallback + `"],"grant_types":["authorization_code"],"response_types":["code"],"token_endpoint_auth_method":"none"}`
@@ -95,9 +99,12 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 			if err := json.Unmarshal(listing.Body.Bytes(), &listed); err != nil {
 				t.Fatal(err)
 			}
-			for _, tool := range listed.Result.Tools {
-				if tool.Name == "replace_text" {
-					t.Fatalf("public %s composition advertised replace_text: %s", name, listing.Body.String())
+			if len(listed.Result.Tools) != len(tc.wantTools) {
+				t.Fatalf("public %s composition advertised unexpected tools: %s", name, listing.Body.String())
+			}
+			for index, tool := range listed.Result.Tools {
+				if tool.Name != tc.wantTools[index] {
+					t.Fatalf("public %s composition advertised unexpected tools: %s", name, listing.Body.String())
 				}
 			}
 

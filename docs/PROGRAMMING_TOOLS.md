@@ -2,6 +2,14 @@
 
 **Estado:** fatia vertical implementada e validada somente localmente na branch `codex/mvp-vertical-programming`; escrita, revisão Git e execução de teste existem apenas em composição automatizada isolada. Isso não é autorização de publicar novas ferramentas MCP, abrir túnel ou conceder OAuth ao ChatGPT Web.
 
+## Composição operacional fail-closed — SS-MVP-002
+
+`cmd/signalspace/composition.go` define uma enumeração interna fechada: `diagnostic` ou `read`. A política mapeia diagnóstico ao escopo `signalspace:diagnostic` e à ferramenta `connection_diagnostic`; leitura mantém esse escopo e acrescenta somente `signalspace:workspace.read`, `read_file` e `list_directory`. Não há modo nem campo de composição para escrita, execução de testes ou Git.
+
+O parser `connect quick` produz somente esses modos; seleções como `write` são inválidas. `planComposition` rejeita valores não suportados antes de inspeção de ambiente, confirmação, reserva de portas, inicialização do túnel ou criação de estado OAuth. `embeddedHandlerForPlan` reconfirma que o plano corresponde exatamente à política antes de criar emissor, concessões ou handler MCP. `panel` permanece apresentação/servidor administrativo exclusivamente local e não muda a composição MCP.
+
+Os testes de `cmd/signalspace` exigem a lista exata de escopos e ferramentas em cada modo e verificam que enum inválido ou plano adulterado não cria estado OAuth; a rejeição Quick não lê confirmação nem chama túnel, verificador ou fábrica do painel. Isso valida o limite de composição no código local, não transporte HTTPS nem aceitação operacional. O gate `SS-MVP-002-PROMOTION-GATE-001` continua **PENDENTE**; capacidades de programação seguem disponíveis apenas no harness de testes.
+
 ## Fronteira de autorização
 
 - A edição exige a concessão existente de `owner`, `clientID` e `sessionID` em `workspace.Grants`; `Grants.Revoke` nega chamadas posteriores.

@@ -82,7 +82,7 @@ func TestQuickPanelAdministrativeServerFailureClosesWholeSession(t *testing.T) {
 				return mcp.TransportReport{ResourceURL: resource}, nil
 			}
 			go func() {
-				finished <- runQuickWithAdminFactory(ctx, strings.NewReader("PUBLICAR PAINEL\n"), &output, tunnel.Start, verify, false, true, factory)
+				finished <- runQuickWithAdminFactory(ctx, strings.NewReader("PUBLICAR PAINEL\n"), &output, tunnel.Start, verify, compositionDiagnostic, true, factory)
 			}()
 			if !beforePublication {
 				var server *http.Server
