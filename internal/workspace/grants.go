@@ -15,6 +15,15 @@ const (
 	ScopeTest  = "signalspace:test.run"
 )
 
+// GrantSnapshot contém somente os metadados locais necessários para informar
+// o estado de uma concessão. Ele não expõe Session, descritor ou raiz.
+type GrantSnapshot struct {
+	Active    bool
+	SessionID string
+	ClientID  string
+	Scopes    []string
+}
+
 // ProcessDirectory é a menor porta necessária para operações locais que
 // precisam executar uma observação vinculada ao diretório aprovado. Ela não
 // expõe a raiz, o descritor ou o ID da sessão.
@@ -153,6 +162,34 @@ func (g *Grants) AllowsClientScope(clientID, scope string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && g.hasScopeLocked(scope)
+}
+
+// Snapshot retorna uma cópia independente dos metadados da concessão atual.
+// Ausência é um estado válido; instância encerrada permanece distinguível por
+// ErrClosed. A ordem dos escopos é canônica e nenhuma operação é autorizada ou
+// renovada por esta consulta.
+func (g *Grants) Snapshot() (GrantSnapshot, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return GrantSnapshot{}, ErrClosed
+	}
+	if g.current == nil {
+		return GrantSnapshot{}, nil
+	}
+
+	scopes := make([]string, 0, len(g.scopes))
+	for _, scope := range []string{ScopeRead, ScopeWrite, ScopeGit, ScopeTest} {
+		if g.hasScopeLocked(scope) {
+			scopes = append(scopes, scope)
+		}
+	}
+	return GrantSnapshot{
+		Active:    true,
+		SessionID: g.current.ID(),
+		ClientID:  g.clientID,
+		Scopes:    scopes,
+	}, nil
 }
 
 func (g *Grants) hasScopeLocked(scope string) bool {

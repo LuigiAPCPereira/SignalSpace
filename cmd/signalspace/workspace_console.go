@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -113,6 +114,54 @@ func capabilityDescriptions(scopes []string) string {
 	return strings.Join(descriptions, "; ")
 }
 
+func (c *workspaceConsole) printWorkspaceStatus(output io.Writer) {
+	snapshot, err := c.grants.Snapshot()
+	if errors.Is(err, workspace.ErrClosed) {
+		fmt.Fprintln(output, "Concessão local: indisponível (instância encerrada).")
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(output, "Concessão local: estado indisponível (%v).\n", err)
+		return
+	}
+	if !snapshot.Active {
+		fmt.Fprintln(output, "Concessão local: ausente.")
+		fmt.Fprintln(output, "Pedidos aguardando confirmação não são concessões e não concedem acesso.")
+		c.printWorkspaceStatusLimits(output, nil)
+		return
+	}
+
+	fmt.Fprintln(output, "Concessão local: ativa.")
+	fmt.Fprintf(output, "Session ID: %s\nCliente OAuth: id=%s\n", snapshot.SessionID, snapshot.ClientID)
+	if client, ok := c.issuedClient(snapshot.ClientID); ok {
+		fmt.Fprintf(output, "Nome declarado: %q (identidade do aplicativo não atestada).\n", client.Name)
+	} else {
+		fmt.Fprintln(output, "Nome declarado: indisponível na lista atual; isso não permite inferir revogação.")
+	}
+	fmt.Fprintf(output, "Escopos exatos: %s\n", strings.Join(snapshot.Scopes, " "))
+	fmt.Fprintf(output, "Revogar: workspace revoke current (ou workspace revoke %s).\n", snapshot.SessionID)
+	c.printWorkspaceStatusLimits(output, snapshot.Scopes)
+}
+
+func (c *workspaceConsole) printWorkspaceStatusLimits(output io.Writer, scopes []string) {
+	fmt.Fprintln(output, "Este estado descreve apenas Grants local; não comprova token OAuth válido nem conexão ou chamada MCP.")
+	if !c.readEnabled && c.programmingApproval == nil {
+		fmt.Fprintln(output, "Modo diagnóstico: uma concessão interna não publica read_file; o MCP permanece limitado a connection_diagnostic.")
+	}
+	if c.programmingApproval != nil && (containsScope(scopes, workspace.ScopeWrite) || containsScope(scopes, workspace.ScopeGit) || containsScope(scopes, workspace.ScopeTest)) {
+		fmt.Fprintln(output, "Escopos de programação são experimentais e não estão ativados remotamente.")
+	}
+}
+
+func containsScope(scopes []string, wanted string) bool {
+	for _, scope := range scopes {
+		if scope == wanted {
+			return true
+		}
+	}
+	return false
+}
+
 // handleWorkspaceCommand processa somente comandos de workspace no stdin local.
 // Retorna false para que a autorização OAuth trate a própria entrada.
 func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer) bool {
@@ -138,11 +187,19 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 		}
 		return true
 	}
+	if operation == "status" {
+		if hasArgument || argument != "" {
+			fmt.Fprintln(output, "use workspace status")
+			return true
+		}
+		c.printWorkspaceStatus(output)
+		return true
+	}
 	if !hasArgument || argument == "" {
 		if c.programmingApproval != nil {
-			fmt.Fprintln(output, "use workspace clients | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace revoke <session-id>")
+			fmt.Fprintln(output, "use workspace clients | workspace status | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace revoke current|<session-id>")
 		} else {
-			fmt.Fprintln(output, "use workspace clients | workspace request <client-id> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace revoke <session-id>")
+			fmt.Fprintln(output, "use workspace clients | workspace status | workspace request <client-id> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace revoke current|<session-id>")
 		}
 		return true
 	}
@@ -243,7 +300,32 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintln(output, "A concessão é interna e local; o MCP continua oferecendo somente connection_diagnostic.")
 		}
 	case "revoke":
-		if err := c.grants.Revoke(argument); err != nil {
+		if strings.ContainsAny(argument, " \t\r\n") {
+			fmt.Fprintln(output, "use workspace revoke current | workspace revoke <session-id>")
+			return true
+		}
+		revokeCurrent := argument == "current"
+		if revokeCurrent {
+			snapshot, err := c.grants.Snapshot()
+			if errors.Is(err, workspace.ErrClosed) {
+				fmt.Fprintln(output, "workspace grant is unavailable because the instance is closed")
+				return true
+			}
+			if err != nil {
+				fmt.Fprintf(output, "workspace grant state unavailable: %v\n", err)
+				return true
+			}
+			if !snapshot.Active {
+				fmt.Fprintln(output, "no active workspace grant to revoke")
+				return true
+			}
+			argument = snapshot.SessionID
+		}
+		if err := c.grants.Revoke(argument); errors.Is(err, workspace.ErrNotAuthorized) && revokeCurrent {
+			fmt.Fprintln(output, "workspace grant changed or is no longer active; run workspace status and retry")
+		} else if errors.Is(err, workspace.ErrClosed) {
+			fmt.Fprintln(output, "workspace grant is unavailable because the instance is closed")
+		} else if err != nil {
 			fmt.Fprintln(output, "workspace session not active or already revoked")
 		} else {
 			fmt.Fprintln(output, "workspace grant revoked")

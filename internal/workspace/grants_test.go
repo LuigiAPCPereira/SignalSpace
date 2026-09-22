@@ -2,8 +2,10 @@ package workspace
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -152,5 +154,99 @@ func TestGrantsReplacementAndShutdownRevoke(t *testing.T) {
 	}
 	if err := g.Revoke(newID); !errors.Is(err, ErrClosed) {
 		t.Fatalf("revoke after close: %v", err)
+	}
+}
+
+func TestGrantsSnapshotIsAbsentSafeOrderedAndIndependent(t *testing.T) {
+	g, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+
+	absent, err := g.Snapshot()
+	if err != nil || absent.Active || absent.SessionID != "" || absent.ClientID != "" || len(absent.Scopes) != 0 {
+		t.Fatalf("snapshot without grant: %+v, %v", absent, err)
+	}
+
+	root := t.TempDir()
+	const privateContents = "private workspace contents"
+	if err := os.WriteFile(filepath.Join(root, "file"), []byte(privateContents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	id, err := g.GrantWithScopes(root, testClientA, ScopeTest, ScopeRead, ScopeGit, ScopeWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := g.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantScopes := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeTest}
+	if !snapshot.Active || snapshot.SessionID != id || snapshot.ClientID != testClientA || !reflect.DeepEqual(snapshot.Scopes, wantScopes) {
+		t.Fatalf("active snapshot = %+v, want scopes %v", snapshot, wantScopes)
+	}
+	snapshot.Scopes[0] = "mutated by caller"
+	copyAgain, err := g.Snapshot()
+	if err != nil || !reflect.DeepEqual(copyAgain.Scopes, wantScopes) {
+		t.Fatalf("caller changed stored scopes: %+v, %v", copyAgain, err)
+	}
+
+	// A forma serializada do snapshot não inclui raiz ou conteúdo de arquivos.
+	serialized := fmt.Sprintf("%+v", copyAgain)
+	if strings.Contains(serialized, root) || strings.Contains(serialized, privateContents) {
+		t.Fatalf("snapshot exposed private workspace data: %s", serialized)
+	}
+	snapshotType := reflect.TypeOf(copyAgain)
+	for _, forbidden := range []string{"Root", "FD", "Session"} {
+		if _, ok := snapshotType.FieldByName(forbidden); ok {
+			t.Fatalf("snapshot exposes forbidden field %q", forbidden)
+		}
+	}
+
+	if err := g.Revoke(id); err != nil {
+		t.Fatal(err)
+	}
+	revoked, err := g.Snapshot()
+	if err != nil || revoked.Active || revoked.SessionID != "" || revoked.ClientID != "" || len(revoked.Scopes) != 0 {
+		t.Fatalf("snapshot after revoke: %+v, %v", revoked, err)
+	}
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot, err := g.Snapshot(); !errors.Is(err, ErrClosed) || snapshot.Active {
+		t.Fatalf("snapshot after close = %+v, %v", snapshot, err)
+	}
+}
+
+func TestGrantsRevokeStaleSnapshotCannotRevokeReplacement(t *testing.T) {
+	g, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+
+	oldID, err := g.GrantWithScopes(t.TempDir(), testClientA, ScopeRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale, err := g.Snapshot()
+	if err != nil || !stale.Active || stale.SessionID != oldID {
+		t.Fatalf("initial snapshot: %+v, %v", stale, err)
+	}
+	newID, err := g.GrantWithScopes(t.TempDir(), testClientB, ScopeWrite, ScopeTest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Simula a substituição entre Snapshot e Revoke(current): o ID antigo é
+	// revalidado atomicamente e não pode revogar a concessão recém-criada.
+	if err := g.Revoke(stale.SessionID); !errors.Is(err, ErrNotAuthorized) {
+		t.Fatalf("stale revoke error = %v, want ErrNotAuthorized", err)
+	}
+	current, err := g.Snapshot()
+	wantScopes := []string{ScopeWrite, ScopeTest}
+	if err != nil || !current.Active || current.SessionID != newID || current.ClientID != testClientB || !reflect.DeepEqual(current.Scopes, wantScopes) {
+		t.Fatalf("replacement grant was affected by stale revoke: %+v, %v", current, err)
 	}
 }

@@ -233,8 +233,133 @@ func TestWorkspaceConsoleProgrammingApprovalIsExplicitAndIndependent(t *testing.
 	if !grants.AllowsClientScope(testConsoleClient, workspace.ScopeWrite) || !grants.AllowsClientScope(testConsoleClient, workspace.ScopeTest) || !grants.AllowsClientScope(testConsoleClient, workspace.ScopeGit) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeRead) {
 		t.Fatal("programming grant changed unselected capabilities")
 	}
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status", &out)
+	for _, expected := range []string{workspace.ScopeWrite, workspace.ScopeTest, workspace.ScopeGit, "não estão ativados remotamente"} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("experimental status omitted %q: %s", expected, out.String())
+		}
+	}
 	console.handleWorkspaceCommand("workspace revoke "+match[1], &out)
 	if grants.AllowsClientScope(testConsoleClient, workspace.ScopeWrite) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeTest) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeGit) {
 		t.Fatal("revocation retained programming capabilities")
+	}
+}
+
+func TestWorkspaceConsoleStatusIsLocalAndDoesNotExposeWorkspaceData(t *testing.T) {
+	console := testWorkspaceConsole(t)
+	root := t.TempDir()
+	const privateContents = "private marker not for status"
+	if err := os.WriteFile(filepath.Join(root, "file"), []byte(privateContents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	id, err := console.grants.GrantWithScopes(root, testConsoleClient, workspace.ScopeRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if !console.handleWorkspaceCommand("workspace status", &out) {
+		t.Fatal("status command was not handled")
+	}
+	for _, expected := range []string{id, testConsoleClient, "Cliente de teste", workspace.ScopeRead, "não comprova token OAuth", "não publica read_file", "connection_diagnostic"} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("status omitted %q: %s", expected, out.String())
+		}
+	}
+	if strings.Contains(out.String(), root) || strings.Contains(out.String(), privateContents) {
+		t.Fatalf("status exposed workspace data: %s", out.String())
+	}
+
+	// A ausência do cliente na lista atual só remove o nome; ela não transforma
+	// nem descreve a concessão como revogada.
+	console.issuedClients = func() []auth.ClientInfo { return nil }
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status", &out)
+	if !strings.Contains(out.String(), "Nome declarado: indisponível") || !strings.Contains(out.String(), "não permite inferir revogação") {
+		t.Fatalf("missing client name was misrepresented: %s", out.String())
+	}
+	current, err := console.grants.Snapshot()
+	if err != nil || !current.Active || current.SessionID != id {
+		t.Fatalf("status changed the active grant: %+v, %v", current, err)
+	}
+}
+
+func TestWorkspaceConsoleStatusAndRevokeCurrentStates(t *testing.T) {
+	console := testWorkspaceConsole(t)
+	var out bytes.Buffer
+	console.handleWorkspaceCommand("workspace status", &out)
+	if !strings.Contains(out.String(), "Concessão local: ausente") {
+		t.Fatalf("empty status: %s", out.String())
+	}
+
+	root := t.TempDir()
+	console.handleWorkspaceCommand("workspace request "+testConsoleClient+" "+root, &out)
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status", &out)
+	if !strings.Contains(out.String(), "Concessão local: ausente") || !strings.Contains(out.String(), "não são concessões") {
+		t.Fatalf("pending approval appeared as a grant: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace cancel "+console.pending.id, &out)
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status", &out)
+	if !strings.Contains(out.String(), "Concessão local: ausente") {
+		t.Fatalf("canceled approval changed grant status: %s", out.String())
+	}
+
+	console.handleWorkspaceCommand("workspace request "+testConsoleClient+" "+root, &out)
+	console.pending.expires = time.Now().Add(-time.Second)
+	console.handleWorkspaceCommand("workspace approve "+console.pending.id, &out)
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status", &out)
+	if !strings.Contains(out.String(), "Concessão local: ausente") {
+		t.Fatalf("expired approval changed grant status: %s", out.String())
+	}
+
+	firstID, err := console.grants.Grant(root, testConsoleClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status extra", &out)
+	console.handleWorkspaceCommand("workspace revoke current extra", &out)
+	if !strings.Contains(out.String(), "use workspace status") || !strings.Contains(out.String(), "use workspace revoke") {
+		t.Fatalf("extra arguments were not rejected: %s", out.String())
+	}
+	current, err := console.grants.Snapshot()
+	if err != nil || !current.Active || current.SessionID != firstID {
+		t.Fatalf("invalid commands changed grant: %+v, %v", current, err)
+	}
+
+	out.Reset()
+	console.handleWorkspaceCommand("workspace revoke current", &out)
+	if !strings.Contains(out.String(), "workspace grant revoked") {
+		t.Fatalf("current grant revoke failed: %s", out.String())
+	}
+	current, err = console.grants.Snapshot()
+	if err != nil || current.Active {
+		t.Fatalf("grant remains after revoke current: %+v, %v", current, err)
+	}
+	console.handleWorkspaceCommand("workspace revoke current", &out)
+	if !strings.Contains(out.String(), "no active workspace grant") {
+		t.Fatalf("missing current grant reported incorrectly: %s", out.String())
+	}
+
+	legacyID, err := console.grants.Grant(root, testConsoleClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	console.handleWorkspaceCommand("workspace revoke "+legacyID, &out)
+	if !strings.Contains(out.String(), "workspace grant revoked") {
+		t.Fatalf("legacy session-ID revoke failed: %s", out.String())
+	}
+
+	if err := console.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	console.handleWorkspaceCommand("workspace status", &out)
+	if !strings.Contains(out.String(), "indisponível (instância encerrada)") || strings.Contains(out.String(), "Concessão local: ausente") {
+		t.Fatalf("closed grants were confused with absence: %s", out.String())
 	}
 }
