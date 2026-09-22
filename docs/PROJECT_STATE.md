@@ -279,3 +279,15 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Correção de relatório anterior:** o grupo 4 registrou textualmente um hash incorreto para o segundo patch; a divergência é apenas documental. O arquivo preservado continua com o hash `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`; nenhum patch foi editado.
 
 **Publicação e próxima ação:** o commit `a523f7912fe279f6afb3ab949a5380a7b214332e` foi enviado normalmente para `origin/codex/mvp-vertical-programming`; `git ls-remote` e o remote-tracking local confirmaram o mesmo SHA, sem divergência de diff. Enviar o relatório ao ChatGPT Web e aguardar a próxima missão concreta sem promover capacidades públicas.
+
+## Checkpoint SS-BE-007 grupo 9 — tombstone OAuth real via HTTP — 22/09/2026
+
+**Estado:** a fatia de tombstone público real do grupo 9 está **CONFIRMADA no escopo local**; o grupo 9 completo e SS-BE-007 global permanecem **PARCIAIS/em andamento**. SS-MVP-002 continua **PARCIAL/em andamento** e `SS-MVP-002-PROMOTION-GATE-001` continua **PENDENTE**.
+
+**Ref e preservação:** a branch `codex/mvp-vertical-programming` foi revalidada em `857d465daccb36e0c1fd8f2078478b9bf1cac21c`; fetch/prune e pull fast-forward não trouxeram alterações. Os patches seguem fora do Git: `signalspace-oauth-read-scope.patch` = `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b`; `signalspace-workspace-client-binding.patch` = `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+
+**Implementação e evidência:** `internal/auth/public_status_expiry_http_test.go` usa `auth.New` real, registro `/register`, pedido `/authorize`, cookie OAuth e `request_id` reais, além de `PublicStatusHandler` e `Server.Handler` em listener TCP efêmero. O teste fixa somente os prazos da fixture sob `Server.mu`, sem clock de produção. O status HTTP observado percorre PENDING → EXPIRED retido → EXPIRED estável → 404 `not_found`. `expires_at` e `retainUntil` não mudam por polling; conclusão tardia não redireciona; a decisão real retorna expiração enquanto retida e not found após limpeza; `codes` e clientes emitidos permanecem sem efeito.
+
+**Separação de evidência:** o 410/404 da API administrativa continua sendo a cobertura existente com fonte controlada, conforme exigido pelo prompt. Este checkpoint confirma o tombstone do emissor verdadeiro via HTTP público, não uma integração administrativa 410/404 com a mesma instância.
+
+**Validação e limites:** o teste novo, regressões de lifecycle/public status/admin, suíte Go completa serial, race de auth/admin/cmd, vet, build, gofmt e diff-check passaram. Não houve mudança de produção, JavaScript, CI, túnel, navegador/ChatGPT Web, HTTPS operacional, workspace real, merge ou deploy. Próxima ação: publicar o relatório e aguardar outro ID aberto da TASKLIST; não fechar o grupo 9 inteiro nem promover capacidades públicas.
