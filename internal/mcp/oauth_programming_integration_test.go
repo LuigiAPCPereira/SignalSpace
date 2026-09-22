@@ -41,7 +41,11 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 		ResourceURL: testResource,
 		Issuer:      oauthWriteIssuer,
 		Scope:       diagnosticScope,
-		WriteScope:  workspaceWriteScope,
+		ReadScope:   workspaceReadScope,
+		CanIssueRead: func(clientID string) bool {
+			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeRead)
+		},
+		WriteScope: workspaceWriteScope,
 		CanIssueWrite: func(clientID string) bool {
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeWrite)
 		},
@@ -109,7 +113,7 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 	// OAuth. Obter o token diagnóstico não concede workspace nem capacidade de
 	// programação; apenas torna o cliente elegível para a decisão local.
 	diagnosticComposition := &oauthProgrammingComposition{authorization: authorization, verifier: verifier, server: registrationServer, requests: requests, clientID: clientID}
-	_, _, _ = issueOAuthProgrammingToken(t, diagnosticComposition, diagnosticScope)
+	diagnosticToken, _, _ := issueOAuthProgrammingToken(t, diagnosticComposition, diagnosticScope)
 	issuedClients := authorization.IssuedClients()
 	if len(issuedClients) != 1 || issuedClients[0].ID != clientID {
 		registrationServer.Close()
@@ -117,7 +121,6 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 		_ = authorization.Close()
 		t.Fatal("diagnostic OAuth did not make the client eligible")
 	}
-	registrationServer.Close()
 	approval, err := workspace.NewCapabilityApproval(grants, func(candidate string) bool {
 		for _, issued := range authorization.IssuedClients() {
 			if issued.ID == candidate {
@@ -131,19 +134,69 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 		_ = authorization.Close()
 		t.Fatal(err)
 	}
-	pending, err := approval.Request(root, clientID, workspace.ScopeWrite, workspace.ScopeTest, workspace.ScopeGit)
+	pending, err := approval.Request(root, clientID, workspace.ScopeWrite, workspace.ScopeTest, workspace.ScopeGit, workspace.ScopeRead)
 	if err != nil {
 		approval.Close()
 		_ = grants.Close()
 		_ = authorization.Close()
 		t.Fatal(err)
 	}
-	if grants.AllowsClientScope(clientID, workspace.ScopeWrite) || grants.AllowsClientScope(clientID, workspace.ScopeTest) || grants.AllowsClientScope(clientID, workspace.ScopeGit) {
+	if grants.AllowsClientScope(clientID, workspace.ScopeRead) || grants.AllowsClientScope(clientID, workspace.ScopeWrite) || grants.AllowsClientScope(clientID, workspace.ScopeTest) || grants.AllowsClientScope(clientID, workspace.ScopeGit) {
 		approval.Close()
 		_ = grants.Close()
 		_ = authorization.Close()
 		t.Fatal("programming request created a grant before local confirmation")
 	}
+	// A solicitação pendente não concede leitura nem escrita, mesmo quando as
+	// portas existem numa composição experimental.
+	pendingHandler, handlerErr := NewOAuthHandler(OAuthConfig{
+		ResourceURL:     testResource,
+		Issuer:          oauthWriteIssuer,
+		OwnerSubject:    authorization.OwnerSubject(),
+		WorkspaceReader: grants,
+		workspaceWriter: grants,
+	}, verifier)
+	if handlerErr != nil {
+		approval.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatal(handlerErr)
+	}
+	pendingServer := httptest.NewServer(pendingHandler)
+	for name, call := range map[string]string{
+		"read":  readCall(strings.Repeat("p", 32), "editable.txt"),
+		"write": oauthWriteCall(strings.Repeat("p", 32), "editable.txt", "before\n", "pending\n"),
+	} {
+		response := oauthWriteHTTP(t, pendingServer, http.MethodPost, "/mcp", "application/json", call, diagnosticToken, "")
+		_, isError := readResult(t, oauthWriteJSON(t, response))
+		if response.status != http.StatusOK || !isError {
+			pendingServer.Close()
+			approval.Close()
+			_ = grants.Close()
+			_ = authorization.Close()
+			t.Fatalf("pending approval authorized %s: %d %s", name, response.status, response.body)
+		}
+	}
+	pendingServer.Close()
+	for _, scope := range []string{workspaceReadScope, workspaceWriteScope} {
+		query := oauthProgrammingAuthorizeQuery(clientID, diagnosticScope+" "+scope)
+		response := oauthWriteHTTP(t, registrationServer, http.MethodGet, "/authorize?"+query.Encode(), "", "", "", "")
+		if response.status != http.StatusForbidden {
+			approval.Close()
+			_ = grants.Close()
+			_ = authorization.Close()
+			t.Fatalf("pending approval allowed OAuth scope %q: %d %s", scope, response.status, response.body)
+		}
+	}
+	select {
+	case request := <-requests:
+		approval.Close()
+		_ = grants.Close()
+		_ = authorization.Close()
+		t.Fatalf("pending approval created an OAuth consent request: %+v", request)
+	default:
+	}
+	registrationServer.Close()
 	confirmed, sessionID, err := approval.Confirm(pending.ID)
 	if err != nil {
 		approval.Close()
@@ -151,7 +204,7 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 		_ = authorization.Close()
 		t.Fatal(err)
 	}
-	if confirmed.ID != pending.ID || len(confirmed.Scopes) != 3 || confirmed.Scopes[0] != workspace.ScopeWrite || confirmed.Scopes[1] != workspace.ScopeGit || confirmed.Scopes[2] != workspace.ScopeTest {
+	if confirmed.ID != pending.ID || len(confirmed.Scopes) != 4 || confirmed.Scopes[0] != workspace.ScopeRead || confirmed.Scopes[1] != workspace.ScopeWrite || confirmed.Scopes[2] != workspace.ScopeGit || confirmed.Scopes[3] != workspace.ScopeTest {
 		approval.Close()
 		_ = grants.Close()
 		_ = authorization.Close()
@@ -174,6 +227,7 @@ func newOAuthProgrammingComposition(t *testing.T, stateDir, root string) *oauthP
 		ResourceURL:     testResource,
 		Issuer:          oauthWriteIssuer,
 		OwnerSubject:    authorization.OwnerSubject(),
+		WorkspaceReader: grants,
 		workspaceWriter: grants,
 		gitReviewer:     &harnessGitReviewer{grants: grants, before: baseline, outputLimit: 8192, starts: gitStarts},
 		testRunner:      runner,
@@ -288,6 +342,8 @@ func issueOAuthProgrammingToken(t *testing.T, c *oauthProgrammingComposition, re
 		requiredScope = gitReviewScope
 	} else if strings.Contains(requestedScope, testRunScope) {
 		requiredScope = testRunScope
+	} else if strings.Contains(requestedScope, workspaceReadScope) {
+		requiredScope = workspaceReadScope
 	} else if strings.Contains(requestedScope, workspaceWriteScope) {
 		requiredScope = workspaceWriteScope
 	}
@@ -316,9 +372,11 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 	root := testRunnerFixture(t, false)
 	composition := newOAuthProgrammingComposition(t, filepath.Join(t.TempDir(), "identity"), root)
 	writeScope := diagnosticScope + " " + workspaceWriteScope
+	readScope := diagnosticScope + " " + workspaceReadScope
 	gitScope := diagnosticScope + " " + gitReviewScope
 	testScope := diagnosticScope + " " + testRunScope
 	writeToken, writeTokenForm, _ := issueOAuthProgrammingToken(t, composition, writeScope)
+	readToken, _, _ := issueOAuthProgrammingToken(t, composition, readScope)
 	gitToken, _, _ := issueOAuthProgrammingToken(t, composition, gitScope)
 	testToken, _, _ := issueOAuthProgrammingToken(t, composition, testScope)
 
@@ -328,7 +386,7 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 	}
 	metadata := oauthWriteJSON(t, metadataResponse)
 	supported := metadata["scopes_supported"].([]any)
-	for _, required := range []string{diagnosticScope, workspaceWriteScope, gitReviewScope, testRunScope} {
+	for _, required := range []string{diagnosticScope, workspaceReadScope, workspaceWriteScope, gitReviewScope, testRunScope} {
 		found := false
 		for _, item := range supported {
 			if item == required {
@@ -340,24 +398,63 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 		}
 	}
 
-	for name, token := range map[string]string{"write": writeToken, "git": gitToken, "test": testToken} {
+	for name, token := range map[string]string{"read": readToken, "write": writeToken, "git": gitToken, "test": testToken} {
 		response := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, token, "")
 		if response.status != http.StatusOK {
 			t.Fatalf("tools/list failed for %s token: %d %s", name, response.status, response.body)
 		}
 		names := toolNames(t, oauthWriteJSON(t, response))
-		if name == "write" && (len(names) != 2 || names[1] != writeToolName) {
+		if name == "read" && (len(names) != 2 || names[1] != readToolName) {
+			t.Fatalf("read token exposed unexpected tools: %v", names)
+		}
+		if name == "write" && (len(names) != 3 || names[1] != readToolName || names[2] != writeToolName) {
 			t.Fatalf("write token exposed unexpected tools: %v", names)
 		}
-		if name == "git" && (len(names) != 2 || names[1] != gitReviewToolName) {
+		if name == "git" && (len(names) != 3 || names[1] != readToolName || names[2] != gitReviewToolName) {
 			t.Fatalf("Git token exposed unexpected tools: %v", names)
 		}
-		if name == "test" && (len(names) != 2 || names[1] != testRunToolName) {
+		if name == "test" && (len(names) != 3 || names[1] != readToolName || names[2] != testRunToolName) {
 			t.Fatalf("test token exposed unexpected tools: %v", names)
 		}
 	}
 
-	editResponse := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", oauthWriteCall(composition.sessionID, "editable.txt", "before\n", "after\n"), writeToken, "")
+	readResponse := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", readCall(composition.sessionID, "editable.txt"), readToken, "")
+	readText, readError := readResult(t, oauthWriteJSON(t, readResponse))
+	if readResponse.status != http.StatusOK || readError || readText != "before\n" {
+		t.Fatalf("real OAuth read did not return fixture contents: %d %q %s", readResponse.status, readText, readResponse.body)
+	}
+	for name, token := range map[string]string{"write": writeToken, "git": gitToken, "test": testToken} {
+		response := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", readCall(composition.sessionID, "editable.txt"), token, "")
+		text, isError := readResult(t, oauthWriteJSON(t, response))
+		if response.status != http.StatusOK || !isError || strings.Contains(text, readText) {
+			t.Fatalf("%s-only token read workspace contents: %d %q", name, response.status, text)
+		}
+	}
+	wrongSessionRead := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", readCall(strings.Repeat("x", len(composition.sessionID)), "editable.txt"), readToken, "")
+	wrongSessionText, wrongSessionError := readResult(t, oauthWriteJSON(t, wrongSessionRead))
+	if wrongSessionRead.status != http.StatusOK || !wrongSessionError || strings.Contains(wrongSessionText, readText) {
+		t.Fatalf("read accepted a mismatched session: %d %q", wrongSessionRead.status, wrongSessionText)
+	}
+	startsBeforeDenied := composition.runner.starts.Load()
+	gitStartsBeforeDenied := composition.gitStarts.Load()
+	for name, call := range map[string]string{
+		"write": oauthWriteCall(composition.sessionID, "editable.txt", readText, "read-only-write\n"),
+		"test":  testWorkspaceCall(composition.sessionID),
+		"git":   gitReviewCall(composition.sessionID),
+	} {
+		response := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", call, readToken, "")
+		payload := oauthWriteJSON(t, response)
+		text, isError := readResult(t, payload)
+		if response.status != http.StatusOK || !isError {
+			t.Fatalf("read-only token acquired %s capability: %d %q", name, response.status, text)
+		}
+	}
+	if composition.runner.starts.Load() != startsBeforeDenied || composition.gitStarts.Load() != gitStartsBeforeDenied || fileText(t, filepath.Join(root, "editable.txt")) != readText {
+		t.Fatal("read-only token started a process or changed the workspace")
+	}
+
+	// O conteúdo lido acima é a pré-condição real da edição otimista.
+	editResponse := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", oauthWriteCall(composition.sessionID, "editable.txt", readText, "after\n"), writeToken, "")
 	edit := oauthWriteJSON(t, editResponse)
 	if editResponse.status != http.StatusOK || edit["result"].(map[string]any)["isError"] != false || fileText(t, filepath.Join(root, "editable.txt")) != "after\n" {
 		t.Fatalf("real OAuth edit failed: %d %v", editResponse.status, edit)
@@ -396,6 +493,7 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 		call  string
 	}{
 		"write": {writeToken, oauthWriteCall(composition.sessionID, "editable.txt", "after\n", "revoked\n")},
+		"read":  {readToken, readCall(composition.sessionID, "editable.txt")},
 		"test":  {testToken, testWorkspaceCall(composition.sessionID)},
 		"git":   {gitToken, gitReviewCall(composition.sessionID)},
 	} {
@@ -405,7 +503,7 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 			t.Fatalf("revoked %s call changed transport status: %d %s", name, response.status, response.body)
 		}
 		text, isError := readResult(t, payload)
-		if !isError || text == "" {
+		if !isError || text == "" || (name == "read" && strings.Contains(text, "after\n")) {
 			t.Fatalf("revoked %s call was accepted: %s", name, response.body)
 		}
 	}
@@ -435,6 +533,7 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 		t.Fatalf("public composition exposed programming tools: %v", publicNames)
 	}
 	for name, call := range map[string]string{
+		"read":  readCall(composition.sessionID, "editable.txt"),
 		"write": oauthWriteCall(composition.sessionID, "editable.txt", "after\n", "public\n"),
 		"test":  testWorkspaceCall(composition.sessionID),
 		"git":   gitReviewCall(composition.sessionID),
