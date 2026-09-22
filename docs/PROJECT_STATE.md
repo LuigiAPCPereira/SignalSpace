@@ -265,3 +265,17 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 **Validação e limites:** teste integrado focalizado e pacote `internal/admin` passaram, assim como `node --check internal/admin/ui/admin.js` e os 21 testes Node. A falha foi simulada no cliente depois da conclusão do handler; isso não é queda de rede externa nem prova de navegador, túnel, HTTPS ou recuperação operacional. Não houve defeito de produção, alteração de runtime, CI, grant ao ChatGPT Web, workspace real, merge ou deploy. Shutdown e rebind de `7677` passaram. Os dois patches não rastreados permanecem preservados.
 
 **Próxima ação:** aguardar do orquestrador uma nova missão concreta vinculada a outro grupo aberto da `SS-BE-007`, sem reabrir SS-BE-006 ou o grupo 4 e sem promover capacidades públicas.
+
+## Checkpoint SS-BE-007 grupo 5 — expiração administrativa via HTTP loopback — 22/09/2026
+
+**Estado:** SS-BE-007 grupo 5 **CONFIRMADO no escopo local automatizado**; SS-BE-007 global **PARCIAL/em andamento**. SS-MVP-002 permanece **PARCIAL/em andamento** e `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**.
+
+**Ref e preservação:** a branch `codex/mvp-vertical-programming` foi reaberta em `8924eb3037fd56c99bf2c6fd7eafc4afcf80f975`; `git fetch origin --prune` e `git pull --ff-only origin codex/mvp-vertical-programming` não trouxeram divergência. O teste novo é `internal/admin/http_session_expiry_test.go`. Os patches não rastreados permaneceram intocados. Recalculados nesta retomada: `signalspace-oauth-read-scope.patch` = `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b`; `signalspace-workspace-client-binding.patch` = `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+
+**Implementação/teste:** o teste inicia `NewServer(gate.HandlerWithRequests(fixture))` em listener TCP loopback efêmero, força `Host: localhost:7677` e `Origin` canônica, usa cookie jar/CSRF reais e avança o `Gate.now` de forma controlada, sem sleep ou relógio novo em produção. No cenário de idle, GET de sessão e fila preservam `idle_expires_at`; no deadline, sessão/fila/decisão/refresh retornam `401 AUTH_REQUIRED`, sem ID da fila no erro, sem decisão aplicada e sem reativação: a sessão posterior é `LOCKED`. No cenário absoluto, refresh explícito válido é repetido antes do vencimento, refresh com CSRF inválido retorna `403`, o idle é limitado ao absoluto e, no deadline absoluto, as operações retornam 401 sem leak ou mutação.
+
+**Validação:** `TestAdminHTTPSessionExpiryAndAbsoluteRefresh`, `gofmt -l cmd internal`, `git diff --check`, `go test ./... -parallel=1 -count=1 -timeout=180s`, race dos seis pacotes afetados, `go vet ./...`, `go build ./...`, `node --check internal/admin/ui/admin.js` e `node --test internal/admin/ui/admin_js_test.mjs` passaram. O teste exercita somente HTTP loopback local; não prova navegador, túnel/cloudflared, HTTPS operacional, grant ChatGPT Web, CI ou workspace real.
+
+**Correção de relatório anterior:** o grupo 4 registrou textualmente um hash incorreto para o segundo patch; a divergência é apenas documental. O arquivo preservado continua com o hash `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`; nenhum patch foi editado.
+
+**Próxima ação:** executar os gates locais restantes, criar commits focados, publicar normalmente na mesma branch, confirmar `git ls-remote` e enviar o relatório ao ChatGPT Web. Depois, aguardar a próxima missão concreta sem promover capacidades públicas.
