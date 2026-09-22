@@ -256,6 +256,12 @@ func awaitQuickTransport(ctx context.Context, resource string, tunnelDone <-chan
 			return fmt.Errorf("loopback MCP stopped during HTTPS verification: %w", err)
 		case <-readyCtx.Done():
 			timer.Stop()
+			// readyCtx também é cancelado quando ctx é cancelado. Nesse
+			// caso, preserve a causa explícita em vez de classificar o
+			// último DNS como expiração da janela.
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			return fmt.Errorf("public HTTPS verification failed after DNS retry window, tunnel closed: %w", lastErr)
 		case <-timer.C:
 		}

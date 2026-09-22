@@ -62,10 +62,17 @@ func TestQuickTransportStopsWaitingForTunnelOrCancellation(t *testing.T) {
 			defer cancel()
 			tunnelDone := make(chan struct{})
 			started := make(chan struct{})
+			var release chan struct{}
+			if tc.name == "context" {
+				release = make(chan struct{})
+			}
 			finished := make(chan error, 1)
 			go func() {
 				finished <- awaitQuickTransport(ctx, "https://example.trycloudflare.com/mcp", tunnelDone, make(chan error), func(context.Context, string) (mcp.TransportReport, error) {
 					close(started)
+					if release != nil {
+						<-release
+					}
 					return mcp.TransportReport{}, &net.DNSError{Err: "no such host", IsNotFound: true}
 				}, time.Minute, time.Minute)
 			}()
@@ -74,6 +81,7 @@ func TestQuickTransportStopsWaitingForTunnelOrCancellation(t *testing.T) {
 				close(tunnelDone)
 			} else {
 				cancel()
+				close(release)
 			}
 			select {
 			case err := <-finished:
