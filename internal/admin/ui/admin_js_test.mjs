@@ -146,6 +146,24 @@ test('LOCKED permite desbloquear somente com frase-senha', async () => {
   assert.equal(JSON.parse(h.calls[1].options.body).pairing_code, undefined);
 });
 
+test('desbloqueio rejeitado permanece LOCKED e recupera o bootstrap sem repetir POST', async () => {
+  const h = harness([
+    jsonResponse(lockedSession),
+    jsonResponse({ error: { code: 'ACCESS_DENIED', message: 'Acesso negado.' } }, 403),
+    jsonResponse(lockedSession)
+  ]);
+  h.app.start(); await settle();
+  const form = element(h.documentRef, 'unlock-form');
+  form.formValues = { passphrase: 'wrong-passphrase' };
+  form.dispatch('submit'); await settle();
+  assert.deepEqual(h.calls.map((call) => call.path), ['/api/admin/v1/session', '/api/admin/v1/unlock', '/api/admin/v1/session']);
+  assert.equal(h.calls.filter((call) => call.path === '/api/admin/v1/unlock').length, 1);
+  assert.equal(h.app.state.session.state, 'LOCKED');
+  assert.equal(element(h.documentRef, 'unlock-section').hidden, false);
+  assert.equal(element(h.documentRef, 'unavailable-section').hidden, true);
+  assert.match(element(h.documentRef, 'error').textContent, /servidor recusou/);
+});
+
 test('resposta perdida no pareamento reconcilia por sessão sem repetir POST', async () => {
   for (const lost of [new Error('connection lost'), invalidJSONResponse(201)]) {
     const h = harness([jsonResponse(unpairedSession), lost, jsonResponse(lockedSession)]);

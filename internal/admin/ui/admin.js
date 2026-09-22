@@ -366,6 +366,11 @@
         if (inconclusive(error)) {
           renderTransient('UNKNOWN_RESULT', 'A resposta de pareamento/desbloqueio foi perdida; verificando a sessão sem repetir o POST.');
           await loadSession();
+        } else if (path === '/api/admin/v1/unlock' && (error.status === 403 || error.status === 429)) {
+          // Uma credencial rejeitada não torna o serviço indisponível:
+          // recupere o estado LOCKED e o bootstrap para permitir nova tentativa.
+          await loadSession();
+          showError(errorMessage(error));
         } else {
           renderTransient('UNAVAILABLE', errorMessage(error));
           showError(errorMessage(error));
