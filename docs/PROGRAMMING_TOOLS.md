@@ -38,6 +38,14 @@ O pedido exibe nome declarado e ID OAuth, sem atestar o software, além dos efei
 
 `CapabilityApproval` é a mesma lógica exercitada pelo console e pelo harness OAuth/MCP; o teste vertical deixou de chamar `GrantWithScopes` diretamente para criar a concessão de programação. A aprovação terminal-local continua distinta do consentimento OAuth: depois da confirmação, cada token e cada ferramenta ainda exigem seus escopos e a concessão corrente. A extensão não adiciona rotas administrativas, variáveis de ambiente, flags, comandos públicos, writers, executor ou Git reviewer aos entrypoints.
 
+## Consulta e revogação local da concessão
+
+`workspace status` consulta `Grants.Snapshot` sob o mutex e informa somente se há concessão local ativa ou ausente. Com uma concessão ativa, mostra o `session_id`, o `client_id`, o nome declarado apenas se a lista confiável atual de clientes emitidos ainda o contém, os escopos exatos em ordem canônica e as formas de revogar. A falta do nome não prova revogação. O snapshot é uma cópia independente e não expõe raiz, descritor, objeto `Session`, token OAuth, chave privada ou conteúdo; consulta não autoriza, renova nem altera a concessão. Instância encerrada é distinta de estado ausente (`ErrClosed`).
+
+`workspace revoke current` obtém o snapshot e chama o `Grants.Revoke` existente com aquele ID exato; `workspace revoke <session-id>` continua aceito. Se a concessão mudar entre consulta e revogação, a comparação sob o mutex rejeita o ID antigo e preserva a sessão substituta; o terminal orienta consultar `workspace status` novamente. Uma revogação concorrente pode aguardar uma operação local já dentro da seção crítica; esse comando não interrompe processo em andamento nem fornece preempção.
+
+Esses comandos pertencem apenas ao console de stdin local e não criam rota HTTP, ferramenta MCP ou função no painel administrativo. O status descreve apenas `Grants` local e não comprova validade de token OAuth ou conexão/chamada MCP. No console padrão de diagnóstico, concessão interna não publica `read_file` e o MCP continua limitado a `connection_diagnostic`. Em um console experimental com escopos de programação, eles são mostrados como estado local experimental, não como capacidades ativadas remotamente.
+
 ## Gate de promoção remota — decisão SS-MVP-002-PROMOTION-GATE-001
 
 **Estado global:** PENDENTE. A decisão abaixo fecha a fronteira necessária para uma futura promoção experimental, mas não autoriza nem implementa a publicação de `workspace.write`.
