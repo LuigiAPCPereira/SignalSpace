@@ -8,12 +8,23 @@ import (
 	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
 )
 
-// reserveQuickPorts mantém a porta administrativa ausente no modo terminal.
-// A opção de painel ainda não está exposta pela CLI: sua publicação depende dos gates HTTP.
-func reserveQuickPorts(panel bool) (*admin.Listeners, error) {
+func reserveQuickPortsForPlan(plan compositionPlan, panel bool) (*admin.Listeners, error) {
+	closedPlan, err := validateCompositionPlan(plan)
+	if err != nil {
+		return nil, err
+	}
+	return reserveQuickPortsAt(closedPlan.mcpAddress, panel)
+}
+
+func reserveQuickPortsAt(publicAddress string, panel bool) (*admin.Listeners, error) {
 	return reserveQuickPortsWith(panel, func() (net.Listener, error) {
-		return net.Listen("tcp4", admin.PublicAddress)
-	}, admin.ReserveListeners)
+		return net.Listen("tcp4", publicAddress)
+	}, func() (*admin.Listeners, error) {
+		if publicAddress != admin.PublicAddress {
+			return nil, errors.New("composition plan selected an unsupported public MCP listener")
+		}
+		return admin.ReserveListeners()
+	})
 }
 
 // reserveQuickPortsWith permite testar falhas de bind sem ocupar portas fixas.

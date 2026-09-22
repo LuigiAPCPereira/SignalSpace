@@ -85,7 +85,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 
 	// A reserva conjunta ocorre ANTES de cloudflared. A falha na segunda porta
 	// libera a primeira e nunca provoca fallback para o modo terminal.
-	ports, err := reserveQuickPorts(panel)
+	ports, err := reserveQuickPortsForPlan(plan, panel)
 	if err != nil {
 		return err
 	}

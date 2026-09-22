@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/tunnel"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
@@ -31,9 +32,11 @@ func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 		mode        compositionMode
 		readScope   string
 		consoleMode workspaceConsoleMode
+		validator   compositionValidatorMode
+		mcpAddress  string
 	}{
-		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly},
-		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead},
+		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress},
+		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -41,7 +44,7 @@ func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if plan.mode != test.mode || plan.oauthScope != compositionDiagnosticScope || plan.workspaceReadScope != test.readScope || plan.consoleMode != test.consoleMode {
+			if plan.mode != test.mode || plan.oauthScope != compositionDiagnosticScope || plan.workspaceReadScope != test.readScope || plan.consoleMode != test.consoleMode || plan.validatorMode != test.validator || plan.mcpAddress != test.mcpAddress {
 				t.Fatalf("unexpected composition plan: %+v", plan)
 			}
 		})
@@ -73,6 +76,26 @@ func TestEmbeddedHandlerRejectsUnsupportedCompositionBeforeOAuthState(t *testing
 	}
 	if _, statErr := os.Stat(stateDir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("modified plan touched OAuth state path: %v", statErr)
+	}
+
+	plan, err = planComposition(compositionDiagnostic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.validatorMode = 0
+	if handler, authorization, console, err := embeddedHandlerForPlan(readTestResource, stateDir, plan); err == nil || handler != nil || authorization != nil || console != nil {
+		t.Fatalf("plan without a local validator was accepted: handler=%v auth=%v console=%v err=%v", handler, authorization, console, err)
+	}
+	plan, err = planComposition(compositionDiagnostic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.mcpAddress = admin.AdminAddress
+	if handler, authorization, console, err := embeddedHandlerForPlan(readTestResource, stateDir, plan); err == nil || handler != nil || authorization != nil || console != nil {
+		t.Fatalf("plan exposing the administrative port as MCP was accepted: handler=%v auth=%v console=%v err=%v", handler, authorization, console, err)
+	}
+	if _, statErr := os.Stat(stateDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("invalid plans touched OAuth state path: %v", statErr)
 	}
 }
 

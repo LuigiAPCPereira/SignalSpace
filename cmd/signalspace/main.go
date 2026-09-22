@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/auth"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
@@ -113,12 +114,9 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, mode compositionMod
 }
 
 func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (http.Handler, *auth.Server, *workspaceConsole, error) {
-	closedPlan, err := planComposition(plan.mode)
+	closedPlan, err := validateCompositionPlan(plan)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	if plan != closedPlan {
-		return nil, nil, nil, errors.New("composition plan does not match the closed SignalSpace policy")
 	}
 	plan = closedPlan
 	issuer := strings.TrimSuffix(resource, "/mcp")
@@ -155,7 +153,13 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 		}
 		console = &workspaceConsole{grants: grants, issuedClients: authorization.IssuedClients, readEnabled: true}
 	}
-	verifier, err := mcp.NewStaticJWTVerifier(authorization.PublicKey(), authorization.KeyID())
+	var verifier *mcp.JWKSVerifier
+	switch plan.validatorMode {
+	case compositionLocalOAuthJWTValidator:
+		verifier, err = mcp.NewStaticJWTVerifier(authorization.PublicKey(), authorization.KeyID())
+	default:
+		return closeFailure(errors.New("composition plan has no supported local OAuth validator"))
+	}
 	if err != nil {
 		return closeFailure(err)
 	}
@@ -234,7 +238,7 @@ func serveTerminalCommands(authorization *auth.Server, console *workspaceConsole
 
 func diagnosticServer(handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:              "127.0.0.1:7676",
+		Addr:              admin.PublicAddress,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
