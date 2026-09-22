@@ -278,4 +278,4 @@ O resultado é cobertura automatizada local adicional, sem correção de produto
 
 **Correção de relatório anterior:** o grupo 4 registrou textualmente um hash incorreto para o segundo patch; a divergência é apenas documental. O arquivo preservado continua com o hash `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`; nenhum patch foi editado.
 
-**Próxima ação:** executar os gates locais restantes, criar commits focados, publicar normalmente na mesma branch, confirmar `git ls-remote` e enviar o relatório ao ChatGPT Web. Depois, aguardar a próxima missão concreta sem promover capacidades públicas.
+**Publicação e próxima ação:** o commit `a523f7912fe279f6afb3ab949a5380a7b214332e` foi enviado normalmente para `origin/codex/mvp-vertical-programming`; `git ls-remote` e o remote-tracking local confirmaram o mesmo SHA, sem divergência de diff. Enviar o relatório ao ChatGPT Web e aguardar a próxima missão concreta sem promover capacidades públicas.
