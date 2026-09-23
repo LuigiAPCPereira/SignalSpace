@@ -483,3 +483,19 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** passaram o foco da regressão antes/depois, foco público `TestPublicCompositionsKeepWorkspaceWriteUnpublished`, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, `go test -race ./cmd/signalspace ./internal/mcp -p=1 -parallel=1 -count=1`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check`. Não houve listeners residuais em 7676/7677 nem processo `cloudflared` após os testes.
 
 **Limites e próxima ação:** a prova permanece local/automatizada. Não houve túnel/cloudflared, HTTPS operacional, navegador, grant ChatGPT Web, workspace real, consulta CI, merge ou deploy. Aguardar missão vinculada a ID existente sem promover capacidades.
+
+## Checkpoint SS-MVP-002 / SS-BE-007 — auditoria de prontidão da fronteira pública — 23/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL**; `SS-BE-007` permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI permanece **DESCONHECIDA**. Nenhuma ferramenta de escrita, execução ou Git foi promovida.
+
+**Ref e preservação:** a missão informou `a2dd93b6ae3be89bd3871cada8c406ed139ac014` como base, mas a ref efetiva local/remota foi revalidada em `codex/mvp-vertical-programming`, HEAD `47878563c360b6b84d6ce17c8121ea6b491fc912`; não houve rewind. PR #1, `feat/m1-local-mcp-diagnostic` e `feat/frontend-oauth-consent` não foram alterados. Os dois patches não rastreados continuam não aplicados, fora do Git e intocados.
+
+**Fronteira auditada:** `CLI → composição → Quick → OAuth → verificador JWT → handler MCP → ferramentas`. A composição fechada aceita apenas `diagnostic` e `read`; `panel` não muda capacidades; plano inválido falha antes de OAuth, listener, túnel e efeitos; o admin é separado do MCP público; o público é ligado a `127.0.0.1:7676`; `127.0.0.1:7677` permanece administrativo e não há encaminhamento entre os listeners. Testes existentes mantêm `tools/list` público sem `workspace.write`, `test.run` ou `git.review`, com listas exatas por escopo.
+
+**Autorização:** a evidência em OAuth/MCP/workspace confirma que escopo OAuth independente não substitui concessão local: owner, cliente, sessão, escopo e revogação são revalidados na operação. JWT válido após revogação não recupera a autorização. As lacunas de descoberta e de `initialize` já corrigidas foram reabertas na revisão; não surgiu defeito negativo novo demonstrável e nenhuma produção foi alterada nesta missão.
+
+**Validação:** passaram os focos de composição, rejeição de plano, isolamento dos listeners, matriz pública administrativa, promoção READ, ferramentas MCP de leitura/escrita/listagem/Git, escopos OAuth e proteção admin. `git diff --check` passou após esta atualização documental. Não houve SignalSpace, cloudflared, túnel, navegador, grant ChatGPT Web, workspace real, CI, merge ou deploy.
+
+**Reconciliação do grupo 1:** o checkpoint `a2dd93b6` registra nove variantes externas do smoke descartável, incluindo isolamento/metadata/shutdown e negativos administrativos; essa evidência é restrita à fatia exercitada e não comprova a matriz integral de ataques, proxy/DNS rebinding, navegador, CI ou deploy.
+
+**Próxima ação:** aguardar missão vinculada a ID existente, preservando os estados acima e sem promover capacidades públicas.
