@@ -11,6 +11,32 @@ import (
 	"testing"
 )
 
+func assertPublicToolNames(t *testing.T, handler http.Handler, token string, want ...string) {
+	t.Helper()
+	listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
+	if listing.Code != http.StatusOK {
+		t.Fatalf("tools/list: %d %s", listing.Code, listing.Body.String())
+	}
+	var payload struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(listing.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode tools/list: %v", err)
+	}
+	if len(payload.Result.Tools) != len(want) {
+		t.Fatalf("unexpected public tools: got=%v want=%v", payload.Result.Tools, want)
+	}
+	for index, tool := range payload.Result.Tools {
+		if tool.Name != want[index] {
+			t.Fatalf("unexpected public tools: got=%v want=%v", payload.Result.Tools, want)
+		}
+	}
+}
+
 func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -82,11 +108,15 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 				t.Fatal("public composition accepted an OAuth workspace.write request")
 			}
 			requestedScope := "signalspace:diagnostic"
+			var token string
 			if tc.mode == compositionRead {
-				requestedScope += " signalspace:workspace.read"
-				_ = authorizeClient(t, handler, func(id string) error {
+				// A concessão local não pode alterar a descoberta de um token
+				// que só possui o escopo diagnóstico.
+				diagnosticToken := authorizeClient(t, handler, func(id string) error {
 					return authorization.DecideTerminal(id, true)
-				}, client.ID, "signalspace:diagnostic")
+				}, client.ID, requestedScope)
+				assertPublicToolNames(t, handler, diagnosticToken, "connection_diagnostic")
+
 				root := t.TempDir()
 				var output strings.Builder
 				console.handleWorkspaceCommand("workspace request "+client.ID+" "+root, &output)
@@ -94,31 +124,26 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 					t.Fatalf("read composition did not create local grant request: %s", output.String())
 				}
 				console.handleWorkspaceCommand("workspace approve "+console.pending.id, &output)
-			}
-			token := authorizeClient(t, handler, func(id string) error {
-				return authorization.DecideTerminal(id, true)
-			}, client.ID, requestedScope)
+				assertPublicToolNames(t, handler, diagnosticToken, "connection_diagnostic")
 
-			listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
-			if listing.Code != http.StatusOK {
-				t.Fatalf("tools/list: %d %s", listing.Code, listing.Body.String())
-			}
-			var listed struct {
-				Result struct {
-					Tools []struct {
-						Name string `json:"name"`
-					}
-				} `json:"result"`
-			}
-			if err := json.Unmarshal(listing.Body.Bytes(), &listed); err != nil {
-				t.Fatal(err)
-			}
-			if len(listed.Result.Tools) != len(tc.wantTools) {
-				t.Fatalf("public %s composition advertised unexpected tools: %s", name, listing.Body.String())
-			}
-			for index, tool := range listed.Result.Tools {
-				if tool.Name != tc.wantTools[index] {
-					t.Fatalf("public %s composition advertised unexpected tools: %s", name, listing.Body.String())
+				requestedScope += " signalspace:workspace.read"
+				token = authorizeClient(t, handler, func(id string) error {
+					return authorization.DecideTerminal(id, true)
+				}, client.ID, requestedScope)
+				assertPublicToolNames(t, handler, token, tc.wantTools...)
+			} else {
+				token = authorizeClient(t, handler, func(id string) error {
+					return authorization.DecideTerminal(id, true)
+				}, client.ID, requestedScope)
+				assertPublicToolNames(t, handler, token, tc.wantTools...)
+
+				readRequestValues := url.Values{}
+				for key, values := range writeRequest {
+					readRequestValues[key] = append([]string(nil), values...)
+				}
+				readRequestValues.Set("scope", "signalspace:diagnostic signalspace:workspace.read")
+				if rejected := readRequest(t, handler, http.MethodGet, "/authorize?"+readRequestValues.Encode(), "", "", "", nil); rejected.Code == http.StatusOK {
+					t.Fatal("diagnostic composition accepted an OAuth workspace.read request")
 				}
 			}
 

@@ -455,3 +455,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** passaram a suíte de `internal/mcp`, a suíte serial de `cmd/signalspace`, o race de `internal/mcp`, `go vet` dos pacotes afetados, `go build ./...`, `gofmt` e `git diff --check`. A primeira execução de `cmd/signalspace` falhou somente por expectativas antigas de descoberta; após a reconciliação dos testes, passou. Nenhum serviço, túnel ou cloudflared foi iniciado nesta missão.
 
 **Limites e próxima ação:** trata-se de evidência local de código/testes, não de matriz operacional completa, navegador, CI, grant externo, workspace, merge ou deploy. Não declarar o gate de promoção concluído; aguardar próxima missão vinculada a ID existente.
+
+## Checkpoint SS-MVP-002 — regressão pública READ — 23/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL**; `SS-BE-007` permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI permanece **DESCONHECIDA**.
+
+**Ref e preservação:** base local/remota revalidada em `codex/mvp-vertical-programming`, HEAD `ac5b6ee47c50df71512f8ce1d9eca56e875dc95d`. PR #1, `feat/m1-local-mcp-diagnostic` e frontend não foram alterados. Os dois patches não rastreados permaneceram fora do Git, não aplicados e intocados.
+
+**Evidência pública:** `TestPublicCompositionsKeepWorkspaceWriteUnpublished` usa a mesma composição `read`, DCR/OAuth e grant local descartável. Antes do grant, token somente diagnóstico lista apenas `connection_diagnostic`; depois do grant, o mesmo token mantém essa lista. Um token com `signalspace:workspace.read` lista exatamente `connection_diagnostic`, `read_file` e `list_directory`. O modo `diagnostic` rejeita solicitação adicional de leitura e sua lista permanece somente diagnóstico. A ausência de write/test/Git é preservada pela lista exata e pela rejeição de `workspace.write`; o equivalente de escopo adicional contra handler sem reader permanece coberto pelo teste MCP isolado existente.
+
+**Validação:** focos públicos/MCP/READ/painel/vertical OAuth, suíte `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial dos pacotes afetados `cmd/signalspace` e `internal/mcp`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram. Não houve mudança de produção, túnel/cloudflared, workspace real, grant ChatGPT Web, consulta CI, merge ou deploy.
+
+**Limites e próxima ação:** a regressão fecha a cobertura do entrypoint público para o fix de descoberta, mas não constitui aceite remoto/HTTPS nem promoção de ferramentas. Aguardar missão vinculada a ID existente.

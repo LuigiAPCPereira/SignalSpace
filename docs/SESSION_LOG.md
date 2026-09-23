@@ -437,3 +437,11 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - A primeira suíte MCP completa revelou expectativas antigas em `oauth_programming_integration_test.go`; elas foram atualizadas para refletir escopos independentes. A suíte completa de MCP e a suíte serial de `cmd/signalspace` passaram após essa reconciliação.
 - Validação adicional: `go test -race ./internal/mcp -p=1 -parallel=1 -count=1`, `go vet ./internal/mcp ./cmd/signalspace`, `go build ./...`, `gofmt` e `git diff --check` — PASS. Não houve serviço SignalSpace, cloudflared, túnel, navegador, CI, grant/decisão OAuth externo, workspace, merge ou deploy.
 - Estado preservado: `SS-MVP-002` **PARCIAL**, `SS-BE-007` **PARCIAL**, `SS-MVP-002-PROMOTION-GATE-001` **PENDENTE**, CI **DESCONHECIDA**. A evidência é local e não autoriza promoção; próxima ação vinculada a ID existente.
+
+## 23/09/2026 — regressão do entrypoint público READ após fix de descoberta
+
+- A missão revalidou a branch `codex/mvp-vertical-programming` no HEAD local/remoto `ac5b6ee47c50df71512f8ce1d9eca56e875dc95d`. PR #1, frontend e os dois patches não rastreados permaneceram intocados.
+- O teste existente `TestPublicCompositionsKeepWorkspaceWriteUnpublished` foi ampliado, sem nova fixture, para reutilizar DCR/OAuth e a concessão local da composição `read`. O mesmo token somente diagnóstico lista apenas `connection_diagnostic` antes e depois do grant; o token READ lista exatamente `connection_diagnostic`, `read_file` e `list_directory`. A composição diagnostic rejeita `workspace.read` e permanece diagnóstica; a lista exata não contém write/test/Git.
+- O caso de escopo adicional com handler sem reader já é coberto pelo equivalente `internal/mcp/TestWorkspaceToolRequiresExplicitConfigurationAndIdentityVerifier`; não foi duplicado no entrypoint público. Nenhum defeito de produção adicional foi encontrado e nenhum contrato foi ampliado.
+- Passaram focos de promotion/READ/painel/vertical OAuth, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial de `cmd/signalspace` e `internal/mcp`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check`.
+- Não houve túnel/cloudflared, workspace real, grant ChatGPT Web, CI, merge ou deploy. Estado: SS-MVP-002 **PARCIAL**, SS-BE-007 **PARCIAL**, gate de promoção **PENDENTE**, CI **DESCONHECIDA**.
