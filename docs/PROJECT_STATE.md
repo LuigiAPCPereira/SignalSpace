@@ -429,3 +429,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Autorização e limite:** nesta missão não foram iniciados SignalSpace, cloudflared ou túnel, nem consultada CI, aberto workspace, concedido OAuth ao ChatGPT Web, feito merge ou deploy. A autorização permanente para enviar relatórios ao Web não autoriza publicação externa, grant/decisão OAuth, workspace ou chamada MCP.
 
 **Próxima ação:** somente após autorização específica para o smoke, executar o roteiro com evidência redigida; até lá, não iniciar túnel e não promover `SS-BE-007`.
+
+## Checkpoint SS-BE-007 — smoke real de túnel e isolamento — 22/09/2026
+
+**Estado:** a fatia autorizada de isolamento do Quick Tunnel está **CONFIRMADA operacionalmente no escopo descartável**; `SS-BE-007` permanece **PARCIAL**, `SS-MVP-002` permanece **PARCIAL**, `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE** e CI permanece **DESCONHECIDA**.
+
+**Ref e preservação:** branch `codex/mvp-vertical-programming`, HEAD local/remoto `f14c92afe82bf6505090321135c74a895e69b605`. PR #1 continua draft em outra branch e não foi alterado. Os dois patches do usuário continuam não rastreados, não aplicados e intocados, com hashes preservados.
+
+**Evidência observada:** preflight sem processos residuais, portas 7676/7677 livres, `cloudflared 2026.9.1`, origem efetiva `http://127.0.0.1:7676` e admin `127.0.0.1:7677`. Após autorização exclusiva, `go run ./cmd/signalspace connect quick panel` iniciou um único túnel. Dez sondagens públicas sem cookies e sem seguir redirects passaram: nove rotas/variantes administrativas retornaram `404` sem `Location`, `Set-Cookie` ou corpo administrativo; `/.well-known/oauth-protected-resource` retornou `200` JSON. O HTTPS foi validado pelo cliente TLS padrão, sem ignorar certificado.
+
+**Isolamento local e shutdown:** `Host` externo, `Origin` cruzada e preflight cruzado retornaram `403`; `Forwarded`/`X-Forwarded-*` forjados não contornaram a autorização da rota protegida (`401`). O bootstrap com Host canônico retornou `200`, sem registrar cookie ou corpo. Não houve pareamento, OAuth, decisão, MCP ou operação de workspace. Ctrl+C encerrou o processo; 7676/7677 ficaram livres e não restaram processos SignalSpace/cloudflared do smoke. O diretório temporário do Quick e os temporários de probe foram removidos.
+
+**Limites:** confirma somente o encaminhamento público para 7676, os negativos administrativos e o isolamento/Host/Origin observado neste ambiente. Não cobre proxy externo arbitrário, DNS rebinding, configuração externa deliberada, pareamento/decisão, navegador, MCP, CI, merge ou deploy. O túnel não ficou ativo.
