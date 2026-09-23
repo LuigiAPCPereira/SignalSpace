@@ -415,3 +415,17 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação e limites:** a fixture terminou PASS em 100,9 s, o navegador e os servidores foram encerrados e não restaram listeners fixos nem `cloudflared`. Passaram regressões focadas, suíte Go serial, race serial dos seis pacotes afetados, vet, build, gofmt, diff-check, `node --check` e 22/22 testes Node. A injeção demonstra o contrato da UI e a recuperação local, não uma queda externa, proxy, Cloudflare, túnel ou HTTPS; não houve defeito nem alteração de produção.
 
 **Próxima ação:** aguardar missão vinculada a SS-BE-007; não declarar o grupo 9 completo, SS-BE-007 global ou o gate de promoção como concluídos.
+
+## Checkpoint SS-BE-007 — roteiro de aceite operacional preparado, smoke não executado — 22/09/2026
+
+**Estado:** matriz dos 11 grupos reconciliada documentalmente; `SS-BE-007` permanece **PARCIAL**, `SS-MVP-002` permanece **PARCIAL**, `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**, CI permanece **DESCONHECIDA** e o aceite operacional novo está **NÃO EXECUTADO**.
+
+**Ref e PR:** branch observada `codex/mvp-vertical-programming`, HEAD local/remoto `e14c8588991338f3f9e8c1e999644f9e2fa8a34b`. O PR #1 continua draft e sua HEAD/branch é `feat/m1-local-mcp-diagnostic`; não é a branch atual e não foi integrado. Os dois patches não rastreados foram preservados, não aplicados e não incluídos.
+
+**Reconciliação da matriz:** grupos 3 e 5 agora refletem a evidência visual local descartável de pareamento/unlock/restart; grupo 9 reflete a evidência visual + HTTP local de fila PENDING real durante 503 e falha de rede, além de quotas, retenção e tombstones. Nenhuma dessas classificações foi elevada a evidência externa.
+
+**Roteiro preparado em [`docs/QUICK_PANEL.md`](QUICK_PANEL.md):** preflight de ref/portas/processos e modo `diagnostic panel`; confirmação de origem fixa `127.0.0.1:7676` e painel local `127.0.0.1:7677`; negativas administrativas pela URL pública; Host/Origin e proxy no admin local; pareamento/decisão descartável; diagnóstico MCP somente com autorização específica; shutdown e verificação de limpeza. Critérios de parada cobrem publicação de 7677, origem incorreta, bind, resposta administrativa pública, segredo em log e falha de limpeza.
+
+**Autorização e limite:** nesta missão não foram iniciados SignalSpace, cloudflared ou túnel, nem consultada CI, aberto workspace, concedido OAuth ao ChatGPT Web, feito merge ou deploy. A autorização permanente para enviar relatórios ao Web não autoriza publicação externa, grant/decisão OAuth, workspace ou chamada MCP.
+
+**Próxima ação:** somente após autorização específica para o smoke, executar o roteiro com evidência redigida; até lá, não iniciar túnel e não promover `SS-BE-007`.

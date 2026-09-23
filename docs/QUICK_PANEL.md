@@ -37,3 +37,31 @@ Admin exige socket `127.0.0.1`, Host canônico `localhost:7677`, sessão própri
 **Faltam os aceites operacionais SS-BE-002/006/007/008:** `cloudflared` real em ambiente descartável autorizado do proprietário, navegador real, smoke da decisão e shutdown. A UI HTML/JS local agora existe na branch `codex/mvp-vertical-programming`, mas foi validada somente por HTTP local, sintaxe e testes de roteamento; não houve integração da branch frontend nem aceite visual. O conector GitHub não executa o túnel na máquina do proprietário nem enxerga o worktree local. Não confundir CI de Go com execução da política CSP no browser.
 
 **A administração local serve painel e API somente no loopback.** `feat/frontend-oauth-consent` continua separada; não houve integração de seus protótipos. Não digitar segredo de pareamento em site externo. HTTP loopback não equivale a HTTPS, não protege contra proxy externo deliberadamente configurado nem garante segurança de produção; Quick Tunnel público/temporário não é deployment. Sem auditoria independente, merge ou deploy.
+
+## Roteiro de aceite operacional pendente — não executar sem autorização específica
+
+Este roteiro foi preparado para a próxima validação de `SS-BE-007`. O smoke operacional **não foi executado nesta preparação**. Ele não transforma a existência do roteiro, o PR draft ou os testes locais em autorização para publicar o serviço.
+
+### Sequência segura
+
+1. **Preflight sem exposição externa:** revalidar branch/HEAD/worktree, os dois patches não rastreados, ausência das variáveis SignalSpace persistentes, disponibilidade de `127.0.0.1:7676` e `127.0.0.1:7677`, versão do `cloudflared` já instalado e ausência de listeners/processos residuais. Não registrar pairing code, frase-senha, cookie, CSRF, token ou conteúdo bruto de logs.
+2. **Modo explícito:** confirmar no terminal o modo `diagnostic panel`; não usar `read`, escrita, execução ou Git. Antes de qualquer túnel, verificar que o painel está ligado a `127.0.0.1:7677` e que o destino público, se iniciado, é exatamente `http://127.0.0.1:7676`.
+3. **Publicação autorizada:** somente após nova autorização explícita do proprietário, digitar `PUBLICAR PAINEL` no terminal e iniciar o Quick Tunnel. Registrar apenas a URL/estado necessários para a verificação; não conceder OAuth ao ChatGPT Web por causa deste smoke.
+4. **Isolamento pela URL pública:** consultar a URL externa somente para provar que `/admin`, `/api/admin/v1/session`, `/api/admin/v1/requests`, `/api/admin/v1/pair`, `/api/admin/v1/unlock` e `/api/admin/v1/requests/<id>/decision`, incluindo variantes de caminho codificado, barras duplicadas e método alternativo, retornam `404`, sem redirecionamento e sem `Set-Cookie` administrativo. A resposta pública não pode alcançar 7677.
+5. **Administração local:** em `http://localhost:7677/`, confirmar `Host: localhost:7677`, rejeição de `Origin` cruzada e que cabeçalhos `Forwarded`/`X-Forwarded-*` não concedem autoridade. Parear apenas uma credencial descartável e verificar sessão, fila e decisão pelo painel local. Qualquer código de pareamento, passphrase, cookie, CSRF ou token fica fora do relatório.
+6. **Diagnóstico opcional:** só executar uma chamada MCP de diagnóstico se houver autorização específica para essa etapa. Não habilitar workspace, leitura, escrita, shell, execução ou Git; a ausência dessa permissão deixa essa etapa como `NÃO EXECUTADA`, sem bloquear a prova de isolamento de portas.
+7. **Shutdown verificável:** encerrar pelo fluxo previsto, esperar o servidor administrativo, o servidor público e o `cloudflared`, confirmar que as duas portas foram liberadas, que a identidade/StateDir temporários foram removidos e que não restam processos ou listeners do smoke.
+
+### Dependências de autorização
+
+- Podem ser executados sem exposição externa: inspeção de ref/worktree, preflight de portas/processos, verificação documental, validação de Host/Origin em listener local descartável e organização de evidências redigidas.
+- Exigem nova autorização explícita imediatamente antes da ação: iniciar o túnel, digitar `PUBLICAR PAINEL`, expor qualquer URL `trycloudflare.com`, parear/decidir um pedido OAuth descartável em ambiente operacional e executar uma chamada MCP, mesmo que seja somente diagnóstico.
+- A autorização permanente para enviar relatórios ao ChatGPT Web não inclui publicação de endpoint, concessão OAuth, decisão de pedido, acesso a workspace ou execução de ferramentas.
+
+### Critérios de parada
+
+Abortar e manter o aceite como `BLOQUEADO` diante de: 7677 publicada externamente; origem do túnel diferente de `127.0.0.1:7676`; falha de reserva de qualquer porta; resposta administrativa pela URL pública; Host/Origin ou proxy forjado concedendo acesso; segredo/cookie/token aparecendo em logs; falha de shutdown, remoção do StateDir ou liberação das portas. Não usar proxy, host rewrite ou aumento de janela DNS como configuração suportada.
+
+### Resultado e evidência esperados
+
+O relatório operacional deve separar `IMPLEMENTADO`, `VALIDADO`, `NÃO VALIDADO` e `DESCONHECIDO`, registrar status/códigos/contagens sem segredos e manter `SS-BE-007` **PARCIAL**, `SS-MVP-002` **PARCIAL**, `SS-MVP-002-PROMOTION-GATE-001` **PENDENTE** e CI **DESCONHECIDA** até que a evidência externa autorizada exista. O roteiro sozinho não é aceite operacional.
