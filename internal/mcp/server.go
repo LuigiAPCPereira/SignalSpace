@@ -215,6 +215,13 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				instructions = "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
 			}
 		}
+		if writeAccess != nil && writeAccess.advertise {
+			if instructions == "Diagnostic only; no development tools are available." {
+				instructions = "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations."
+			} else {
+				instructions += " Workspace text replacement requires a separate OAuth write scope and an active local workspace write grant; no commands or Git mutations."
+			}
+		}
 		if gitAccess != nil && gitAccess.advertise {
 			instructions += " Git review requires a separate OAuth Git review scope and active local Git review grant; it is read-only and never stages, commits or pushes."
 		}

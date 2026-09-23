@@ -418,6 +418,27 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 		}
 	}
 
+	// A descoberta combinada deve manter metadata, initialize, tools/list e
+	// tools/call coerentes para cada escopo independente. Em particular, um
+	// bearer de escrita não pode voltar a receber a instrução de diagnóstico
+	// como se nenhuma capacidade estivesse disponível.
+	wantInstructions := map[string]string{
+		"read":  "File reading",
+		"write": "Workspace text replacement",
+		"git":   "Git review",
+		"test":  "Test execution",
+	}
+	for name, token := range map[string]string{"read": readToken, "write": writeToken, "git": gitToken, "test": testToken} {
+		response := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`, token, "")
+		if response.status != http.StatusOK {
+			t.Fatalf("initialize failed for %s token: %d %s", name, response.status, response.body)
+		}
+		instructions, ok := oauthWriteJSON(t, response)["result"].(map[string]any)["instructions"].(string)
+		if !ok || !strings.Contains(instructions, wantInstructions[name]) {
+			t.Fatalf("initialize omitted %s capability: %q", name, instructions)
+		}
+	}
+
 	readResponse := oauthWriteHTTP(t, composition.server, http.MethodPost, "/mcp", "application/json", readCall(composition.sessionID, "editable.txt"), readToken, "")
 	readText, readError := readResult(t, oauthWriteJSON(t, readResponse))
 	if readResponse.status != http.StatusOK || readError || readText != "before\n" {
