@@ -209,16 +209,16 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			return
 		}
 		instructions := "Diagnostic only; no development tools are available."
-		if readAccess != nil {
+		if readAccess != nil && readAccess.advertise {
 			instructions = "File reading requires a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
 			if readAccess.lister != nil {
 				instructions = "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
 			}
 		}
-		if gitAccess != nil {
+		if gitAccess != nil && gitAccess.advertise {
 			instructions += " Git review requires a separate OAuth Git review scope and active local Git review grant; it is read-only and never stages, commits or pushes."
 		}
-		if testAccess != nil {
+		if testAccess != nil && testAccess.advertise {
 			instructions += " Test execution requires a separate OAuth test scope and active local test grant; it runs only go test ./... and is not a process sandbox."
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{

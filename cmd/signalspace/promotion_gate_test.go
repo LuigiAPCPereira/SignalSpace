@@ -37,6 +37,25 @@ func assertPublicToolNames(t *testing.T, handler http.Handler, token string, wan
 	}
 }
 
+func assertPublicInitializeInstructions(t *testing.T, handler http.Handler, token, want string) {
+	t.Helper()
+	initialized := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`, "application/json", token, nil)
+	if initialized.Code != http.StatusOK {
+		t.Fatalf("initialize: %d %s", initialized.Code, initialized.Body.String())
+	}
+	var payload struct {
+		Result struct {
+			Instructions string `json:"instructions"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(initialized.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode initialize: %v", err)
+	}
+	if payload.Result.Instructions != want {
+		t.Fatalf("unexpected initialize instructions: got=%q want=%q", payload.Result.Instructions, want)
+	}
+}
+
 func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -116,6 +135,7 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 					return authorization.DecideTerminal(id, true)
 				}, client.ID, requestedScope)
 				assertPublicToolNames(t, handler, diagnosticToken, "connection_diagnostic")
+				assertPublicInitializeInstructions(t, handler, diagnosticToken, "Diagnostic only; no development tools are available.")
 
 				root := t.TempDir()
 				var output strings.Builder
@@ -131,11 +151,13 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 					return authorization.DecideTerminal(id, true)
 				}, client.ID, requestedScope)
 				assertPublicToolNames(t, handler, token, tc.wantTools...)
+				assertPublicInitializeInstructions(t, handler, token, "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands.")
 			} else {
 				token = authorizeClient(t, handler, func(id string) error {
 					return authorization.DecideTerminal(id, true)
 				}, client.ID, requestedScope)
 				assertPublicToolNames(t, handler, token, tc.wantTools...)
+				assertPublicInitializeInstructions(t, handler, token, "Diagnostic only; no development tools are available.")
 
 				readRequestValues := url.Values{}
 				for key, values := range writeRequest {

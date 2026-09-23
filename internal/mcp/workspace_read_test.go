@@ -119,6 +119,13 @@ func TestWorkspaceReadToolAuthGrantRevocationAndPaths(t *testing.T) {
 	if schemes[0].(map[string]any)["scopes"].([]any)[0] != workspaceReadScope {
 		t.Fatalf("read tool missing separate OAuth scope: %v", schemes)
 	}
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", readToken, `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`, nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("read initialize failed: %d %v", res.StatusCode, result)
+	}
+	if got := result["result"].(map[string]any)["instructions"]; got != "File reading requires a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands." {
+		t.Fatalf("read initialize omitted advertised capability: %v", got)
+	}
 	// A configuração local de leitura não deve anunciar a ferramenta a um
 	// bearer que só possui o escopo diagnóstico.
 	diagnosticClaims := defaultClaims()
@@ -131,6 +138,14 @@ func TestWorkspaceReadToolAuthGrantRevocationAndPaths(t *testing.T) {
 	tools = result["result"].(map[string]any)["tools"].([]any)
 	if len(tools) != 1 || tools[0].(map[string]any)["name"] != toolName {
 		t.Fatalf("diagnostic token advertised workspace tools: %v", tools)
+	}
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", diagnosticToken, `{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`, nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("diagnostic initialize failed: %d %v", res.StatusCode, result)
+	}
+	initialize := result["result"].(map[string]any)
+	if got := initialize["instructions"]; got != "Diagnostic only; no development tools are available." {
+		t.Fatalf("diagnostic initialize advertised unavailable capability: %v", got)
 	}
 
 	// Uma autorização OAuth não concede uma raiz nem um ID de sessão.
