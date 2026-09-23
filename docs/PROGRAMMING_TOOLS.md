@@ -1,6 +1,6 @@
 # SignalSpace — contrato inicial de programação local
 
-**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada e validada localmente para READ + WRITE + GIT review; `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
+**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada, validada localmente e publicada em `origin/codex/mvp-vertical-programming` no HEAD `d1bff2c925e83061bcbc15cef299b22846ac897b` para READ + WRITE + GIT review; `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
 
 O estado do MVP continua **PARCIAL**: a decisão do gate é distinta da conclusão de `SS-MVP-002`, e a evidência atual é local/automatizada. O modo público exige seleção explícita `connect quick programming`, OAuth com escopo exato e concessão terminal-local ativa; a presença de JWT, `client_id`, metadata ou configuração não cria concessão.
 
