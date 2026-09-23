@@ -403,3 +403,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Fronteira e validação:** `go list` mostrou que a ponte não aparece sem tag e aparece com `-tags=signalspace_testtime`. A suíte tagged de `cmd/signalspace`, foco tagged com race, suíte Go normal serial, race serial dos seis pacotes afetados, vet, build, gofmt, diff-check e regressões Node 22/22 passaram. Nenhuma configuração de distribuição habilita a tag; não houve mudança do comportamento temporal normal.
 
 **Limites e próxima ação:** evidência somente local/loopback; não comprova túnel, HTTPS, navegador, grant ChatGPT Web, workspace real, CI, merge ou deploy. O próximo trabalho deve usar um ID existente da TASKLIST e não promover SS-BE-007 global nem SS-MVP-002.
+
+## Checkpoint SS-BE-007 grupo 9 — falha 503/rede observada no painel — 22/09/2026
+
+**Estado:** a fatia de indisponibilidade do painel com fila OAuth real está **CONFIRMADA no escopo visual + HTTP local com falha injetada**. Grupo 9 completo e SS-BE-007 global permanecem **PARCIAIS/em andamento**; SS-MVP-002 permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI é **DESCONHECIDA**.
+
+**Fixture e evidência:** em `http://localhost:7677/`, uma única composição local descartável criou DCR e `/authorize` reais, uma fila com exatamente um PENDING e pareamento HTTP no navegador integrado. Com o detalhe do pedido aberto, um wrapper temporário interceptou apenas GET `/api/admin/v1/requests` e produziu primeiro o envelope vigente `503 TEMPORARILY_UNAVAILABLE`, depois uma conexão encerrada. A UI manteve `AUTHENTICATED`, mostrou respectivamente `O serviço está temporariamente indisponível (503)` e `A conexão com o serviço local foi perdida.`, manteve contador `n/d`, não mostrou fila vazia, não confirmou decisão e ocultou o detalhe não reconfirmado.
+
+**Recuperação:** após remover as interceptações, uma nova consulta real voltou a mostrar contador `1` e o mesmo pedido `PENDING`. A ação de consulta foi o botão explícito `Renovar sessão`; não houve renovação implícita durante as falhas. Nenhum botão de decisão foi tocado e nenhum POST `/decision` foi emitido; a fonte OAuth permaneceu PENDING.
+
+**Validação e limites:** a fixture terminou PASS em 100,9 s, o navegador e os servidores foram encerrados e não restaram listeners fixos nem `cloudflared`. Passaram regressões focadas, suíte Go serial, race serial dos seis pacotes afetados, vet, build, gofmt, diff-check, `node --check` e 22/22 testes Node. A injeção demonstra o contrato da UI e a recuperação local, não uma queda externa, proxy, Cloudflare, túnel ou HTTPS; não houve defeito nem alteração de produção.
+
+**Próxima ação:** aguardar missão vinculada a SS-BE-007; não declarar o grupo 9 completo, SS-BE-007 global ou o gate de promoção como concluídos.
