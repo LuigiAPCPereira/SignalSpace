@@ -499,3 +499,17 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Reconciliação do grupo 1:** o checkpoint `a2dd93b6` registra nove variantes externas do smoke descartável, incluindo isolamento/metadata/shutdown e negativos administrativos; essa evidência é restrita à fatia exercitada e não comprova a matriz integral de ataques, proxy/DNS rebinding, navegador, CI ou deploy.
 
 **Próxima ação:** aguardar missão vinculada a ID existente, preservando os estados acima e sem promover capacidades públicas.
+
+## Checkpoint SS-MVP-002 — matriz combinada OAuth/MCP e step-up — 23/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL**; `SS-BE-007` permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI permanece **DESCONHECIDA**. Nenhuma capacidade pública foi promovida.
+
+**Ref e preservação:** a missão referenciou `47878563c360b6b84d6ce17c8121ea6b491fc912`; a ref efetiva local/remota foi revalidada em `codex/mvp-vertical-programming`, HEAD `23c35b6c7510fe36748b430f1f092b22e6f3a219`. PR #1 e as branches protegidas não foram alterados. Os patches `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` continuam não rastreados, não aplicados e intocados, com SHA-256 preservados.
+
+**Matriz observada:** no harness real OAuth/MCP, metadata lista apenas os escopos configurados pela composição; `initialize` e `tools/list` anunciam somente as capacidades cujo bearer atual passou na verificação independente; `tools/call` revalida o escopo e depois a concessão local. Composição pública diagnostic continua somente `connection_diagnostic`; READ mantém step-up para `workspace.read` sem revelar workspace, sessão, path ou conteúdo; bearer READ sem grant não executa. Os tokens read/write/Git/test do harness demonstraram simetria de escopo independente e chamadas sem escopo não iniciaram writer, runner ou reviewer.
+
+**Defeito e correção:** o bearer `diagnostic + workspace.write` recebia instrução “Diagnostic only” apesar de `replace_text` estar anunciado. O teste combinado de `metadata → initialize → tools/list → tools/call` falhou antes da correção; `internal/mcp/server.go` agora inclui a orientação de escrita somente quando `writeAccess.advertise` é verdadeiro. A correção não torna escrita selecionável no CLI/Quick nem altera o contrato público.
+
+**Validação e limites:** passaram o teste focado antes/depois, as suítes seriais de `internal/mcp` e `cmd/signalspace`, race serial dos dois pacotes, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check`. Não houve túnel/cloudflared, HTTPS operacional, navegador, grant ChatGPT Web, workspace real, CI, merge ou deploy; listeners 7676/7677 não ficaram ativos.
+
+**Próxima decisão:** **PROMOTION GATE PRONTO PARA DECISÃO DO PROPRIETÁRIO, NÃO APROVADO AUTOMATICAMENTE.** A evidência local não autoriza promoção; aguardar decisão vinculada a `SS-MVP-002-PROMOTION-GATE-001`.
