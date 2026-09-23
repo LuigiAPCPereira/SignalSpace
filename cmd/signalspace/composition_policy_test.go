@@ -34,9 +34,12 @@ func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 		consoleMode workspaceConsoleMode
 		validator   compositionValidatorMode
 		mcpAddress  string
+		writeScope  string
+		gitScope    string
 	}{
-		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress},
-		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress},
+		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", ""},
+		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", ""},
+		{"programming", compositionProgramming, workspace.ScopeRead, workspaceConsoleProgramming, compositionLocalOAuthJWTValidator, admin.PublicAddress, workspace.ScopeWrite, workspace.ScopeGit},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -44,7 +47,7 @@ func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if plan.mode != test.mode || plan.oauthScope != compositionDiagnosticScope || plan.workspaceReadScope != test.readScope || plan.consoleMode != test.consoleMode || plan.validatorMode != test.validator || plan.mcpAddress != test.mcpAddress {
+			if plan.mode != test.mode || plan.oauthScope != compositionDiagnosticScope || plan.workspaceReadScope != test.readScope || plan.workspaceWriteScope != test.writeScope || plan.gitReviewScope != test.gitScope || plan.consoleMode != test.consoleMode || plan.validatorMode != test.validator || plan.mcpAddress != test.mcpAddress {
 				t.Fatalf("unexpected composition plan: %+v", plan)
 			}
 		})
@@ -119,7 +122,7 @@ func TestQuickRejectsUnsupportedCompositionBeforeAnySideEffect(t *testing.T) {
 			return &http.Server{}
 		},
 	)
-	if err == nil || !strings.Contains(err.Error(), "allowed modes are diagnostic and read") {
+	if err == nil || !strings.Contains(err.Error(), "allowed modes are diagnostic, read and programming") {
 		t.Fatalf("unsupported mode did not fail at the composition boundary: %v", err)
 	}
 	if input.reads != 0 || output.Len() != 0 || started || verified || adminFactoryCalled {

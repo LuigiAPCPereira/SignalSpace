@@ -30,8 +30,10 @@ func TestQuickModeArgumentsRequireExplicitPanel(t *testing.T) {
 	}{
 		{[]string{"connect", "quick"}, compositionDiagnostic, false, true},
 		{[]string{"connect", "quick", "read"}, compositionRead, false, true},
+		{[]string{"connect", "quick", "programming"}, compositionProgramming, false, true},
 		{[]string{"connect", "quick", "panel"}, compositionDiagnostic, true, true},
 		{[]string{"connect", "quick", "read", "panel"}, compositionRead, true, true},
+		{[]string{"connect", "quick", "programming", "panel"}, compositionProgramming, true, true},
 		{[]string{"connect", "quick", "write"}, compositionInvalid, false, false},
 		{[]string{"connect", "quick", "read", "write"}, compositionInvalid, false, false},
 		{[]string{"connect", "quick", "panel", "read"}, compositionInvalid, false, false},

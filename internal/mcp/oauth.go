@@ -40,11 +40,11 @@ type OAuthConfig struct {
 	// WorkspaceLister é independente e só pode ser habilitado com WorkspaceReader.
 	// A composição local deve injetar a mesma concessão nas duas portas.
 	WorkspaceLister WorkspaceDirectoryLister
-	// workspaceWriter é deliberadamente não exportado: somente o harness de
-	// testes deste pacote pode compor a escrita sem publicá-la no entrypoint.
+	// workspaceWriter só é preenchido pelo construtor explícito de programação
+	// abaixo; a configuração OAuth padrão continua sem escrita.
 	workspaceWriter WorkspaceTextWriter
-	// gitReviewer é deliberadamente não exportado: revisão Git só pode ser
-	// composta pelo harness automatizado deste pacote nesta etapa.
+	// gitReviewer só é preenchido pelo construtor explícito de programação
+	// abaixo; a configuração OAuth padrão continua sem revisão Git.
 	gitReviewer WorkspaceGitReviewer
 	// testRunner é deliberadamente não exportado: execução só pode ser
 	// composta pelo harness automatizado deste pacote nesta etapa.
@@ -52,6 +52,34 @@ type OAuthConfig struct {
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
+}
+
+// ProgrammingPorts são as portas locais necessárias para a composição pública
+// opt-in de leitura, escrita e revisão Git. A ausência de qualquer porta fecha
+// a composição; não há porta para shell, execução de testes ou mutação Git.
+type ProgrammingPorts struct {
+	WorkspaceReader WorkspaceTextReader
+	WorkspaceLister WorkspaceDirectoryLister
+	WorkspaceWriter WorkspaceTextWriter
+	GitReviewer     WorkspaceGitReviewer
+}
+
+// NewOAuthProgrammingHandler compõe explicitamente a superfície pública de
+// programação aprovada. O chamador deve estar no processo local confiável e
+// fornecer as quatro portas vinculadas à mesma concessão; não existe ativação
+// equivalente por parâmetro HTTP, metadata OAuth ou configuração genérica.
+func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
+	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceWriter == nil || ports.GitReviewer == nil {
+		return nil, errors.New("programming composition requires read, list, write and Git review ports")
+	}
+	if config.testRunner != nil {
+		return nil, errors.New("programming composition cannot publish test execution")
+	}
+	config.WorkspaceReader = ports.WorkspaceReader
+	config.WorkspaceLister = ports.WorkspaceLister
+	config.workspaceWriter = ports.WorkspaceWriter
+	config.gitReviewer = ports.GitReviewer
+	return NewOAuthHandler(config, verifier)
 }
 
 // NewOAuthHandler separa a descoberta pública da autorização obrigatória no MCP.

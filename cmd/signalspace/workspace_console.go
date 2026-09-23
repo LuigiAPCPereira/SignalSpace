@@ -30,12 +30,14 @@ type pendingWorkspace struct {
 // workspaceConsole recebe somente comandos do stdin do processo local. O MCP
 // não recebe o objeto de concessões e não pode criar sessões por HTTP.
 type workspaceConsole struct {
-	mu                  sync.Mutex
-	grants              *workspace.Grants
-	issuedClients       func() []auth.ClientInfo
-	readEnabled         bool
-	pending             *pendingWorkspace
-	programmingApproval *workspace.CapabilityApproval
+	mu                     sync.Mutex
+	grants                 *workspace.Grants
+	owner                  string
+	issuedClients          func() []auth.ClientInfo
+	readEnabled            bool
+	pending                *pendingWorkspace
+	programmingApproval    *workspace.CapabilityApproval
+	programmingGitReviewer *workspaceGitReviewer
 }
 
 func newWorkspaceConsole(authorization *auth.Server) (*workspaceConsole, error) {
@@ -43,7 +45,7 @@ func newWorkspaceConsole(authorization *auth.Server) (*workspaceConsole, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &workspaceConsole{grants: grants, issuedClients: authorization.IssuedClients}, nil
+	return &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients}, nil
 }
 
 func (c *workspaceConsole) Close() error {
@@ -52,6 +54,9 @@ func (c *workspaceConsole) Close() error {
 	c.pending = nil
 	if c.programmingApproval != nil {
 		c.programmingApproval.Close()
+	}
+	if c.programmingGitReviewer != nil {
+		c.programmingGitReviewer.Close()
 	}
 	return c.grants.Close()
 }
@@ -149,7 +154,11 @@ func (c *workspaceConsole) printWorkspaceStatusLimits(output io.Writer, scopes [
 		fmt.Fprintln(output, "Modo diagnóstico: uma concessão interna não publica read_file; o MCP permanece limitado a connection_diagnostic.")
 	}
 	if c.programmingApproval != nil && (containsScope(scopes, workspace.ScopeWrite) || containsScope(scopes, workspace.ScopeGit) || containsScope(scopes, workspace.ScopeTest)) {
-		fmt.Fprintln(output, "Escopos de programação são experimentais e não estão ativados remotamente.")
+		if c.programmingGitReviewer != nil {
+			fmt.Fprintln(output, "Escopos públicos opt-in ativos somente para READ, WRITE e Git review; test.run, shell e mutações Git permanecem fora da composição.")
+		} else {
+			fmt.Fprintln(output, "Escopos de programação são experimentais e não estão ativados remotamente.")
+		}
 	}
 }
 
@@ -261,6 +270,13 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintf(output, "workspace programming approval rejected: %v\n", err)
 			return true
 		}
+		if containsScope(pending.Scopes, workspace.ScopeGit) && c.programmingGitReviewer != nil {
+			if err := c.programmingGitReviewer.CaptureBaseline(c.owner, pending.ClientID, sessionID); err != nil {
+				_ = c.grants.Revoke(sessionID)
+				fmt.Fprintf(output, "workspace Git baseline rejected: %v\n", err)
+				return true
+			}
+		}
 		fmt.Fprintf(output, "Local programming workspace grant created: session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", sessionID, pending.ClientID, strings.Join(pending.Scopes, ","), sessionID)
 	case "cancel-programming":
 		if c.programmingApproval == nil {
@@ -328,6 +344,9 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 		} else if err != nil {
 			fmt.Fprintln(output, "workspace session not active or already revoked")
 		} else {
+			if c.programmingGitReviewer != nil {
+				c.programmingGitReviewer.Forget(argument)
+			}
 			fmt.Fprintln(output, "workspace grant revoked")
 		}
 	default:

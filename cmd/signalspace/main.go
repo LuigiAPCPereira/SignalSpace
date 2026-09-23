@@ -31,7 +31,7 @@ func main() {
 			return
 		}
 		if len(os.Args) != 3 || os.Args[1] != "doctor" {
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read] [panel]]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read|programming] [panel]]")
 		}
 		var err error
 		switch os.Args[2] {
@@ -40,7 +40,7 @@ func main() {
 		case "transport":
 			err = runTransportDoctor(context.Background(), os.Stdout)
 		default:
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read] [panel]]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read|programming] [panel]]")
 		}
 		if err != nil {
 			log.Fatal(err)
@@ -121,6 +121,7 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 	plan = closedPlan
 	issuer := strings.TrimSuffix(resource, "/mcp")
 	var grants *workspace.Grants
+	var console *workspaceConsole
 	authConfig := auth.Config{ResourceURL: resource, Issuer: issuer, Scope: plan.oauthScope, StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
 		log.Printf("Authorization requested: %s; client: %s; client_id: %s; redirect: %s; scope: %s; type approve %s or deny %s", info.ID, info.Client, info.ClientID, info.Redirect, info.Scope, info.ID, info.ID)
 	}, OnRegistrationFailure: func(reason string) {
@@ -131,7 +132,19 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 		authConfig.ReadScope = plan.workspaceReadScope
 		authConfig.CanIssueRead = func(clientID string) bool {
 			// Falhar fechado se a composição não terminou ou a concessão foi revogada.
-			return grants != nil && grants.AllowsClient(clientID)
+			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeRead)
+		}
+	}
+	if plan.workspaceWriteScope != "" {
+		authConfig.WriteScope = plan.workspaceWriteScope
+		authConfig.CanIssueWrite = func(clientID string) bool {
+			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeWrite)
+		}
+	}
+	if plan.gitReviewScope != "" {
+		authConfig.GitScope = plan.gitReviewScope
+		authConfig.CanIssueGit = func(clientID string) bool {
+			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeGit)
 		}
 	}
 	authorization, err := auth.New(authConfig)
@@ -139,19 +152,30 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 		return nil, nil, nil, err
 	}
 	closeFailure := func(err error) (http.Handler, *auth.Server, *workspaceConsole, error) {
-		if grants != nil {
+		if console != nil {
+			_ = console.Close()
+		} else if grants != nil {
 			_ = grants.Close()
 		}
 		_ = authorization.Close()
 		return nil, nil, nil, err
 	}
-	var console *workspaceConsole
-	if plan.consoleMode == workspaceConsoleRead {
+	if plan.consoleMode == workspaceConsoleRead || plan.consoleMode == workspaceConsoleProgramming {
 		grants, err = workspace.NewGrants(authorization.OwnerSubject())
 		if err != nil {
 			return closeFailure(err)
 		}
-		console = &workspaceConsole{grants: grants, issuedClients: authorization.IssuedClients, readEnabled: true}
+		console = &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients, readEnabled: true}
+		if plan.consoleMode == workspaceConsoleProgramming {
+			approval, approvalErr := workspace.NewCapabilityApproval(grants, func(clientID string) bool {
+				return console.isIssuedClient(clientID)
+			})
+			if approvalErr != nil {
+				return closeFailure(approvalErr)
+			}
+			console.programmingApproval = approval
+			console.programmingGitReviewer = newWorkspaceGitReviewer(grants, programmingGitOutputLimit)
+		}
 	}
 	var verifier *mcp.JWKSVerifier
 	switch plan.validatorMode {
@@ -176,7 +200,17 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 		mcpConfig.WorkspaceReader = grants
 		mcpConfig.WorkspaceLister = grants
 	}
-	protected, err := mcp.NewOAuthHandler(mcpConfig, verifier)
+	var protected http.Handler
+	if plan.consoleMode == workspaceConsoleProgramming {
+		protected, err = mcp.NewOAuthProgrammingHandler(mcpConfig, mcp.ProgrammingPorts{
+			WorkspaceReader: mcpConfig.WorkspaceReader,
+			WorkspaceLister: mcpConfig.WorkspaceLister,
+			WorkspaceWriter: console.grants,
+			GitReviewer:     console.programmingGitReviewer,
+		}, verifier)
+	} else {
+		protected, err = mcp.NewOAuthHandler(mcpConfig, verifier)
+	}
 	if err != nil {
 		return closeFailure(err)
 	}
