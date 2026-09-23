@@ -365,3 +365,17 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** os quatro testes de retry passaram em serial e em `-race -count=100`; `go test ./... -count=1 -timeout=300s`, `go test -race ./cmd/signalspace ./internal/admin ./internal/auth ./internal/mcp ./internal/workspace -p=1 -parallel=1 -count=1 -timeout=300s`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram. Não houve CI, cloudflared, túnel, HTTPS operacional, navegador, OAuth externo, workspace real, merge ou deploy. Não restaram listeners em 7676/7677 nem processo `cloudflared`.
 
 **Próxima ação:** nenhum novo ID foi criado; aguardar a próxima missão vinculada a ID existente. Este checkpoint não conclui SS-BE-007 global nem aprova o gate de promoção.
+
+## Checkpoint SS-BE-007 grupo 10 — restart visual local no navegador integrado — 22/09/2026
+
+**Estado:** a fatia de restart/bind/publicação fechada está **CONFIRMADA no escopo HTTP + navegador integrado local descartável**. O grupo 10 completo e SS-BE-007 global permanecem **PARCIAIS/em andamento**; SS-MVP-002 permanece **PARCIAL/em andamento** e `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**.
+
+**Ref e preservação:** o código foi reaberto na branch `codex/mvp-vertical-programming`, HEAD `e652d72`, sem aplicar os dois patches não rastreados do usuário. A fixture manual foi criada temporariamente no pacote `cmd/signalspace`, removida após o `PASS`, e não deixou mudança de produção, frontend ou CI.
+
+**Evidência observada:** duas composições `diagnostic` reais usaram o mesmo `StateDir` temporário, `auth.Server`/`admin.Gate` novos, handlers reais e listeners fixos `127.0.0.1:7676`/`localhost:7677`. No mesmo contexto e mesma aba do navegador integrado, o primeiro ciclo fez pareamento e exibiu uma fila com um pedido OAuth `PENDING`; o detalhe mostrou metadados e `Recusar`/`Aprovar`, sem clique de decisão. O primeiro shutdown foi gracioso e o rebind das portas passou.
+
+**Após reinício:** reload da mesma aba apresentou `UNPAIRED` e a mensagem de sessão administrativa inválida; a fila, o detalhe e as ações antigas não foram exibidos. O segundo pareamento apresentou `AUTHENTICATED`, contador `0` e “Nenhuma solicitação encontrada no servidor”. A captura visual final confirmou a distinção entre sessão autenticada e fila vazia.
+
+**Validação e limites:** a fixture terminou `PASS` em 59,67 s; o teste HTTP focalizado de restart também passou. Não houve defeito reproduzível. Não houve cloudflared, túnel, HTTPS operacional, grant ChatGPT Web, workspace real, CI, merge ou deploy; esta evidência não é aceite externo.
+
+**Próxima ação:** aguardar nova missão vinculada a ID existente, sem declarar SS-BE-007 global concluída e sem reabrir a fatia já confirmada.
