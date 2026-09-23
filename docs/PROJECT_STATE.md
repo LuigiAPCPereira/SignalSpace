@@ -379,3 +379,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação e limites:** a fixture terminou `PASS` em 59,67 s; o teste HTTP focalizado de restart também passou. Não houve defeito reproduzível. Não houve cloudflared, túnel, HTTPS operacional, grant ChatGPT Web, workspace real, CI, merge ou deploy; esta evidência não é aceite externo.
 
 **Próxima ação:** aguardar nova missão vinculada a ID existente, sem declarar SS-BE-007 global concluída e sem reabrir a fatia já confirmada.
+
+## Checkpoint SS-BE-007 grupo 9 — integração administrativa com OAuth real bloqueada — 22/09/2026
+
+**Estado:** a fatia de tombstone público real permanece **CONFIRMADA no escopo local**; a nova integração administrativa com a mesma instância OAuth está **BLOQUEADA** no gate de viabilidade do tempo. O grupo 9 completo e SS-BE-007 global permanecem **PARCIAIS/em andamento**. SS-MVP-002 permanece **PARCIAL/em andamento** e `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**.
+
+**Ref e preservação:** branch `codex/mvp-vertical-programming`, HEAD observado `2e86de81193e8acd25b045ab1957d8c27dbc9a59`, após fetch/prune e pull fast-forward sem divergência. Os patches não rastreados foram preservados fora do Git, sem aplicação ou alteração, com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780ebf8a444df1a4e48f2`.
+
+**Gate de viabilidade:** o `auth.Server` usa `time.Now()` ao criar pedidos e ao consultar/limpar snapshots, e mantém `pending`/`terminal` privados. O controle de tempo dos testes existentes só é possível dentro do pacote `auth`; a composição da API administrativa está no pacote `admin`, que importa `auth`. A prova pública real e a prova administrativa controlada passaram separadamente, mas não podem ser apresentadas como a integração pedida. Esperar minutos reais ou ampliar a produção com clock/endpoint de teste não é uma alternativa autorizada nesta missão.
+
+**Validação:** passaram `TestPublicStatusRetainsRealExpiredRequestOverHTTP`, `TestAdminHTTPExpiredDecisionAndRetentionBoundary`, regressões focadas de auth/admin e os 22 testes Node do painel. Não foi criado teste integrado substituto, não houve código de produção, listener, túnel, cloudflared, navegador, HTTPS, CI, merge ou deploy nesta fatia.
+
+**Próxima ação vinculada:** resolver o bloqueio de controle determinístico de tempo com decisão explícita de contrato/teste; até lá, não declarar `410`/`404` administrativos como provenientes da mesma instância OAuth e não repetir grupos já confirmados.
