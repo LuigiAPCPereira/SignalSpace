@@ -513,3 +513,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação e limites:** passaram o teste focado antes/depois, as suítes seriais de `internal/mcp` e `cmd/signalspace`, race serial dos dois pacotes, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check`. Não houve túnel/cloudflared, HTTPS operacional, navegador, grant ChatGPT Web, workspace real, CI, merge ou deploy; listeners 7676/7677 não ficaram ativos.
 
 **Próxima decisão:** **PROMOTION GATE PRONTO PARA DECISÃO DO PROPRIETÁRIO, NÃO APROVADO AUTOMATICAMENTE.** A evidência local não autoriza promoção; aguardar decisão vinculada a `SS-MVP-002-PROMOTION-GATE-001`.
+
+## Checkpoint SS-MVP-002 — promoção local opt-in READ + WRITE + GIT — 23/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL**; `SS-BE-007` permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` está **APROVADO PELO PROPRIETÁRIO / IMPLEMENTAÇÃO LOCAL CONFIRMADA**; CI permanece **DESCONHECIDA**. A aprovação cobre somente READ, WRITE e revisão Git observacional no modo explícito `connect quick programming`; shell, `test.run`, comandos arbitrários e mutações Git não foram promovidos.
+
+**Ref e preservação:** antes da implementação, `codex/mvp-vertical-programming` e `origin/codex/mvp-vertical-programming` estavam em `61863d6a6b1d50d34d1a73f989ea97a18360e8cd`. O código foi registrado no commit local `e97aaf7ec84577f2999f0bb725db5d2b8a451ce2`; o remoto continua no SHA anterior porque não houve push. PR #1, `feat/m1-local-mcp-diagnostic`, `feat/frontend-oauth-consent` e os dois patches não rastreados permanecem preservados, fora do Git, não aplicados e intocados.
+
+**Implementação:** `cmd/signalspace` agora tem composição fechada `diagnostic`/`read`/`programming`; `internal/mcp` expõe o construtor explícito `NewOAuthProgrammingHandler`; a aprovação terminal-local liga reader/lister/writer/revisor Git somente no modo programming. O revisor Git captura baseline por sessão e só observa status/diff; não faz add, commit, push ou limpeza. `7677` continua administrativo local e não é registrado no handler MCP público.
+
+**Evidência:** a integração `cmd/signalspace/programming_composition_test.go` verificou metadata, `initialize`, `tools/list`, chamadas READ/WRITE/GIT, escopos independentes, divergências owner/client/session, revogação com JWT ainda válido e ausência de `run_workspace_tests`/shell/mutação Git. Passaram os testes focados, a suíte Go serial completa, race dos pacotes afetados, vet, build, gofmt e diff check. No fechamento devem ser rechecados listeners/processos residuais; isso não substitui navegador, HTTPS, túnel, grant real, workspace real ou CI.
+
+**Próxima ação:** eventual aceite operacional externo ou inclusão de shell deve ser uma missão separada, com contrato e gate próprios. Não tratar a aprovação deste checkpoint como conclusão de `SS-MVP-002`.
