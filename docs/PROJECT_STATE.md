@@ -391,3 +391,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** passaram `TestPublicStatusRetainsRealExpiredRequestOverHTTP`, `TestAdminHTTPExpiredDecisionAndRetentionBoundary`, regressões focadas de auth/admin e os 22 testes Node do painel. Não foi criado teste integrado substituto, não houve código de produção, listener, túnel, cloudflared, navegador, HTTPS, CI, merge ou deploy nesta fatia.
 
 **Próxima ação vinculada:** resolver o bloqueio de controle determinístico de tempo com decisão explícita de contrato/teste; até lá, não declarar `410`/`404` administrativos como provenientes da mesma instância OAuth e não repetir grupos já confirmados.
+
+## Checkpoint SS-BE-007 grupo 9 — integração administrativa OAuth real confirmada localmente — 22/09/2026
+
+**Estado:** a fatia administrativa com a mesma instância `auth.Server` está **CONFIRMADA no escopo HTTP local**, usando ponte temporal exclusiva da build tag `signalspace_testtime`. Grupo 9 completo e SS-BE-007 global permanecem **PARCIAIS/em andamento**; SS-MVP-002 permanece **PARCIAL/em andamento**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI é **DESCONHECIDA**.
+
+**Ref e preservação:** branch `codex/mvp-vertical-programming`, base `8b697c8ec6aabe57ccf8f37ae51e66a941901e2e`; implementação/teste em `312ef64`. Os dois patches do usuário continuam não rastreados, fora do commit e intocados, com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780ebf8a444df1a4e48f2`.
+
+**Evidência:** o teste `TestAdminOAuthRealExpiryLifecycleWithTestTimeBridge` atravessa DCR, `/authorize`, `auth.Server`, `admin.Gate`, listeners reais de loopback e pareamento HTTP. A transição e limpeza foram disparadas pelos GET administrativos reais, não pela ponte: `PENDING` → `EXPIRED` retido → `410 REQUEST_EXPIRED` → `404 REQUEST_NOT_FOUND`; a fila sem sessão respondeu `401 AUTH_REQUIRED`. A ponte somente ajustou `pending[id].Expires` e, depois de um tombstone verdadeiro, `terminal[id].retainUntil` sob o mutex.
+
+**Fronteira e validação:** `go list` mostrou que a ponte não aparece sem tag e aparece com `-tags=signalspace_testtime`. A suíte tagged de `cmd/signalspace`, foco tagged com race, suíte Go normal serial, race serial dos seis pacotes afetados, vet, build, gofmt, diff-check e regressões Node 22/22 passaram. Nenhuma configuração de distribuição habilita a tag; não houve mudança do comportamento temporal normal.
+
+**Limites e próxima ação:** evidência somente local/loopback; não comprova túnel, HTTPS, navegador, grant ChatGPT Web, workspace real, CI, merge ou deploy. O próximo trabalho deve usar um ID existente da TASKLIST e não promover SS-BE-007 global nem SS-MVP-002.
