@@ -467,3 +467,19 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** focos públicos/MCP/READ/painel/vertical OAuth, suíte `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial dos pacotes afetados `cmd/signalspace` e `internal/mcp`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram. Não houve mudança de produção, túnel/cloudflared, workspace real, grant ChatGPT Web, consulta CI, merge ou deploy.
 
 **Limites e próxima ação:** a regressão fecha a cobertura do entrypoint público para o fix de descoberta, mas não constitui aceite remoto/HTTPS nem promoção de ferramentas. Aguardar missão vinculada a ID existente.
+
+## Checkpoint SS-MVP-002 — instruções MCP alinhadas ao escopo OAuth — 23/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL**; `SS-BE-007` permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI permanece **DESCONHECIDA**. Nenhuma ferramenta de escrita, execução ou Git foi promovida.
+
+**Ref e preservação:** a auditoria começou no HEAD local/remoto `0a774ca2a2b9f0e260b5a68f354bab393d8448ec` e a implementação foi publicada no commit `5f6f2371c7e22047af1dbb767b2f5faf1a5917e6`. PR #1, `feat/m1-local-mcp-diagnostic` e `feat/frontend-oauth-consent` não foram alterados. Os dois patches do usuário permaneceram não rastreados, não aplicados e intocados.
+
+**Fronteira auditada:** CLI → composição → Quick → OAuth → verificador JWT → handler MCP → ferramentas. `composition.go`, `main.go` e `quick.go` continuam fechando os entrypoints em `diagnostic`/`read`; o painel não altera capacidades; o público continua em 7676 e o admin em 7677; `tools/list` público não publica write/test/Git; owner, cliente, sessão, escopo e revogação continuam revalidados na chamada.
+
+**Lacuna reproduzida e corrigida:** `initialize.instructions` usava a existência de `WorkspaceReader`/outras portas internas, e não o escopo do token atual. Com um JWT somente diagnóstico numa composição configurada para leitura, `tools/list` retornava apenas `connection_diagnostic`, mas `initialize` dizia que a leitura de arquivos estava disponível. A regressão focal falhou antes da correção. O servidor agora inclui instruções de leitura, Git ou teste somente quando o respectivo `advertise` foi habilitado pela verificação independente do escopo; a composição pública testa token diagnóstico e token READ sem nova fixture.
+
+**Reconciliação documental:** a matriz resumida do grupo 1 permanece alinhada ao checkpoint `a2dd93b6` e registra nove variantes externas aprovadas no smoke descartável. Isso é evidência de isolamento da fatia exercitada, não aceite da matriz integral de ataques, proxy/DNS rebinding, navegador, CI ou deploy; o histórico anterior não foi reescrito.
+
+**Validação:** passaram o foco da regressão antes/depois, foco público `TestPublicCompositionsKeepWorkspaceWriteUnpublished`, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, `go test -race ./cmd/signalspace ./internal/mcp -p=1 -parallel=1 -count=1`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check`. Não houve listeners residuais em 7676/7677 nem processo `cloudflared` após os testes.
+
+**Limites e próxima ação:** a prova permanece local/automatizada. Não houve túnel/cloudflared, HTTPS operacional, navegador, grant ChatGPT Web, workspace real, consulta CI, merge ou deploy. Aguardar missão vinculada a ID existente sem promover capacidades.
