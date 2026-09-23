@@ -119,6 +119,19 @@ func TestWorkspaceReadToolAuthGrantRevocationAndPaths(t *testing.T) {
 	if schemes[0].(map[string]any)["scopes"].([]any)[0] != workspaceReadScope {
 		t.Fatalf("read tool missing separate OAuth scope: %v", schemes)
 	}
+	// A configuração local de leitura não deve anunciar a ferramenta a um
+	// bearer que só possui o escopo diagnóstico.
+	diagnosticClaims := defaultClaims()
+	diagnosticClaims["client_id"] = clientID
+	diagnosticToken := makeAccessToken(t, key, diagnosticClaims)
+	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", diagnosticToken, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("diagnostic tool discovery failed: %d", res.StatusCode)
+	}
+	tools = result["result"].(map[string]any)["tools"].([]any)
+	if len(tools) != 1 || tools[0].(map[string]any)["name"] != toolName {
+		t.Fatalf("diagnostic token advertised workspace tools: %v", tools)
+	}
 
 	// Uma autorização OAuth não concede uma raiz nem um ID de sessão.
 	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", readToken, readCall(strings.Repeat("0", 32), "readme.txt"), nil)

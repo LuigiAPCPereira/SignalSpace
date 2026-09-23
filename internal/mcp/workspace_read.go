@@ -24,6 +24,7 @@ type readToolAccess struct {
 	lister    WorkspaceDirectoryLister
 	verify    func(context.Context) (VerifiedIdentity, error)
 	challenge string
+	advertise bool
 }
 
 func workspaceToolSchema() map[string]any {

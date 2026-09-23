@@ -240,7 +240,7 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			tool["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{diagnosticScope}}}
 		}
 		tools := []any{tool}
-		if readAccess != nil {
+		if readAccess != nil && readAccess.advertise {
 			tools = append(tools, readToolDefinition())
 			if readAccess.lister != nil {
 				tools = append(tools, listDirectoryToolDefinition())

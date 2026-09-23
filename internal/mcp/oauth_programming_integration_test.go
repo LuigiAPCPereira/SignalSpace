@@ -407,13 +407,13 @@ func TestOAuthProgrammingVerticalFlowUsesRealIssuerVerifierAndIndependentRevocat
 		if name == "read" && (len(names) != 2 || names[1] != readToolName) {
 			t.Fatalf("read token exposed unexpected tools: %v", names)
 		}
-		if name == "write" && (len(names) != 3 || names[1] != readToolName || names[2] != writeToolName) {
+		if name == "write" && (len(names) != 2 || names[1] != writeToolName) {
 			t.Fatalf("write token exposed unexpected tools: %v", names)
 		}
-		if name == "git" && (len(names) != 3 || names[1] != readToolName || names[2] != gitReviewToolName) {
+		if name == "git" && (len(names) != 2 || names[1] != gitReviewToolName) {
 			t.Fatalf("Git token exposed unexpected tools: %v", names)
 		}
-		if name == "test" && (len(names) != 3 || names[1] != readToolName || names[2] != testRunToolName) {
+		if name == "test" && (len(names) != 2 || names[1] != testRunToolName) {
 			t.Fatalf("test token exposed unexpected tools: %v", names)
 		}
 	}

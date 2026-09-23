@@ -164,6 +164,9 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				},
 				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceReadScope),
 			}
+			if _, err := readAccess.verify(r.Context()); err == nil {
+				readAccess.advertise = true
+			}
 		}
 		var writeAccess *writeToolAccess
 		if config.workspaceWriter != nil {

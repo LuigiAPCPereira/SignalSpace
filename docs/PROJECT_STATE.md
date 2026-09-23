@@ -441,3 +441,17 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Isolamento local e shutdown:** `Host` externo, `Origin` cruzada e preflight cruzado retornaram `403`; `Forwarded`/`X-Forwarded-*` forjados não contornaram a autorização da rota protegida (`401`). O bootstrap com Host canônico retornou `200`, sem registrar cookie ou corpo. Não houve pareamento, OAuth, decisão, MCP ou operação de workspace. Ctrl+C encerrou o processo; 7676/7677 ficaram livres e não restaram processos SignalSpace/cloudflared do smoke. O diretório temporário do Quick e os temporários de probe foram removidos.
 
 **Limites:** confirma somente o encaminhamento público para 7676, os negativos administrativos e o isolamento/Host/Origin observado neste ambiente. Não cobre proxy externo arbitrário, DNS rebinding, configuração externa deliberada, pareamento/decisão, navegador, MCP, CI, merge ou deploy. O túnel não ficou ativo.
+
+## Checkpoint SS-MVP-002 — auditoria da fronteira pública — 22/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL**; `SS-BE-007` permanece **PARCIAL**; `SS-MVP-002-PROMOTION-GATE-001` permanece **PENDENTE**; CI permanece **DESCONHECIDA**. A auditoria não promoveu `workspace.write`, `test.run` ou `git.review`.
+
+**Ref e preservação:** a auditoria começou na branch `codex/mvp-vertical-programming`, HEAD local/remoto `a2dd93b6ae3be89bd3871cada8c406ed139ac014`. O PR #1 e `feat/m1-local-mcp-diagnostic` não foram alterados. `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` permaneceram não rastreados, não aplicados e intocados.
+
+**Fronteira auditada:** a composição aceita somente `diagnostic` e `read`; o painel não altera o modo; modos inválidos são rejeitados antes de OAuth, listener, túnel ou efeito; o admin não é MCP; o público usa o listener de 7676 e não encaminha para 7677; `tools/list` não publica escrita, teste ou Git; e grants locais revalidam owner, client, sessão, escopo e revogação. A evidência foi conferida em `cmd/signalspace/{composition.go,main.go,quick.go}` e `internal/mcp/{oauth.go,server.go,workspace_read.go}`, com os testes de composição, promoção, OAuth, revogação e ferramentas.
+
+**Lacuna e correção:** uma composição de leitura anunciava `read_file` para bearer que possuía somente `signalspace:diagnostic`. A chamada de leitura já falhava com desafio de escopo, mas a descoberta indevida violava a separação de escopos. O novo teste reproduziu a exposição; `readToolAccess.advertise` agora só é verdadeiro após verificar `signalspace:workspace.read`, e `tools/list` usa essa condição. As expectativas de integração para tokens de escrita, Git e teste foram alinhadas: cada um anuncia apenas diagnóstico e sua capacidade própria.
+
+**Validação:** passaram a suíte de `internal/mcp`, a suíte serial de `cmd/signalspace`, o race de `internal/mcp`, `go vet` dos pacotes afetados, `go build ./...`, `gofmt` e `git diff --check`. A primeira execução de `cmd/signalspace` falhou somente por expectativas antigas de descoberta; após a reconciliação dos testes, passou. Nenhum serviço, túnel ou cloudflared foi iniciado nesta missão.
+
+**Limites e próxima ação:** trata-se de evidência local de código/testes, não de matriz operacional completa, navegador, CI, grant externo, workspace, merge ou deploy. Não declarar o gate de promoção concluído; aguardar próxima missão vinculada a ID existente.

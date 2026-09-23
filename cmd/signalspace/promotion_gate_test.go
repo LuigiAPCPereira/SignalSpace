@@ -81,9 +81,23 @@ func TestPublicCompositionsKeepWorkspaceWriteUnpublished(t *testing.T) {
 			if rejected := readRequest(t, handler, http.MethodGet, "/authorize?"+writeRequest.Encode(), "", "", "", nil); rejected.Code == http.StatusOK {
 				t.Fatal("public composition accepted an OAuth workspace.write request")
 			}
+			requestedScope := "signalspace:diagnostic"
+			if tc.mode == compositionRead {
+				requestedScope += " signalspace:workspace.read"
+				_ = authorizeClient(t, handler, func(id string) error {
+					return authorization.DecideTerminal(id, true)
+				}, client.ID, "signalspace:diagnostic")
+				root := t.TempDir()
+				var output strings.Builder
+				console.handleWorkspaceCommand("workspace request "+client.ID+" "+root, &output)
+				if console.pending == nil {
+					t.Fatalf("read composition did not create local grant request: %s", output.String())
+				}
+				console.handleWorkspaceCommand("workspace approve "+console.pending.id, &output)
+			}
 			token := authorizeClient(t, handler, func(id string) error {
 				return authorization.DecideTerminal(id, true)
-			}, client.ID, "signalspace:diagnostic")
+			}, client.ID, requestedScope)
 
 			listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 			if listing.Code != http.StatusOK {
