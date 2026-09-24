@@ -12,16 +12,18 @@ import (
 	"testing"
 )
 
-func startProgrammingAuth(t *testing.T, canGit, canTest *atomic.Bool) (*Server, http.Handler, <-chan RequestInfo) {
+func startProgrammingAuth(t *testing.T, canGit, canIndex, canTest *atomic.Bool) (*Server, http.Handler, <-chan RequestInfo) {
 	t.Helper()
 	requests := make(chan RequestInfo, 8)
 	server, err := New(Config{
-		ResourceURL: resourceURL,
-		Issuer:      "https://signalspace.example",
-		Scope:       scope,
-		GitScope:    gitReviewScope,
-		CanIssueGit: func(clientID string) bool { return clientID != "" && canGit.Load() },
-		TestScope:   testRunScope,
+		ResourceURL:      resourceURL,
+		Issuer:           "https://signalspace.example",
+		Scope:            scope,
+		GitScope:         gitReviewScope,
+		CanIssueGit:      func(clientID string) bool { return clientID != "" && canGit.Load() },
+		GitIndexScope:    gitIndexScope,
+		CanIssueGitIndex: func(clientID string) bool { return clientID != "" && canIndex.Load() },
+		TestScope:        testRunScope,
 		CanIssueTest: func(clientID string) bool {
 			return clientID != "" && canTest.Load()
 		},
@@ -36,14 +38,15 @@ func startProgrammingAuth(t *testing.T, canGit, canTest *atomic.Bool) (*Server, 
 }
 
 func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *testing.T) {
-	var canGit, canTest atomic.Bool
+	var canGit, canIndex, canTest atomic.Bool
 	canGit.Store(true)
+	canIndex.Store(true)
 	canTest.Store(true)
-	server, handler, requests := startProgrammingAuth(t, &canGit, &canTest)
+	server, handler, requests := startProgrammingAuth(t, &canGit, &canIndex, &canTest)
 	client := register(t, handler)
 
 	metadata := invoke(handler, http.MethodGet, "/.well-known/oauth-authorization-server", "", "", nil)
-	if metadata.Code != http.StatusOK || !strings.Contains(metadata.Body.String(), gitReviewScope) || !strings.Contains(metadata.Body.String(), testRunScope) {
+	if metadata.Code != http.StatusOK || !strings.Contains(metadata.Body.String(), gitReviewScope) || !strings.Contains(metadata.Body.String(), gitIndexScope) || !strings.Contains(metadata.Body.String(), testRunScope) {
 		t.Fatalf("programming scopes were not advertised: %d %s", metadata.Code, metadata.Body.String())
 	}
 	var discovered struct {
@@ -52,7 +55,7 @@ func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *tes
 	if err := json.Unmarshal(metadata.Body.Bytes(), &discovered); err != nil {
 		t.Fatal(err)
 	}
-	wantScopes := []string{scope, gitReviewScope, testRunScope}
+	wantScopes := []string{scope, gitReviewScope, gitIndexScope, testRunScope}
 	if !reflect.DeepEqual(discovered.Scopes, wantScopes) {
 		t.Fatalf("unexpected programming scope order: got=%v want=%v", discovered.Scopes, wantScopes)
 	}
@@ -60,8 +63,12 @@ func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *tes
 	validScopes := []string{
 		scope,
 		scope + " " + gitReviewScope,
+		scope + " " + gitIndexScope,
 		scope + " " + testRunScope,
 		scope + " " + gitReviewScope + " " + testRunScope,
+		scope + " " + gitReviewScope + " " + gitIndexScope,
+		scope + " " + gitIndexScope + " " + testRunScope,
+		scope + " " + gitReviewScope + " " + gitIndexScope + " " + testRunScope,
 	}
 	for _, requested := range validScopes {
 		result, _, _ := requestProgrammingConsent(t, handler, client, requested)
@@ -81,6 +88,7 @@ func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *tes
 		testRunScope + " " + scope,
 		scope + " " + testRunScope + " " + gitReviewScope,
 		scope + " " + gitReviewScope + " " + gitReviewScope,
+		scope + " " + gitIndexScope + " " + gitReviewScope,
 		scope + "  " + gitReviewScope,
 		scope + " signalspace:unknown",
 	} {
@@ -90,9 +98,9 @@ func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *tes
 		}
 	}
 
-	requested := scope + " " + gitReviewScope + " " + testRunScope
+	requested := scope + " " + gitReviewScope + " " + gitIndexScope + " " + testRunScope
 	result, cookie, csrf := requestProgrammingConsent(t, handler, client, requested)
-	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), "executar o teste predefinido") || !strings.Contains(result.Body.String(), "privilégios do usuário") || !strings.Contains(result.Body.String(), "O workspace não é sandbox") || !strings.Contains(result.Body.String(), "inspecionar status e diff Git") || !strings.Contains(result.Body.String(), "não autoriza commit ou push") {
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), "executar o teste predefinido") || !strings.Contains(result.Body.String(), "privilégios do usuário") || !strings.Contains(result.Body.String(), "O workspace não é sandbox") || !strings.Contains(result.Body.String(), "inspecionar status e diff Git") || !strings.Contains(result.Body.String(), "não autoriza commit ou push") || !strings.Contains(result.Body.String(), "staging/unstaging explícito") || !strings.Contains(result.Body.String(), "não cria commit, branch ou push") {
 		t.Fatalf("programming consent did not describe both capabilities: %d %s", result.Code, result.Body.String())
 	}
 	request := <-requests
@@ -100,11 +108,13 @@ func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *tes
 		t.Fatal(err)
 	}
 	canGit.Store(false)
+	canIndex.Store(false)
 	canTest.Store(false)
 	if response := complete(handler, request.ID, csrf, cookie); response.Code != http.StatusForbidden {
 		t.Fatalf("revoked programming grant was accepted at completion: %d", response.Code)
 	}
 	canGit.Store(true)
+	canIndex.Store(true)
 	canTest.Store(true)
 	if response := complete(handler, request.ID, csrf, cookie); response.Code != http.StatusSeeOther {
 		t.Fatalf("restored programming grant did not complete: %d", response.Code)
@@ -125,6 +135,7 @@ func TestProgrammingScopesMetadataCanonicalConsentAndBoundaryRevalidation(t *tes
 		t.Fatal(err)
 	}
 	canGit.Store(false)
+	canIndex.Store(false)
 	canTest.Store(false)
 	if response := redeem(handler, client, target.Query().Get("code"), testVerifier, resourceURL); response.Code != http.StatusBadRequest {
 		t.Fatalf("revoked programming grant was accepted at token exchange: %d", response.Code)

@@ -36,6 +36,7 @@ type compositionPlan struct {
 	workspaceReadScope  string
 	workspaceWriteScope string
 	gitReviewScope      string
+	gitIndexScope       string
 	consoleMode         workspaceConsoleMode
 	validatorMode       compositionValidatorMode
 	mcpAddress          string
@@ -69,6 +70,7 @@ func planComposition(mode compositionMode) (compositionPlan, error) {
 			workspaceReadScope:  workspace.ScopeRead,
 			workspaceWriteScope: workspace.ScopeWrite,
 			gitReviewScope:      workspace.ScopeGit,
+			gitIndexScope:       workspace.ScopeGitIndex,
 			consoleMode:         workspaceConsoleProgramming,
 			validatorMode:       compositionLocalOAuthJWTValidator,
 			mcpAddress:          admin.PublicAddress,

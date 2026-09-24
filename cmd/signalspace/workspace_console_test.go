@@ -189,14 +189,14 @@ func TestWorkspaceConsoleManagedWorktreeLifecycleUsesSeparateApproval(t *testing
 	console.managed = manager
 	root := gitWorkspaceFixture(t)
 	var out bytes.Buffer
-	command := "workspace request-worktree " + testConsoleClient + " " + workspace.ScopeRead + "," + workspace.ScopeWrite + " " + root
+	command := "workspace request-worktree " + testConsoleClient + " " + workspace.ScopeRead + "," + workspace.ScopeWrite + "," + workspace.ScopeGitIndex + " " + root
 	if !console.handleWorkspaceCommand(command, &out) || console.managedPending == nil {
 		t.Fatalf("managed request was not pending: %s", out.String())
 	}
 	approvalID := console.managedPending.id
 	console.handleWorkspaceCommand("workspace approve-worktree "+approvalID, &out)
 	snapshot, err := console.grants.Snapshot()
-	if err != nil || !snapshot.Active || snapshot.Mode != workspace.WorkspaceModeWorktree || snapshot.ManagedWorkspaceID == "" {
+	if err != nil || !snapshot.Active || snapshot.Mode != workspace.WorkspaceModeWorktree || snapshot.ManagedWorkspaceID == "" || !containsScope(snapshot.Scopes, workspace.ScopeGitIndex) {
 		t.Fatalf("managed grant snapshot: %#v %v\n%s", snapshot, err, out.String())
 	}
 	oldSession := snapshot.SessionID
@@ -207,13 +207,13 @@ func TestWorkspaceConsoleManagedWorktreeLifecycleUsesSeparateApproval(t *testing
 	if console.managed.ActiveID() != "" {
 		t.Fatal("revoke left managed workspace active")
 	}
-	console.handleWorkspaceCommand("workspace request-worktree-resume "+testConsoleClient+" "+workspace.ScopeRead+" "+snapshot.ManagedWorkspaceID, &out)
+	console.handleWorkspaceCommand("workspace request-worktree-resume "+testConsoleClient+" "+workspace.ScopeRead+","+workspace.ScopeGitIndex+" "+snapshot.ManagedWorkspaceID, &out)
 	if console.managedPending == nil {
 		t.Fatalf("resume request was not pending: %s", out.String())
 	}
 	console.handleWorkspaceCommand("workspace approve-worktree-resume "+console.managedPending.id, &out)
 	resumed, err := console.grants.Snapshot()
-	if err != nil || !resumed.Active || resumed.SessionID == oldSession || resumed.ManagedWorkspaceID != snapshot.ManagedWorkspaceID {
+	if err != nil || !resumed.Active || resumed.SessionID == oldSession || resumed.ManagedWorkspaceID != snapshot.ManagedWorkspaceID || !containsScope(resumed.Scopes, workspace.ScopeGitIndex) {
 		t.Fatalf("managed resume snapshot: %#v %v\n%s", resumed, err, out.String())
 	}
 	console.handleWorkspaceCommand("workspace revoke "+resumed.SessionID, &out)
@@ -249,6 +249,10 @@ func TestWorkspaceConsoleProgrammingApprovalIsExplicitAndIndependent(t *testing.
 	defaultConsole.handleWorkspaceCommand("workspace request-programming "+testConsoleClient+" "+workspace.ScopeWrite+","+workspace.ScopeTest+" "+root, &out)
 	if !strings.Contains(out.String(), "programming approval unavailable") {
 		t.Fatalf("default console exposed programming approval: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace request-programming "+testConsoleClient+" "+workspace.ScopeGitIndex+" "+root, &out)
+	if console.pending != nil || !strings.Contains(out.String(), "programming request rejected") {
+		t.Fatalf("generic programming request accepted managed-only Git index: %s", out.String())
 	}
 
 	out.Reset()

@@ -66,10 +66,10 @@ func NormalizeCapabilities(scopes ...string) ([]string, error) {
 	return normalizeCapabilities(false, scopes...)
 }
 
-// normalizeManagedCapabilities só é usada pela composição local do manager
-// de worktrees. O fluxo público de approval continua restrito a
-// NormalizeCapabilities, portanto não passa a conceder mutação do índice.
-func normalizeManagedCapabilities(scopes ...string) ([]string, error) {
+// NormalizeManagedCapabilities só é usada pelo fluxo local owner-side de
+// managed worktrees. Não é exposta por MCP/HTTP e não deve ser usada pelo
+// pedido genérico de programação em checkout comum.
+func NormalizeManagedCapabilities(scopes ...string) ([]string, error) {
 	return normalizeCapabilities(true, scopes...)
 }
 

@@ -28,6 +28,7 @@ const (
 	workspaceReadScope   = "signalspace:workspace.read"
 	workspaceWriteScope  = "signalspace:workspace.write"
 	gitReviewScope       = "signalspace:git.review"
+	gitIndexScope        = "signalspace:git.index"
 	testRunScope         = "signalspace:test.run"
 	maxRegistrationBytes = 16 << 10
 	maxFormBytes         = 8 << 10
@@ -62,7 +63,8 @@ var (
 {{if .Write}}<p><strong>Permissão adicional:</strong> modificar arquivos de texto dentro da pasta autorizada. Esta permissão não dá acesso a outras pastas, comandos ou Git.</p>{{end}}
 {{if .Test}}<p><strong>Permissão adicional:</strong> executar o teste predefinido do projeto autorizado. Os testes podem executar código com os privilégios do usuário. O workspace não é sandbox.</p>{{end}}
 {{if .Git}}<p><strong>Permissão adicional:</strong> inspecionar status e diff Git do workspace. O diff pode conter conteúdo sensível. Esta permissão não autoriza commit ou push.</p>{{end}}
-{{if and (not .Read) (not .Write) (not .Test) (not .Git)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
+{{if .GitIndex}}<p><strong>Permissão adicional:</strong> fazer staging/unstaging explícito de paths literais no índice Git da managed worktree aprovada. Esta permissão não cria commit, branch ou push.</p>{{end}}
+{{if and (not .Read) (not .Write) (not .Test) (not .Git) (not .GitIndex)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
 <p>Escopos solicitados: <code>{{.Scope}}</code></p>
 <p>Destino do retorno: <code>{{.Redirect}}</code></p>
 <p id="authorization-status" role="status" aria-live="polite">Confirme na janela do terminal em que o SignalSpace está em execução.</p>
@@ -100,6 +102,10 @@ type Config struct {
 	// verificador local explícito. A configuração padrão nunca a preenche.
 	GitScope    string
 	CanIssueGit func(clientID string) bool
+	// GitIndexScope é uma fronteira independente: staging/unstaging só pode ser
+	// emitido quando o grant local corrente inclui a managed worktree aprovada.
+	GitIndexScope    string
+	CanIssueGitIndex func(clientID string) bool
 	// TestScope é uma extensão experimental: só pode ser oferecida junto de um
 	// verificador local explícito. A configuração padrão nunca a preenche.
 	TestScope    string
@@ -172,6 +178,9 @@ func New(config Config) (*Server, error) {
 	}
 	if (config.GitScope != "" && (config.Scope != diagnosticScope || config.GitScope != gitReviewScope || config.CanIssueGit == nil || config.OnRequest == nil)) || (config.GitScope == "" && config.CanIssueGit != nil) {
 		return nil, errors.New("Git review scope requires an explicit local grant validator")
+	}
+	if (config.GitIndexScope != "" && (config.Scope != diagnosticScope || config.GitIndexScope != gitIndexScope || config.CanIssueGitIndex == nil || config.OnRequest == nil)) || (config.GitIndexScope == "" && config.CanIssueGitIndex != nil) {
+		return nil, errors.New("Git index scope requires an explicit local grant validator")
 	}
 	if (config.TestScope != "" && (config.Scope != diagnosticScope || config.TestScope != testRunScope || config.CanIssueTest == nil || config.OnRequest == nil)) || (config.TestScope == "" && config.CanIssueTest != nil) {
 		return nil, errors.New("test execution scope requires an explicit local grant validator")
@@ -363,6 +372,9 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	if s.config.GitScope != "" {
 		scopes = append(scopes, s.config.GitScope)
 	}
+	if s.config.GitIndexScope != "" {
+		scopes = append(scopes, s.config.GitIndexScope)
+	}
 	if s.config.TestScope != "" {
 		scopes = append(scopes, s.config.TestScope)
 	}
@@ -370,14 +382,16 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 }
 
 type capabilities struct {
-	Read  bool
-	Write bool
-	Git   bool
-	Test  bool
+	Read     bool
+	Write    bool
+	Git      bool
+	GitIndex bool
+	Test     bool
 }
 
 // requestedCapabilities aceita qualquer subconjunto explicitamente configurado
-// na ordem canônica da metadata: diagnóstico, leitura, escrita, Git, teste.
+// na ordem canônica da metadata: diagnóstico, leitura, escrita, Git, Git index,
+// teste.
 // Escopos desconhecidos, duplicados, não configurados ou reordenados falham
 // fechado e a string precisa ser a serialização canônica sem whitespace extra.
 func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
@@ -395,6 +409,9 @@ func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
 	}
 	if s.config.GitScope != "" {
 		configured = append(configured, s.config.GitScope)
+	}
+	if s.config.GitIndexScope != "" {
+		configured = append(configured, s.config.GitIndexScope)
 	}
 	if s.config.TestScope != "" {
 		configured = append(configured, s.config.TestScope)
@@ -423,6 +440,8 @@ func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
 			result.Write = true
 		case s.config.GitScope:
 			result.Git = true
+		case s.config.GitIndexScope:
+			result.GitIndex = true
 		case s.config.TestScope:
 			result.Test = true
 		}
@@ -445,6 +464,10 @@ func (s *Server) writeAllowed(clientID string) bool {
 
 func (s *Server) gitAllowed(clientID string) bool {
 	return s.config.CanIssueGit != nil && s.config.CanIssueGit(clientID)
+}
+
+func (s *Server) gitIndexAllowed(clientID string) bool {
+	return s.config.CanIssueGitIndex != nil && s.config.CanIssueGitIndex(clientID)
 }
 
 func (s *Server) testAllowed(clientID string) bool {
@@ -590,7 +613,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_redirect_uri")
 		return
 	}
-	if (requested.Read && !s.readAllowed(id)) || (requested.Write && !s.writeAllowed(id)) || (requested.Git && !s.gitAllowed(id)) || (requested.Test && !s.testAllowed(id)) {
+	if (requested.Read && !s.readAllowed(id)) || (requested.Write && !s.writeAllowed(id)) || (requested.Git && !s.gitAllowed(id)) || (requested.GitIndex && !s.gitIndexAllowed(id)) || (requested.Test && !s.testAllowed(id)) {
 		bad(w, 403, "access_denied")
 		return
 	}
@@ -631,8 +654,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = consentPage.Execute(w, struct {
 		ID, Client, ClientID, Redirect, CSRF, Scope string
-		Read, Write, Test, Git                      bool
-	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git})
+		Read, Write, Test, Git, GitIndex            bool
+	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git, requested.GitIndex})
 }
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -671,7 +694,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requested, supported := s.requestedCapabilities(p.Scope)
-	if !supported || (requested.Read && !s.readAllowed(p.ClientID)) || (requested.Write && !s.writeAllowed(p.ClientID)) || (requested.Git && !s.gitAllowed(p.ClientID)) || (requested.Test && !s.testAllowed(p.ClientID)) {
+	if !supported || (requested.Read && !s.readAllowed(p.ClientID)) || (requested.Write && !s.writeAllowed(p.ClientID)) || (requested.Git && !s.gitAllowed(p.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(p.ClientID)) || (requested.Test && !s.testAllowed(p.ClientID)) {
 		s.mu.Unlock()
 		bad(w, 403, "access_denied")
 		return
@@ -755,7 +778,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requested, supported := s.requestedCapabilities(g.Scope)
-	if !supported || (requested.Read && !s.readAllowed(g.ClientID)) || (requested.Write && !s.writeAllowed(g.ClientID)) || (requested.Git && !s.gitAllowed(g.ClientID)) || (requested.Test && !s.testAllowed(g.ClientID)) {
+	if !supported || (requested.Read && !s.readAllowed(g.ClientID)) || (requested.Write && !s.writeAllowed(g.ClientID)) || (requested.Git && !s.gitAllowed(g.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(g.ClientID)) || (requested.Test && !s.testAllowed(g.ClientID)) {
 		bad(w, 400, "invalid_grant")
 		return
 	}

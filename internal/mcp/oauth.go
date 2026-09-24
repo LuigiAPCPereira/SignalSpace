@@ -68,9 +68,9 @@ type OAuthConfig struct {
 }
 
 // ProgrammingPorts são as portas locais necessárias para a composição pública
-// opt-in do filesystem tipado, leitura, escrita e revisão Git. A ausência de
-// qualquer porta fecha a composição; não há porta para shell, execução de
-// testes ou mutação Git.
+// opt-in do filesystem tipado, leitura, escrita, revisão Git e índice Git. A
+// ausência de qualquer porta fecha a composição; não há porta para shell,
+// execução de testes ou Git remoto.
 type ProgrammingPorts struct {
 	WorkspaceReader           WorkspaceTextReader
 	WorkspaceLister           WorkspaceDirectoryLister
@@ -87,6 +87,8 @@ type ProgrammingPorts struct {
 	WorkspaceDirectoryDeleter WorkspaceDirectoryDeleter
 	WorkspacePatchApplier     WorkspacePatchApplier
 	GitReviewer               WorkspaceGitReviewer
+	GitStatusReader           WorkspaceGitStatusReader
+	GitIndexer                WorkspaceGitIndexMutator
 }
 
 // NewOAuthProgrammingHandler compõe explicitamente a superfície pública de
@@ -94,8 +96,8 @@ type ProgrammingPorts struct {
 // fornecer as portas vinculadas à mesma concessão; não existe ativação
 // equivalente por parâmetro HTTP, metadata OAuth ou configuração genérica.
 func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
-	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.WorkspaceCopier == nil || ports.WorkspaceMover == nil || ports.WorkspaceFileDeleter == nil || ports.WorkspaceDirectoryDeleter == nil || ports.WorkspacePatchApplier == nil || ports.GitReviewer == nil {
-		return nil, errors.New("programming composition requires all typed filesystem, read, write and Git review ports")
+	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.WorkspaceCopier == nil || ports.WorkspaceMover == nil || ports.WorkspaceFileDeleter == nil || ports.WorkspaceDirectoryDeleter == nil || ports.WorkspacePatchApplier == nil || ports.GitReviewer == nil || ports.GitStatusReader == nil || ports.GitIndexer == nil {
+		return nil, errors.New("programming composition requires all typed filesystem, read, write, Git review and Git index ports")
 	}
 	if config.testRunner != nil {
 		return nil, errors.New("programming composition cannot publish test execution")
@@ -115,6 +117,8 @@ func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, veri
 	config.workspaceDirectoryDeleter = ports.WorkspaceDirectoryDeleter
 	config.workspacePatchApplier = ports.WorkspacePatchApplier
 	config.gitReviewer = ports.GitReviewer
+	config.gitStatusReader = ports.GitStatusReader
+	config.gitIndexer = ports.GitIndexer
 	return NewOAuthHandler(config, verifier)
 }
 

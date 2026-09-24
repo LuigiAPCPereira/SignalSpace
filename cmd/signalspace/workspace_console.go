@@ -134,6 +134,8 @@ func capabilityDescriptions(scopes []string) string {
 			descriptions = append(descriptions, "escrita: modificação de arquivos permitidos")
 		case workspace.ScopeGit:
 			descriptions = append(descriptions, "Git: inspeção de status/diff potencialmente sensíveis, sem commit/push")
+		case workspace.ScopeGitIndex:
+			descriptions = append(descriptions, "índice Git: staging/unstaging explícito da managed worktree; sem commit, branch ou push")
 		case workspace.ScopeTest:
 			descriptions = append(descriptions, "execução: go test ./... com privilégios do usuário; não é sandbox")
 		}
@@ -178,9 +180,9 @@ func (c *workspaceConsole) printWorkspaceStatusLimits(output io.Writer, scopes [
 	if !c.readEnabled && c.programmingApproval == nil {
 		fmt.Fprintln(output, "Modo diagnóstico: uma concessão interna não publica read_file; o MCP permanece limitado a connection_diagnostic.")
 	}
-	if c.programmingApproval != nil && (containsScope(scopes, workspace.ScopeWrite) || containsScope(scopes, workspace.ScopeGit) || containsScope(scopes, workspace.ScopeTest)) {
+	if c.programmingApproval != nil && (containsScope(scopes, workspace.ScopeWrite) || containsScope(scopes, workspace.ScopeGit) || containsScope(scopes, workspace.ScopeGitIndex) || containsScope(scopes, workspace.ScopeTest)) {
 		if c.programmingGitReviewer != nil {
-			fmt.Fprintln(output, "Escopos públicos opt-in ativos somente para READ, WRITE e Git review; test.run, shell e mutações Git permanecem fora da composição.")
+			fmt.Fprintln(output, "Escopos públicos opt-in ativos para READ, WRITE, Git review e Git index managed-only; test.run, shell, commit, branch e Git remoto permanecem fora da composição.")
 		} else {
 			fmt.Fprintln(output, "Escopos de programação são experimentais e não estão ativados remotamente.")
 		}
@@ -276,7 +278,7 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintln(output, "managed worktree source rejected: use a canonical absolute Git repository root")
 			return true
 		}
-		scopes, err := workspace.NormalizeCapabilities(strings.Split(scopeText, ",")...)
+		scopes, err := workspace.NormalizeManagedCapabilities(strings.Split(scopeText, ",")...)
 		if err != nil {
 			fmt.Fprintf(output, "managed worktree request rejected: %v\n", err)
 			return true
@@ -308,7 +310,7 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintln(output, "use workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id>")
 			return true
 		}
-		scopes, err := workspace.NormalizeCapabilities(strings.Split(scopeText, ",")...)
+		scopes, err := workspace.NormalizeManagedCapabilities(strings.Split(scopeText, ",")...)
 		if err != nil {
 			fmt.Fprintf(output, "managed worktree resume rejected: %v\n", err)
 			return true

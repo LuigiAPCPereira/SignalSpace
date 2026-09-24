@@ -16,7 +16,7 @@ import (
 	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
 )
 
-func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
+func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *testing.T) {
 	handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), compositionProgramming)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	if err := json.Unmarshal(metadata.Body.Bytes(), &metadataPayload); err != nil {
 		t.Fatal(err)
 	}
-	wantScopes := []string{compositionDiagnosticScope, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit}
+	wantScopes := []string{compositionDiagnosticScope, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex}
 	if strings.Join(metadataPayload.Scopes, " ") != strings.Join(wantScopes, " ") {
 		t.Fatalf("unexpected programming metadata scopes: %v", metadataPayload.Scopes)
 	}
@@ -81,8 +81,8 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 
 	assertPublicToolNames(t, handler, readToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text")
 	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch")
-	assertPublicToolNames(t, handler, gitToken, "connection_diagnostic", "review_git_changes")
-	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes")
+	assertPublicToolNames(t, handler, gitToken, "connection_diagnostic", "review_git_changes", "git_status")
+	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes", "git_status")
 	for _, token := range []string{readToken, writeToken, gitToken, allToken} {
 		listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 		if strings.Contains(listing.Body.String(), `"name":"run_workspace_tests"`) || strings.Contains(listing.Body.String(), `"name":"shell"`) {
@@ -164,6 +164,11 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	gitResponse := readRequest(t, handler, http.MethodPost, "/mcp", gitCall, "application/json", gitToken, nil)
 	if gitResponse.Code != http.StatusOK || !strings.Contains(gitResponse.Body.String(), "diff_changed") || !strings.Contains(gitResponse.Body.String(), "+after") {
 		t.Fatalf("authorized public Git review failed: %d %s", gitResponse.Code, gitResponse.Body.String())
+	}
+	statusCall := `{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"git_status","arguments":{"session_id":"` + sessionID + `"}}}`
+	statusResponse := readRequest(t, handler, http.MethodPost, "/mcp", statusCall, "application/json", gitToken, nil)
+	if statusResponse.Code != http.StatusOK || !strings.Contains(statusResponse.Body.String(), `"index_sha256"`) {
+		t.Fatalf("authorized public Git status failed: %d %s", statusResponse.Code, statusResponse.Body.String())
 	}
 
 	missingGitScope := readRequest(t, handler, http.MethodPost, "/mcp", gitCall, "application/json", writeToken, nil)
