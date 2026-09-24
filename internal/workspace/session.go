@@ -27,20 +27,47 @@ var (
 	ErrTooLarge                = errors.New("file exceeds reading limit")
 	ErrClosed                  = errors.New("workspace session closed")
 	ErrInvalidProcessOperation = errors.New("invalid workspace process operation")
+	ErrReservedPath            = errors.New("workspace path is reserved")
+)
+
+// WorkspaceMetadata descreve somente o modo seguro da sessão. Caminhos
+// absolutos, descritores e credenciais permanecem internos ao processo.
+type WorkspaceMetadata struct {
+	Mode               string
+	ManagedWorkspaceID string
+	BaseRef            string
+	BaseSHA            string
+	DirtySource        bool
+}
+
+const (
+	WorkspaceModeCheckout = "checkout"
+	WorkspaceModeWorktree = "worktree"
 )
 
 // Session mantém a identidade e o descritor de uma raiz aprovada em outra
 // fronteira local. A criação não é uma autorização remota.
 type Session struct {
-	mu     sync.Mutex
-	id     string
-	rootFD int
-	closed bool
+	mu       sync.Mutex
+	id       string
+	rootFD   int
+	closed   bool
+	metadata WorkspaceMetadata
 }
 
 // OpenApprovedRoot recebe somente uma raiz escolhida e aprovada pelo usuário
 // local; o chamador não deve preenchê-la com dados vindos de uma ferramenta.
 func OpenApprovedRoot(root string) (*Session, error) {
+	return openApprovedRootWithMetadata(root, WorkspaceMetadata{Mode: WorkspaceModeCheckout})
+}
+
+func openApprovedRootWithMetadata(root string, metadata WorkspaceMetadata) (*Session, error) {
+	if metadata.Mode == "" {
+		metadata.Mode = WorkspaceModeCheckout
+	}
+	if metadata.Mode != WorkspaceModeCheckout && metadata.Mode != WorkspaceModeWorktree {
+		return nil, ErrInvalidRoot
+	}
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || root == "/" || strings.ContainsRune(root, '\x00') {
 		return nil, ErrInvalidRoot
 	}
@@ -73,7 +100,17 @@ func OpenApprovedRoot(root string) (*Session, error) {
 		_ = syscall.Close(fd)
 		return nil, err
 	}
-	return &Session{rootFD: fd, id: hex.EncodeToString(id[:])}, nil
+	return &Session{rootFD: fd, id: hex.EncodeToString(id[:]), metadata: metadata}, nil
+}
+
+// OpenManagedRoot abre uma worktree já criada pelo manager local. O chamador
+// não recebe autorização implícita: Grants ainda precisa registrar owner,
+// client, sessão e escopos antes de expor qualquer ferramenta.
+func OpenManagedRoot(root string, metadata WorkspaceMetadata) (*Session, error) {
+	if metadata.Mode != WorkspaceModeWorktree || metadata.ManagedWorkspaceID == "" {
+		return nil, ErrInvalidRoot
+	}
+	return openApprovedRootWithMetadata(root, metadata)
 }
 
 func normalizePathError(err error) error {
@@ -85,6 +122,13 @@ func normalizePathError(err error) error {
 
 // ID é opaco e permanece constante somente durante a sessão.
 func (s *Session) ID() string { return s.id }
+
+// Metadata retorna apenas metadados não sensíveis da sessão atual.
+func (s *Session) Metadata() WorkspaceMetadata {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.metadata
+}
 
 // WithProcessDir executa uma operação local com o descritor da raiz retido sob
 // o mutex da sessão. Isso impede que Close/Grant/Revogação feche e reutilize o
@@ -108,18 +152,34 @@ func validRelative(relative string) bool {
 		return false
 	}
 	for _, part := range strings.Split(relative, "/") {
-		if part == "" || part == "." || part == ".." {
+		if part == "" || part == "." || part == ".." || part == ".git" {
 			return false
 		}
 	}
 	return true
 }
 
+func relativePathError(relative string) error {
+	if reservedRelative(relative) {
+		return ErrReservedPath
+	}
+	return ErrInvalidPath
+}
+
+func reservedRelative(relative string) bool {
+	for _, part := range strings.Split(relative, "/") {
+		if part == ".git" {
+			return true
+		}
+	}
+	return false
+}
+
 // ReadText recusa links simbólicos em todos os componentes. Os descritores
 // relativos à raiz impedem troca por symlink entre validação e abertura.
 func (s *Session) ReadText(relative string) (string, error) {
 	if !validRelative(relative) {
-		return "", ErrInvalidPath
+		return "", relativePathError(relative)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

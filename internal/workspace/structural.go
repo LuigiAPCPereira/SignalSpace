@@ -180,6 +180,9 @@ func (s *Session) copyDirectoryContentsLocked(sourceFD, destinationFD, depth int
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		if name == ".git" {
+			continue
+		}
 		if result.EntriesCopied >= MaxStructuralEntries {
 			return ErrStructuralLimit
 		}
@@ -309,7 +312,7 @@ func (s *Session) Move(source, destination string) (result MoveResult, err error
 func (s *Session) DeleteFile(relative string) (result DeleteResult, err error) {
 	result = DeleteResult{Path: relative}
 	if !validRelative(relative) {
-		return result, ErrInvalidPath
+		return result, relativePathError(relative)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -364,7 +367,7 @@ func (s *Session) DeleteFile(relative string) (result DeleteResult, err error) {
 func (s *Session) DeleteDirectory(relative string) (result DeleteResult, err error) {
 	result = DeleteResult{Path: relative}
 	if !validRelative(relative) {
-		return result, ErrInvalidPath
+		return result, relativePathError(relative)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -425,6 +428,9 @@ func (s *Session) DeleteDirectory(relative string) (result DeleteResult, err err
 
 func validateStructuralPair(source, destination string) error {
 	if !validRelative(source) || !validRelative(destination) || source == destination {
+		if reservedRelative(source) || reservedRelative(destination) {
+			return ErrReservedPath
+		}
 		return ErrInvalidPath
 	}
 	return nil

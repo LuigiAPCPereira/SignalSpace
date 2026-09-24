@@ -25,7 +25,7 @@ var ErrConflict = errors.New("workspace file changed since the expected version"
 // silencioso quando outra operação desta instância já modificou o arquivo.
 func (s *Session) ReplaceText(relative, expected, replacement string) error {
 	if !validRelative(relative) {
-		return ErrInvalidPath
+		return relativePathError(relative)
 	}
 	if !validTextContent(expected) || !validTextContent(replacement) {
 		return ErrNotText

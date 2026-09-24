@@ -100,7 +100,7 @@ type TextFileResult struct {
 
 func (s *Session) StatPath(relative string) (PathStat, error) {
 	if relative != "." && !validRelative(relative) {
-		return PathStat{}, ErrInvalidPath
+		return PathStat{}, relativePathError(relative)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -157,7 +157,7 @@ func (s *Session) FindPaths(root, pattern string, maxResults, maxDepth int) (Fin
 		root = "."
 	}
 	if root != "." && !validRelative(root) {
-		return FindResult{}, ErrInvalidPath
+		return FindResult{}, relativePathError(root)
 	}
 	if len(pattern) == 0 || len(pattern) > MaxPatternBytes || !utf8.ValidString(pattern) || strings.ContainsRune(pattern, '\x00') || strings.HasPrefix(pattern, "/") {
 		return FindResult{}, ErrInvalidPattern
@@ -214,7 +214,7 @@ func (s *Session) SearchText(root, query string, maxResults int) (SearchResult, 
 		root = "."
 	}
 	if root != "." && !validRelative(root) {
-		return SearchResult{}, ErrInvalidPath
+		return SearchResult{}, relativePathError(root)
 	}
 	if len(query) == 0 || len(query) > MaxQueryBytes || !utf8.ValidString(query) || strings.ContainsRune(query, '\x00') || strings.ContainsRune(query, '\n') || strings.ContainsRune(query, '\r') {
 		return SearchResult{}, ErrInvalidQuery
@@ -342,7 +342,7 @@ func searchSnippet(line string, matchOffset, matchLength int) (string, bool) {
 
 func (s *Session) CreateDirectory(relative string) (DirectoryResult, error) {
 	if !validRelative(relative) {
-		return DirectoryResult{}, ErrInvalidPath
+		return DirectoryResult{}, relativePathError(relative)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -381,7 +381,7 @@ func (s *Session) CreateDirectory(relative string) (DirectoryResult, error) {
 
 func (s *Session) CreateTextFile(relative, content string) (TextFileResult, error) {
 	if !validRelative(relative) {
-		return TextFileResult{}, ErrInvalidPath
+		return TextFileResult{}, relativePathError(relative)
 	}
 	if !validTextContent(content) {
 		return TextFileResult{}, ErrNotText
@@ -418,7 +418,7 @@ func (s *Session) CreateTextFile(relative, content string) (TextFileResult, erro
 
 func (s *Session) WriteTextFile(relative, expectedSHA256, content string) (TextFileResult, error) {
 	if !validRelative(relative) {
-		return TextFileResult{}, ErrInvalidPath
+		return TextFileResult{}, relativePathError(relative)
 	}
 	if !validTextContent(content) {
 		return TextFileResult{}, ErrNotText
@@ -691,6 +691,9 @@ func (s *Session) walkDirectoryLocked(dirFD int, relativeRoot string, depth, max
 	for _, name := range names {
 		if !utf8.ValidString(name) || name == "." || name == ".." || strings.ContainsRune(name, '\x00') {
 			return visited, false, ErrInvalidPath
+		}
+		if name == ".git" {
+			continue
 		}
 		if visited >= MaxFindVisited {
 			return visited, true, nil

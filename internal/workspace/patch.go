@@ -191,7 +191,7 @@ func validatePatchOperations(operations []PatchOperation) error {
 		switch operation.Type {
 		case PatchCreateFile:
 			if !validRelative(operation.Path) {
-				return ErrInvalidPath
+				return relativePathError(operation.Path)
 			}
 			if err := validatePatchText(operation.Content); err != nil {
 				return err
@@ -199,7 +199,7 @@ func validatePatchOperations(operations []PatchOperation) error {
 			contentBytes += len(operation.Content)
 		case PatchWriteFile:
 			if !validRelative(operation.Path) {
-				return ErrInvalidPath
+				return relativePathError(operation.Path)
 			}
 			if err := validatePatchText(operation.Content); err != nil {
 				return err
@@ -210,6 +210,9 @@ func validatePatchOperations(operations []PatchOperation) error {
 			contentBytes += len(operation.Content)
 		case PatchMovePath:
 			if !validRelative(operation.Source) || !validRelative(operation.Destination) {
+				if reservedRelative(operation.Source) || reservedRelative(operation.Destination) {
+					return ErrReservedPath
+				}
 				return ErrInvalidPath
 			}
 			if operation.Source == operation.Destination {
@@ -220,14 +223,14 @@ func validatePatchOperations(operations []PatchOperation) error {
 			}
 		case PatchDeleteFile:
 			if !validRelative(operation.Path) {
-				return ErrInvalidPath
+				return relativePathError(operation.Path)
 			}
 			if _, err := decodeSHA256(operation.ExpectedSHA256); err != nil {
 				return err
 			}
 		case PatchCreateDirectory:
 			if !validRelative(operation.Path) {
-				return ErrInvalidPath
+				return relativePathError(operation.Path)
 			}
 		default:
 			return ErrPatchInvalid
@@ -473,6 +476,8 @@ func (s *Session) deleteFileExpected(relative, expectedSHA256 string) (DeleteRes
 
 func patchStatus(err error) string {
 	switch {
+	case errors.Is(err, ErrReservedPath):
+		return "reserved_path"
 	case errors.Is(err, ErrInvalidPath):
 		return "invalid_path"
 	case errors.Is(err, ErrPatchInvalid), errors.Is(err, ErrInvalidHash), errors.Is(err, ErrNotText):

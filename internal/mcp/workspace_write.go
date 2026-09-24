@@ -286,6 +286,8 @@ func (a *writeToolAccess) authorizeWriteArguments(w http.ResponseWriter, ctx con
 func replyStructuredWriteError(w http.ResponseWriter, id any, message string, err error) {
 	status := "unavailable_or_not_authorized"
 	switch {
+	case errors.Is(err, workspace.ErrReservedPath):
+		status = "reserved_path"
 	case errors.Is(err, workspace.ErrConflict):
 		status = "conflict"
 	case errors.Is(err, workspace.ErrPathExists):

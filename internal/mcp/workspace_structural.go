@@ -145,6 +145,8 @@ func (a *writeToolAccess) deleteDirectory(w http.ResponseWriter, ctx context.Con
 
 func structuralErrorStatus(err error) string {
 	switch {
+	case errors.Is(err, workspace.ErrReservedPath):
+		return "reserved_path"
 	case errors.Is(err, workspace.ErrPathExists):
 		return "already_exists"
 	case errors.Is(err, workspace.ErrInvalidPath), errors.Is(err, workspace.ErrUnsafePath), errors.Is(err, workspace.ErrUnsupportedType), errors.Is(err, workspace.ErrNotFile):

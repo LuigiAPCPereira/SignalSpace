@@ -19,7 +19,7 @@ var ErrTooManyEntries = errors.New("directory exceeds listing limit")
 // aprovada; os demais caminhos devem ser relativos e canônicos.
 func (s *Session) ListDirectory(relative string) ([]string, error) {
 	if relative != "." && !validRelative(relative) {
-		return nil, ErrInvalidPath
+		return nil, relativePathError(relative)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -63,6 +63,12 @@ func (s *Session) ListDirectory(relative string) ([]string, error) {
 			return nil, ErrInvalidPath
 		}
 	}
-	sort.Strings(names)
-	return names, nil
+	filtered := names[:0]
+	for _, name := range names {
+		if name != ".git" {
+			filtered = append(filtered, name)
+		}
+	}
+	sort.Strings(filtered)
+	return filtered, nil
 }
