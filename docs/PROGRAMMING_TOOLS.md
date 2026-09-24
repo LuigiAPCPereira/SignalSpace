@@ -1,12 +1,12 @@
 # SignalSpace — contrato inicial de programação local
 
-**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada e publicada anteriormente; nesta missão, o slice de filesystem tipado base foi implementado no commit local `e39d7d9` e rebaseado sobre o remoto live `1cf598a5222a8118d268752dbf2bbd0993f437ff`, sem push. `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
+**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` e o slice estrutural desta missão estão implementados e validados localmente; a ref inicial observada foi `6b8adc5b44e4856a743f0df336241aff5b5da79e`, também confirmada no remoto. A implementação estrutural está no commit local `347f84bd290e09f1c50c962623feb64976627d82`; a documentação deste estado ainda será o segundo commit local e ambos continuam não publicados. `test.run`, shell, comandos arbitrários, mutações Git, `apply_patch` e worktree gerenciada continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
 
 O estado do MVP continua **PARCIAL**: a decisão do gate é distinta da conclusão de `SS-MVP-002`, e a evidência atual é local/automatizada. O modo público exige seleção explícita `connect quick programming`, OAuth com escopo exato e concessão terminal-local ativa; a presença de JWT, `client_id`, metadata ou configuração não cria concessão.
 
 ## Composição operacional fail-closed — SS-MVP-002
 
-`cmd/signalspace/composition.go` define uma enumeração interna fechada: `diagnostic`, `read` ou `programming`. O plano canônico determina os escopos OAuth, o verificador JWT local e o único endereço MCP permitido (`admin.PublicAddress`, `127.0.0.1:7676`), além do modo do console. Diagnóstico admite somente `signalspace:diagnostic` e `connection_diagnostic`; leitura acrescenta `signalspace:workspace.read`, `read_file` e `list_directory`; programação é um modo explícito que acrescenta READ + WRITE + GIT review, sem `test.run` ou shell.
+`cmd/signalspace/composition.go` define uma enumeração interna fechada: `diagnostic`, `read` ou `programming`. O plano canônico determina os escopos OAuth, o verificador JWT local e o único endereço MCP permitido (`admin.PublicAddress`, `127.0.0.1:7676`), além do modo do console. Diagnóstico admite somente `signalspace:diagnostic` e `connection_diagnostic`; leitura acrescenta `signalspace:workspace.read`, `read_file` e `list_directory`; programação é um modo explícito que acrescenta READ + WRITE + GIT review e, dentro de WRITE, `copy_path`, `move_path`, `delete_file` e `delete_directory`, sem `test.run` ou shell.
 
 O parser `connect quick` aceita somente as combinações explícitas `diagnostic`, `read` e `programming`, com `panel` opcional; seleções como `write`, `shell` ou `test` são inválidas. `planComposition` rejeita valores não suportados antes de inspeção de ambiente, confirmação, reserva de portas, inicialização do túnel ou criação de estado OAuth. `embeddedHandlerForPlan` reconfirma que o plano corresponde exatamente à política antes de criar emissor, concessões ou handler MCP e usa `mcp.NewOAuthProgrammingHandler` somente no modo opt-in. `reserveQuickPortsForPlan` reserva o endereço MCP do plano; a porta administrativa `7677` é separada, nunca compõe MCP e só existe quando `panel` foi selecionado. `panel` permanece apresentação/servidor administrativo exclusivamente local e não muda a composição MCP.
 
@@ -105,23 +105,34 @@ O Git evoluirá em camadas. `signalspace:git.review` permanece observacional. Gi
 
 Cada tool deverá publicar um resultado estruturado estável que possa alimentar UX especializada sem fazer a segurança depender do frontend. A direção visual é ter variantes por domínio — workspace, filesystem/search, diff/review, teste/processo e artifacts — reutilizando componentes quando possível. Não existe requisito de iframe/widget pesado para cada leitura ou mutação; plain MCP deve continuar suficiente para o modelo operar corretamente.
 
-**Sequência recomendada:** primeiro consolidar o motor de filesystem e os contratos estruturados; depois completar operações estruturais/destrutivas seguras; então promover Git local tipado; só depois decidir Git remoto, execução genérica/shell e superfícies visuais mais ricas. O aceite HTTPS/ChatGPT Web continua um gate operacional distinto.
+**Sequência reconciliada:** o motor/base tipado e as operações estruturais/destrutivas seguras foram concluídos localmente nesta retomada; o próximo bloco continua sendo Git local tipado, depois Git remoto, execução genérica/shell e superfícies visuais, cada qual com capacidade e gate próprios. O aceite HTTPS/ChatGPT Web continua um gate operacional distinto.
 
-## Implementação local reconciliada — filesystem tipado base — SS-MVP-002
+## Implementação local reconciliada — filesystem tipado base e estrutural — SS-MVP-002
 
-O primeiro slice da direção aprovada está implementado localmente sobre o motor comum de workspace. A superfície MCP acrescenta seis tools, todas sob revalidação de owner, cliente, sessão, escopo e concessão na chamada:
+Os slices base e estrutural da direção aprovada estão implementados localmente sobre o motor comum de workspace. A superfície MCP acrescenta dez tools, todas sob revalidação de owner, cliente, sessão, escopo e concessão na chamada. O código estrutural está no commit local `347f84b`; o commit documental desta seção será criado após esta reconciliação:
 
 | Família | Tools implementadas | Escopo | Estado |
 | --- | --- | --- | --- |
 | inspeção | `stat_path`, `find_paths`, `search_text` | `signalspace:workspace.read` | implementadas e validadas localmente |
 | criação/edição | `create_directory`, `create_text_file`, `write_text_file` | `signalspace:workspace.write` | implementadas e validadas localmente |
+| estrutura/remoção | `copy_path`, `move_path`, `delete_file`, `delete_directory` | `signalspace:workspace.write` | implementadas e validadas localmente; commits desta fatia ainda locais |
 
 O motor comum normaliza caminhos relativos, rejeita traversal e symlink, limita profundidade/entradas/conteúdo, mantém resultados estruturados, aplica create-only onde indicado e exige hash/precondição para escrita integral. A publicação é local/atômica quando aplicável; falhas de autorização, tipo, limite ou precondição falham fechado. Nenhum tool recebe shell, comando arbitrário, raiz absoluta ou autoridade do frontend.
 
-As regressões existentes de `read_file`, `list_directory`, `replace_text` e `review_git_changes` foram preservadas. A composição pública `programming` continua sendo a única composição opt-in que reúne READ + WRITE + Git review; `diagnostic`/`read` não ganham escrita; `test.run`, shell, Git mutável, copy/move/delete/apply_patch e worktree funcional permanecem fora desta fatia.
+As regressões existentes de `read_file`, `list_directory`, `replace_text` e `review_git_changes` foram preservadas. A composição pública `programming` continua sendo a única composição opt-in que reúne READ + WRITE + Git review e agora a fatia estrutural; `diagnostic`/`read` não ganham escrita; `test.run`, shell, Git mutável, `apply_patch` e worktree funcional permanecem fora desta fatia.
 
 O registro de worktrees é apenas direção arquitetural/documental: worktree poderá ser uma futura superfície separada para isolamento, mas nenhuma foi criada, removida ou usada nesta missão. O código continua no checkout corrente e a segurança não depende de uma worktree.
 
+
+## Filesystem estrutural — SS-MVP-002
+
+O segundo slice implementa `copy_path`, `move_path`, `delete_file` e `delete_directory` sobre `internal/workspace/structural.go`, com wrappers de `Grants` e composição MCP explícita. A origem e o destino são sempre relativos à `Session`; a composição pública exige as quatro portas estruturais além das portas READ/WRITE/Git existentes, e cada chamada revalida JWT, owner, cliente, escopo, sessão e concessão corrente antes da mutação.
+
+`copy_path` aceita somente arquivo regular ou árvore de diretórios/arquivos regulares, nunca sobrescreve, não segue symlinks nem copia tipos especiais, ordena a travessia e limita profundidade a `32`, entradas a `4096` e bytes a `64 MiB`. Arquivos são criados com `0600` e diretórios com `0700`; ACLs, xattrs e ownership não são prometidos. Se a árvore falhar, o resultado informa cópias, bytes, `partial` e `cleanup`; a limpeza é tentada apenas com descritores relativos/no-follow e estado desconhecido permanece explícito.
+
+`move_path` usa `renameat2(..., RENAME_NOREPLACE)` relativo a descritores, rejeita destino existente, caminho equivalente e diretório dentro de si, e reporta `cross_device_unsupported` em `EXDEV` sem copiar/deletar silenciosamente. `delete_file` aceita somente arquivo regular; `delete_directory` aceita somente diretório vazio e nunca a raiz da sessão. Nenhuma operação é apresentada como transação contra escritores externos; revalidações de identidade e estados `unknown` evitam declarar sucesso quando a publicação não pôde ser confirmada.
+
+Os testes estruturais cobrem traversal/absoluto, symlink de origem e componente, destino existente, tipos especiais, limites de profundidade/entradas/bytes, limpeza parcial, diretório não vazio, raiz, divergência owner/client/session, escopo ausente e revoke; o caso `EXDEV` permanece não testável nesta fixture local. A composição `diagnostic`/`read` não anuncia essas tools, `apply_patch` continua ausente e não há shell, `test.run`, Git mutável, artifacts ou UI.
 
 ## Edição segura inicial
 

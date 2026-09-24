@@ -1,8 +1,18 @@
 # SignalSpace — checkpoint de continuidade
 
-**Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. **Último commit de código validado localmente em 20/09/2026:** [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1), branch `feat/m1-local-mcp-diagnostic`, [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1) aberto/draft/não mesclado; CI remota deste SHA não consultada conforme orientação do proprietário, estado desconhecido. `gofmt`, `go test ./...`, race dos pacotes afetados, `go vet ./...`, `go build ./...`, `node --check` e teste funcional Node passaram localmente.
+**Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é o de filesystem estrutural logo a seguir. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
-## Checkpoint vigente — SS-MVP-002 filesystem tipado base — 23/09/2026
+## Checkpoint vigente — SS-MVP-002 filesystem estrutural — 23/09/2026
+
+**Ref observada:** branch `codex/mvp-vertical-programming`; antes da alteração, HEAD local e remoto live coincidiam em `6b8adc5b44e4856a743f0df336241aff5b5da79e`. A árvore inicial tinha somente `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` não rastreados; seus hashes foram rechecados e permanecem `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`. Não houve alteração de PR #1, `feat/m1-local-mcp-diagnostic` ou `feat/frontend-oauth-consent`.
+
+**Objetivo/estado:** SS-MVP-002 está **implementada e validada localmente nesta fatia, mas PARCIAL quanto ao aceite operacional externo**. O promotion gate continua **APROVADO PELO PROPRIETÁRIO** para READ + WRITE + Git observacional; isso não autoriza push desta fatia, HTTPS, túnel, navegador, grant ChatGPT Web, CI, merge ou deploy.
+
+**Implementação:** commit local `347f84bd290e09f1c50c962623feb64976627d82` adiciona `internal/workspace/structural.go` com `Copy`, `Move`, `DeleteFile` e `DeleteDirectory`; `Grants` revalida owner/client/session e `ScopeWrite`; `internal/mcp` adiciona `copy_path`, `move_path`, `delete_file` e `delete_directory`; a composição `NewOAuthProgrammingHandler` exige as portas estruturais e as registra somente em programming. Copy usa limites `32` níveis/`4096` entradas/`64 MiB`, ordenação, no-follow, no-overwrite, permissões `0600`/`0700` e cleanup explícito; move usa `renameat2` no-replace e rejeita `EXDEV`; delete é não-recursivo e delete-directory aceita somente vazio. `apply_patch`, shell, `test.run`, Git mutável, artifacts e worktree não foram implementados.
+
+**Validação/limites:** passaram `gofmt -l cmd internal`, `git diff --check`, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial de `internal/workspace`, `internal/mcp` e `cmd/signalspace`, `go vet ./...` e `go build ./...`. Testes focais e negativos cobrem symlink/traversal/tipos, destino existente, limites, cleanup parcial, diretório não vazio/raiz, owner/client/session, escopo/revoke e regressões MCP. O caso `EXDEV` não foi testável na fixture local; escritores externos, transação filesystem, exactly-once, HTTPS, navegador, OAuth externo, workspace real e CI permanecem não validados. O commit documental será criado agora, sem push, e o relatório será enviado ao ChatGPT Web.
+
+## Checkpoint histórico — SS-MVP-002 filesystem tipado base — 23/09/2026
 
 **Ref e preservação:** branch `codex/mvp-vertical-programming`; HEAD local observado antes do slice `41966e1300072f8dc4519f3a7837eccbb41fafd2`. O `git ls-remote` live da branch retornou `1cf598a5222a8118d268752dbf2bbd0993f437ff`; não houve rewind, commit ou push nesta missão. A ref tracking local `origin/...` em `ac5b6ee` é stale e não foi usada como estado remoto atual. Os patches `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` continuam não rastreados, fora do Git, não aplicados e preservados com os hashes registrados. PR #1, `feat/m1-local-mcp-diagnostic` e `feat/frontend-oauth-consent` não foram integrados.
 
@@ -549,7 +559,7 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 **Próxima ação vinculada:** `SS-MVP-002` — especificar e implementar o primeiro slice do motor de filesystem: `stat_path`, `find_paths`, `search_text`, `create_directory`, `create_text_file` e `write_text_file`, reutilizando a fronteira segura existente de workspace e emitindo resultados estruturados desde o início. Não incluir copy/move/delete/apply_patch, Git mutável, shell ou aceite externo no mesmo slice.
 
-## Checkpoint vigente — SS-MVP-002 filesystem tipado base após rebase — 23/09/2026
+## Checkpoint histórico — SS-MVP-002 filesystem tipado base após rebase — 23/09/2026
 
 **Estado:** o primeiro slice está **implementado e validado localmente**, rebaseado sobre `1cf598a5222a8118d268752dbf2bbd0993f437ff`, mas ainda não foi publicado nesta missão. `SS-MVP-002` permanece parcial quanto ao aceite operacional externo; `SS-BE-007` permanece parcial/em andamento; CI permanece desconhecida. O gate anterior segue aprovado somente para READ + WRITE + Git review observacional.
 
