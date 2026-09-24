@@ -2,9 +2,9 @@
 
 **Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é o de filesystem estrutural logo a seguir. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
-## Checkpoint vigente — SS-MVP-002 apply_patch estruturado — 23/09/2026
+## Checkpoint vigente — SS-MVP-002 apply_patch estruturado — 24/09/2026
 
-**Ref observada:** branch `codex/mvp-vertical-programming`; HEAD local/remoto confirmado em `3628d2fe4b08053c63af50d7d18c1d62fc37613f` antes desta missão. A árvore preserva somente os dois patches não rastreados do proprietário, fora do Git, não aplicados e com os hashes `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+**Ref observada:** branch `codex/mvp-vertical-programming`; a sequência local `f2bed05` → `4e597c9` → `e4d5dd2` inclui a implementação, a documentação e o endurecimento local do preflight, enquanto o remoto live foi confirmado em `3628d2fe4b08053c63af50d7d18c1d62fc37613f` antes desta missão. A árvore preserva somente os dois patches não rastreados do proprietário, fora do Git, não aplicados e com os hashes `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
 
 **Objetivo/estado:** `SS-MVP-002` está **implementada e validada localmente nesta fatia, mas PARCIAL quanto ao aceite operacional externo**. O `apply_patch` é público somente na composição `programming`, com o escopo existente `signalspace:workspace.write`; diagnostic/read não o anunciam. A publicação remota desta fatia não foi autorizada pela missão e não foi feita.
 
@@ -12,7 +12,7 @@
 
 **Validação:** passaram `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race de `internal/workspace`, `internal/mcp` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, `gofmt -l cmd internal` e `git diff --check`, além dos testes focais com chamada MCP real, regressão de listas/instruções, criação/atualização, stale hash e preflight sem mutação. Não houve HTTPS, túnel, navegador, grant ChatGPT Web, workspace real, CI, merge, deploy ou push.
 
-**Próxima ação vinculada:** executar os gates finais, inspecionar o diff, criar commits locais focados e devolver ao ChatGPT Web o relatório com os SHAs locais. A publicação remota exige missão/autorização posterior.
+**Próxima ação vinculada:** devolver ao ChatGPT Web o relatório com os SHAs locais e aguardar nova missão. A publicação remota desta fatia continua fora desta missão.
 
 ## Checkpoint histórico — SS-MVP-002 filesystem estrutural — 23/09/2026
 
