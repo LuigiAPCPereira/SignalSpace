@@ -1,6 +1,6 @@
 # SignalSpace — contrato inicial de programação local
 
-**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada, validada localmente e publicada em `origin/codex/mvp-vertical-programming` no HEAD `d1bff2c925e83061bcbc15cef299b22846ac897b` para READ + WRITE + GIT review; `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
+**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada, validada localmente no commit `e97aaf7ec84577f2999f0bb725db5d2b8a451ce2`, documentada em `d1bff2c925e83061bcbc15cef299b22846ac897b` e publicada em `origin/codex/mvp-vertical-programming`; `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
 
 O estado do MVP continua **PARCIAL**: a decisão do gate é distinta da conclusão de `SS-MVP-002`, e a evidência atual é local/automatizada. O modo público exige seleção explícita `connect quick programming`, OAuth com escopo exato e concessão terminal-local ativa; a presença de JWT, `client_id`, metadata ou configuração não cria concessão.
 
@@ -84,6 +84,29 @@ O transporte mantém `7676` como listener público e `7677` exclusivamente admin
 | Autorização para ativação remota | PENDENTE | decisão aprovou somente a composição local opt-in; não houve grant ChatGPT Web nem aceite externo | Novo gate operacional no SHA exato, sem inferir permissão de túnel ou navegador |
 
 A aprovação do gate não transforma a evidência local em aceite externo: HTTPS, navegador, grant real, workspace real, CI e deploy permanecem separados. A conclusão de `SS-MVP-002` continua condicionada à implementação e validação efetivamente registradas, não à decisão isolada.
+
+
+## Direção aprovada de evolução — filesystem completo, Git tipado e UX por tool
+
+Esta seção registra direção de produto/arquitetura aprovada pelo proprietário; **não descreve capacidades já implementadas** além da composição READ + WRITE + Git review documentada acima.
+
+A superfície de filesystem deverá convergir para um motor único de workspace, com resolução e validação de caminho compartilhadas, no-symlink, limites, precondições de concorrência, publicação segura e revalidação de owner/client/session/escopo/grant em cada operação. Sobre esse motor, a superfície-alvo é:
+
+| Família | Tools alvo | Observação de contrato |
+| --- | --- | --- |
+| inspeção/busca | `stat_path`, `list_directory`, `read_file`, `find_paths`, `search_text` | sem shell; resultados estruturados, limitados e pagináveis quando aplicável |
+| criação/edição | `create_directory`, `create_text_file`, `replace_text`, `write_text_file` | create-only quando indicado; escrita integral exige precondição/versionamento, nunca overwrite silencioso |
+| estrutura | `copy_path`, `move_path` | origem/destino dentro da mesma raiz autorizada; symlink não vira rota de escape |
+| remoção | `delete_file`, `delete_directory` | remoção recursiva/destrutiva não fica escondida em um booleano genérico; exige contrato explícito |
+| composição | `apply_patch` futuramente | reutiliza o mesmo motor/autorização e pode agrupar mudanças com precondições; não cria filesystem paralelo |
+| artifacts | import/export futuro | binários e arquivos grandes usam canal próprio, separados das tools textuais |
+
+O Git evoluirá em camadas. `signalspace:git.review` permanece observacional. Git local mutável deverá ser uma capacidade distinta, com tools tipadas para stage/unstage, branch e commit, sem aceitar um comando Git arbitrário. Git remoto (fetch/push) exige fronteira própria para rede e credenciais. Hooks, helpers, pagers, editores, diffs externos e configuração/ambiente executável não podem transformar uma operação Git tipada em execução implícita. Reset destrutivo, clean, force-push e equivalentes permanecem fora da superfície normal até decisão separada.
+
+Cada tool deverá publicar um resultado estruturado estável que possa alimentar UX especializada sem fazer a segurança depender do frontend. A direção visual é ter variantes por domínio — workspace, filesystem/search, diff/review, teste/processo e artifacts — reutilizando componentes quando possível. Não existe requisito de iframe/widget pesado para cada leitura ou mutação; plain MCP deve continuar suficiente para o modelo operar corretamente.
+
+**Sequência recomendada:** primeiro consolidar o motor de filesystem e os contratos estruturados; depois completar operações estruturais/destrutivas seguras; então promover Git local tipado; só depois decidir Git remoto, execução genérica/shell e superfícies visuais mais ricas. O aceite HTTPS/ChatGPT Web continua um gate operacional distinto.
+
 
 ## Edição segura inicial
 

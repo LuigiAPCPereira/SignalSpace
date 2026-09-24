@@ -487,3 +487,12 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - Histórico verdadeiro foi preservado: o registro anterior de “não houve push” descrevia corretamente o estado antes deste marco e não foi apagado. A promoção publicada continua limitada à composição opt-in READ + WRITE + Git observacional; `test.run`, shell, comandos arbitrários e mutação Git permanecem fora do gate.
 - Não houve merge, CI, deploy, túnel/cloudflared, HTTPS operacional, navegador, grant/decisão OAuth externa, workspace real ou chamada MCP externa nesta publicação. PR #1, branches protegidas e os dois patches não rastreados permaneceram preservados; os hashes dos patches não mudaram.
 - Estado corrente: `SS-MVP-002` **PARCIAL**, `SS-BE-007` **PARCIAL**, `SS-MVP-002-PROMOTION-GATE-001` **APROVADO PELO PROPRIETÁRIO / implementação local e publicação remota confirmadas**, CI **DESCONHECIDA**. Próxima ação depende de missão específica para aceite externo ou contrato de shell.
+
+
+## 23/09/2026 — decisão de produto: filesystem completo, Git tipado e UX por tool (SS-MVP-002)
+
+- Após a reconciliação publicada em `41966e1300072f8dc4519f3a7837eccbb41fafd2`, o proprietário aprovou a direção de tornar o ChatGPT Web um coding agent completo dentro de workspaces autorizados.
+- A direção registrada separa primitives de filesystem/busca de shell: leitura/listagem existentes evoluem para stat/find/search, criação de diretórios/arquivos, escrita integral com precondição, copy/move/delete e futuramente apply_patch sobre um motor único seguro. Binários/artifacts ficam em canal próprio.
+- Git evolui do `git.review` observacional já implementado para mutações locais tipadas em capacidade separada; fetch/push ficam em fronteira remota distinta; hooks/configuração executável devem ser neutralizados; reset hard/clean/force-push não são autorizados por esta decisão.
+- A UX futura deverá partir de resultados estruturados e usar apresentações específicas quando agregarem valor, sem exigir widget por chamada nem substituir autorização backend. DevSpace/Graphify são referências conceituais, sem incorporação de código.
+- Este registro é documental: não houve mudança de produção, nova tool, OAuth, shell, Git mutável, CI, túnel, navegador, workspace real, merge ou deploy. Próxima ação: `SS-MVP-002`, primeiro slice do motor de filesystem e contratos estruturados.

@@ -525,3 +525,14 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Evidência:** a integração `cmd/signalspace/programming_composition_test.go` verificou metadata, `initialize`, `tools/list`, chamadas READ/WRITE/GIT, escopos independentes, divergências owner/client/session, revogação com JWT ainda válido e ausência de `run_workspace_tests`/shell/mutação Git. Passaram os testes focados, a suíte Go serial completa, race dos pacotes afetados, vet, build, gofmt e diff check. No fechamento devem ser rechecados listeners/processos residuais; isso não substitui navegador, HTTPS, túnel, grant real, workspace real ou CI.
 
 **Próxima ação:** eventual aceite operacional externo ou inclusão de shell deve ser uma missão separada, com contrato e gate próprios. A publicação remota desta fatia já foi confirmada; não tratar essa publicação nem a aprovação do gate como conclusão de `SS-MVP-002`.
+
+
+## Checkpoint SS-MVP-002 — direção aprovada para coding agent completo — 23/09/2026
+
+**Decisão de produto:** o proprietário aprovou evoluir a superfície de programação para que o ChatGPT Web possa operar como coding agent completo em workspace autorizado. O alvo inclui filesystem tipado completo e busca nativa, Git operacional em camadas e resultados estruturados/UX especializada por domínio. DevSpace permanece inspiração de fluxo, não dependência; Graphify permanece referência opcional de compreensão estrutural.
+
+**Estado de implementação:** esta decisão documental não adiciona ferramentas. A composição vigente continua READ + WRITE (`replace_text`) + Git review observacional; `test.run`, shell, comandos arbitrários e mutações Git continuam fora da composição pública. `SS-MVP-002` e `SS-BE-007` permanecem PARCIAIS; CI permanece DESCONHECIDA.
+
+**Fronteiras aprovadas para desenho:** filesystem normal não deverá depender de shell; Git local mutável terá capacidade própria e tools tipadas; Git remoto terá gate separado; hooks/configuração executável não podem virar execução implícita; operações Git destrutivas e shell exigem decisão própria. UX pode especializar workspace/filesystem/search/diff/test/process/artifacts, mas autorização continua no backend e plain MCP deve permanecer funcional.
+
+**Próxima ação vinculada:** `SS-MVP-002` — especificar e implementar o primeiro slice do motor de filesystem: `stat_path`, `find_paths`, `search_text`, `create_directory`, `create_text_file` e `write_text_file`, reutilizando a fronteira segura existente de workspace e emitindo resultados estruturados desde o início. Não incluir copy/move/delete/apply_patch, Git mutável, shell ou aceite externo no mesmo slice.

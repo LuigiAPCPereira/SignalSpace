@@ -27,6 +27,19 @@ Uma aplicação independente executa localmente e disponibiliza ferramentas via 
 - **Ferramentas:** operações de leitura, edição, processos e Git, com efeitos observáveis.
 - **Estado operacional (posterior):** identidade de operações longas, resultados, reconciliação e retomada após desconexão.
 
+
+## Direção aprovada — ChatGPT Web como coding agent completo
+
+O objetivo de produto é que o ChatGPT Web consiga atuar, dentro de um workspace explicitamente autorizado, como um coding agent completo: compreender o projeto, navegar e pesquisar, criar e modificar a árvore de arquivos, revisar e operar Git por capacidades tipadas, executar ferramentas autorizadas e apresentar resultados verificáveis. O SignalSpace deve oferecer primitivas próprias e estruturadas em vez de depender de shell para operações normais de filesystem, busca ou Git.
+
+**Filesystem de primeira classe:** a superfície-alvo cobre inspeção e busca (`stat_path`, `list_directory`, `read_file`, `find_paths`, `search_text`), criação e edição (`create_directory`, `create_text_file`, `replace_text`, `write_text_file`), operações estruturais (`copy_path`, `move_path`) e remoção explícita (`delete_file`, `delete_directory`). `apply_patch` é uma composição futura sobre o mesmo motor seguro, não um segundo caminho de autorização. Transferência de binários/artifacts permanece uma superfície separada.
+
+**Git de primeira classe:** `git.review` continua sendo a capacidade observacional existente. A direção aprovada inclui Git local tipado para status/diff/log/show/branches e, em etapa própria, stage/unstage, criação/troca de branch e commit. Operações remotas como fetch/push pertencem a uma fronteira separada de rede/credenciais. Operações destrutivas como reset hard, clean, remoção agressiva de branch e force-push não entram implicitamente no Git normal. Mutações Git não devem ganhar execução arbitrária por hooks/configuração: o contrato deve neutralizar hooks e ambiente/configuração executável antes de promovê-las.
+
+**UX por domínio/tool:** cada tool deve ter resultado estruturado e identidade visual coerente com sua função. UI especializada é desejável quando melhora compreensão ou revisão — por exemplo workspace, árvore/busca, diff Git, testes/processos e artifacts — sem exigir um iframe diferente para cada chamada trivial. A tool continua funcional para hosts MCP sem UI especializada; apresentação não substitui o contrato nem a autorização.
+
+DevSpace e Graphify permanecem referências conceituais: o primeiro inspira o fluxo de coding agent conectado ao ambiente local; o segundo inspira compreensão estrutural opcional. O SignalSpace não incorpora código desses projetos nem delega a eles sua fronteira de segurança. Shell continua capacidade de alto risco separada e não é autorizado por esta direção de filesystem/Git.
+
 ## Contrato de aprovações e interface de autenticação
 
 A interface de autenticação do SignalSpace cuida **da conexão OAuth e dos escopos solicitados**, não da confirmação de cada chamada MCP. A confirmação de uso de ferramentas que o ChatGPT apresentar pertence à interface do ChatGPT. Sua disponibilidade e suas opções de aprovação podem variar; o backend do SignalSpace **não depende de receber um sinal de aprovação do ChatGPT** para autorizar uma chamada.

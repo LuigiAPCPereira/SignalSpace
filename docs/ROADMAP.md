@@ -2,7 +2,7 @@
 
 **Status:** plano de execução documental da frente de backend do [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), não compromisso de datas ou autorização de ampliar o MVP. Fontes do escopo: [produto](PRODUCT.md), [MVP](MVP.md), [contrato administrativo](LOCAL_ADMIN_AUTHORIZATION.md) e pedido do proprietário para continuar o backend mantendo o PR draft. Detalhes executáveis/estado por ID: [`../TASKLIST.md`](../TASKLIST.md). Revalidar branch e HEAD na retomada.
 
-**Estado corrente (23/09/2026):** `codex/mvp-vertical-programming` e `origin/codex/mvp-vertical-programming` estão em `d1bff2c925e83061bcbc15cef299b22846ac897b`. A composição opt-in READ + WRITE + Git observacional de `SS-MVP-002` foi implementada, validada localmente e publicada nessa branch. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell ou mutação Git.
+**Estado reconciliado antes desta decisão (23/09/2026):** a composição opt-in READ + WRITE + Git observacional de `SS-MVP-002` foi implementada, validada localmente e publicada; a reconciliação documental correspondente foi publicada em `41966e1300072f8dc4519f3a7837eccbb41fafd2`. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell ou mutação Git.
 
 | Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
 | --- | --- | --- | --- | --- | --- |
@@ -27,3 +27,19 @@ Esta seção registra a nova frente autorizada pela missão de 20/09/2026 sem ap
 | M6 — programação vertical local | Composição opt-in pública com concessão local e escopos independentes para READ, edição e revisão Git somente leitura, com negação após revogação. `test.run` permanece separado. | WORKSPACE_SECURITY; `PROGRAMMING_TOOLS.md`; promotion gate | SS-MVP-002…006 | implementação e validação local confirmadas; publicação remota confirmada; aceite operacional externo pendente | `e97aaf7` e `d1bff2c`; testes OAuth/MCP, suíte Go, race, vet, build, gofmt e diff-check passaram. Não é HTTPS/ChatGPT Web, workspace real ou sandbox de processo; shell e mutação Git permanecem fora. |
 
 O próximo bloco não é repetir a promoção já implementada/publicada: é um aceite operacional externo de READ + WRITE + Git, caso seja autorizado, ou um contrato separado para shell. Ambos exigem missão própria; `SS-MVP-002` permanece PARCIAL.
+
+
+## Direção pós-M6 — coding agent completo dentro de SS-MVP-002
+
+A decisão de produto de 23/09/2026 amplia a direção de longo prazo sem declarar implementação pronta. O alvo é um ChatGPT Web capaz de trabalhar como coding agent completo no workspace autorizado, com filesystem e busca nativos, Git tipado e UX especializada por domínio. Essa direção permanece vinculada a `SS-MVP-002` enquanto a fronteira de autorização e composição estiver em evolução; não cria por si só um novo ID, um novo escopo OAuth ou permissão de shell.
+
+Sequenciamento recomendado dentro da frente existente:
+
+1. consolidar o motor seguro de filesystem e adicionar contratos estruturados para inspeção/busca/criação/escrita;
+2. completar copy/move/delete e, depois, `apply_patch` sobre o mesmo motor;
+3. evoluir Git observacional para Git local tipado com capacidade separada e hardening contra hooks/configuração executável;
+4. tratar Git remoto (fetch/push) como fronteira própria de rede/credenciais;
+5. adicionar UX especializada por domínio sobre resultados estruturados, preservando funcionamento sem widget;
+6. manter shell/execução arbitrária e operações Git destrutivas sob decisões/gates próprios.
+
+O próximo slice técnico recomendado é o item 1. Ele deve preservar `replace_text`, `read_file`, `list_directory` e `review_git_changes` como regressões e não promover shell, `test.run` ou mutação Git por consequência.
