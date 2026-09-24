@@ -24,6 +24,7 @@ func typedFilesystemOAuthServer(t *testing.T, verifier *JWKSVerifier, grants *wo
 		workspaceTextCreator: grants, workspaceTextUpdater: grants,
 		workspaceCopier: grants, workspaceMover: grants,
 		workspaceFileDeleter: grants, workspaceDirectoryDeleter: grants,
+		workspacePatchApplier: grants,
 	}, verifier)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +74,7 @@ func TestTypedFilesystemMCPScopesSchemasAndStructuredResults(t *testing.T) {
 		t.Fatalf("read tools were not typed and ordered: %v", names)
 	}
 	_, writeList := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, nil)
-	if names := toolNames(t, writeList); len(names) != 9 || names[1] != writeToolName || names[2] != createDirectoryToolName || names[3] != createTextFileToolName || names[4] != writeTextFileToolName || names[5] != copyPathToolName || names[6] != movePathToolName || names[7] != deleteFileToolName || names[8] != deleteDirectoryToolName {
+	if names := toolNames(t, writeList); len(names) != 10 || names[1] != writeToolName || names[2] != createDirectoryToolName || names[3] != createTextFileToolName || names[4] != writeTextFileToolName || names[5] != copyPathToolName || names[6] != movePathToolName || names[7] != deleteFileToolName || names[8] != deleteDirectoryToolName || names[9] != applyPatchToolName {
 		t.Fatalf("write tools were not typed and ordered: %v", names)
 	}
 
@@ -103,6 +104,15 @@ func TestTypedFilesystemMCPScopesSchemasAndStructuredResults(t *testing.T) {
 	updateResponse, updateResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(writeTextFileToolName, `{"session_id":"`+sessionID+`","path":"generated/file.txt","expected_sha256":"`+hex.EncodeToString(fileSum[:])+`","content":"after"}`), nil)
 	if updateResponse.StatusCode != http.StatusOK || !strings.Contains(updateResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), `"status":"updated"`) {
 		t.Fatalf("structured update result missing: %d %v", updateResponse.StatusCode, updateResult)
+	}
+	afterSum := sha256.Sum256([]byte("after"))
+	patchResponse, patchResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(applyPatchToolName, `{"session_id":"`+sessionID+`","operations":[{"type":"create_file","path":"generated/patched.txt","content":"patched"},{"type":"write_file","path":"generated/file.txt","expected_sha256":"`+hex.EncodeToString(afterSum[:])+`","content":"patched again"}]}`), nil)
+	if patchResponse.StatusCode != http.StatusOK || !strings.Contains(patchResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), `"status":"applied"`) {
+		t.Fatalf("structured patch result missing or leaked root: %d %v", patchResponse.StatusCode, patchResult)
+	}
+	stalePatchResponse, stalePatchResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(applyPatchToolName, `{"session_id":"`+sessionID+`","operations":[{"type":"write_file","path":"generated/file.txt","expected_sha256":"`+hex.EncodeToString(fileSum[:])+`","content":"stale"}]}`), nil)
+	if stalePatchResponse.StatusCode != http.StatusOK || !strings.Contains(stalePatchResult["result"].(map[string]any)["structuredContent"].(map[string]any)["status"].(string), "hash_conflict") {
+		t.Fatalf("stale structured patch was not rejected: %d %v", stalePatchResponse.StatusCode, stalePatchResult)
 	}
 
 	readCreateResponse, readCreateResult := oauthRequest(t, server, http.MethodPost, "/mcp", readToken, callTool(createTextFileToolName, `{"session_id":"`+sessionID+`","path":"blocked.txt","content":"no"}`), nil)

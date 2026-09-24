@@ -30,6 +30,7 @@ const (
 	movePathToolName        = "move_path"
 	deleteFileToolName      = "delete_file"
 	deleteDirectoryToolName = "delete_directory"
+	applyPatchToolName      = "apply_patch"
 )
 
 type request struct {
@@ -237,6 +238,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			if writeAccess.directoryCreator != nil || writeAccess.textCreator != nil || writeAccess.textUpdater != nil {
 				instructions += " Directory creation, create-only text files and hash-preconditioned full-file updates use the same separate write scope."
 			}
+			if writeAccess.patchApplier != nil {
+				instructions += " Structured apply_patch supports bounded create, hash-preconditioned update/delete, move and directory operations after a complete preflight; it has no shell, Git mutation or arbitrary diff parser."
+			}
 		}
 		if gitAccess != nil && gitAccess.advertise {
 			instructions += " Git review requires a separate OAuth Git review scope and active local Git review grant; it is read-only and never stages, commits or pushes."
@@ -300,6 +304,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			}
 			if writeAccess.directoryDeleter != nil {
 				tools = append(tools, deleteDirectoryToolDefinition())
+			}
+			if writeAccess.patchApplier != nil {
+				tools = append(tools, applyPatchToolDefinition())
 			}
 		}
 		if gitAccess != nil && gitAccess.advertise {
@@ -373,6 +380,10 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		}
 		if params.Name == deleteDirectoryToolName && writeAccess != nil && writeAccess.directoryDeleter != nil {
 			writeAccess.deleteDirectory(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == applyPatchToolName && writeAccess != nil && writeAccess.patchApplier != nil {
+			writeAccess.applyPatch(w, r.Context(), id, params.Arguments)
 			return
 		}
 		if params.Name == gitReviewToolName && gitAccess != nil {

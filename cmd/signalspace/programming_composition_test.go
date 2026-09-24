@@ -80,9 +80,9 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	allToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeRead+" "+workspace.ScopeWrite+" "+workspace.ScopeGit)
 
 	assertPublicToolNames(t, handler, readToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text")
-	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory")
+	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch")
 	assertPublicToolNames(t, handler, gitToken, "connection_diagnostic", "review_git_changes")
-	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "review_git_changes")
+	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes")
 	for _, token := range []string{readToken, writeToken, gitToken, allToken} {
 		listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 		if strings.Contains(listing.Body.String(), `"name":"run_workspace_tests"`) || strings.Contains(listing.Body.String(), `"name":"shell"`) {
@@ -91,7 +91,7 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	}
 
 	assertPublicInitializeInstructions(t, handler, readToken, "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands. Structured path metadata, bounded path search and literal text search are available without shell.")
-	assertPublicInitializeInstructions(t, handler, writeToken, "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations. Directory creation, create-only text files and hash-preconditioned full-file updates use the same separate write scope.")
+	assertPublicInitializeInstructions(t, handler, writeToken, "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations. Directory creation, create-only text files and hash-preconditioned full-file updates use the same separate write scope. Structured apply_patch supports bounded create, hash-preconditioned update/delete, move and directory operations after a complete preflight; it has no shell, Git mutation or arbitrary diff parser.")
 
 	readCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{"session_id":"` + sessionID + `","path":"tracked.txt"}}}`
 	readResponse := readRequest(t, handler, http.MethodPost, "/mcp", readCall, "application/json", readToken, nil)

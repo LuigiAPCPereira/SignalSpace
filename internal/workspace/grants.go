@@ -368,6 +368,21 @@ func (g *Grants) DeleteDirectory(owner, clientID, id, relative string) (DeleteRe
 	return g.current.DeleteDirectory(relative)
 }
 
+// ApplyPatch revalida proprietário, cliente, sessão e escopo uma única vez
+// sob o mutex da concessão; a Session executa o preflight e a compensação
+// estruturada sem abrir uma segunda rota de filesystem.
+func (g *Grants) ApplyPatch(owner, clientID, id string, operations []PatchOperation) (PatchResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return PatchResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return PatchResult{}, ErrNotAuthorized
+	}
+	return g.current.ApplyPatch(operations)
+}
+
 // Revoke é um comando exclusivamente local, sem rota pública equivalente.
 func (g *Grants) Revoke(id string) error {
 	g.mu.Lock()

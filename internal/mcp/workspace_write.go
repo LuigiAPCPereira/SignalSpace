@@ -54,6 +54,7 @@ type writeToolAccess struct {
 	mover            WorkspaceStructuralMove
 	fileDeleter      WorkspaceStructuralFileDelete
 	directoryDeleter WorkspaceStructuralDirectoryDelete
+	patchApplier     WorkspacePatchApplier
 	verify           func(context.Context) (VerifiedIdentity, error)
 	challenge        string
 	advertise        bool
