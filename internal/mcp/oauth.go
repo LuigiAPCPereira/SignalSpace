@@ -39,10 +39,16 @@ type OAuthConfig struct {
 	WorkspaceReader WorkspaceTextReader
 	// WorkspaceLister é independente e só pode ser habilitado com WorkspaceReader.
 	// A composição local deve injetar a mesma concessão nas duas portas.
-	WorkspaceLister WorkspaceDirectoryLister
+	WorkspaceLister   WorkspaceDirectoryLister
+	workspaceStatter  WorkspacePathStatter
+	workspaceFinder   WorkspacePathFinder
+	workspaceSearcher WorkspaceTextSearcher
 	// workspaceWriter só é preenchido pelo construtor explícito de programação
 	// abaixo; a configuração OAuth padrão continua sem escrita.
-	workspaceWriter WorkspaceTextWriter
+	workspaceWriter           WorkspaceTextWriter
+	workspaceDirectoryCreator WorkspaceDirectoryCreator
+	workspaceTextCreator      WorkspaceTextCreator
+	workspaceTextUpdater      WorkspaceTextUpdater
 	// gitReviewer só é preenchido pelo construtor explícito de programação
 	// abaixo; a configuração OAuth padrão continua sem revisão Git.
 	gitReviewer WorkspaceGitReviewer
@@ -55,29 +61,42 @@ type OAuthConfig struct {
 }
 
 // ProgrammingPorts são as portas locais necessárias para a composição pública
-// opt-in de leitura, escrita e revisão Git. A ausência de qualquer porta fecha
-// a composição; não há porta para shell, execução de testes ou mutação Git.
+// opt-in do filesystem tipado, leitura, escrita e revisão Git. A ausência de
+// qualquer porta fecha a composição; não há porta para shell, execução de
+// testes ou mutação Git.
 type ProgrammingPorts struct {
-	WorkspaceReader WorkspaceTextReader
-	WorkspaceLister WorkspaceDirectoryLister
-	WorkspaceWriter WorkspaceTextWriter
-	GitReviewer     WorkspaceGitReviewer
+	WorkspaceReader           WorkspaceTextReader
+	WorkspaceLister           WorkspaceDirectoryLister
+	WorkspaceStatter          WorkspacePathStatter
+	WorkspaceFinder           WorkspacePathFinder
+	WorkspaceSearcher         WorkspaceTextSearcher
+	WorkspaceWriter           WorkspaceTextWriter
+	WorkspaceDirectoryCreator WorkspaceDirectoryCreator
+	WorkspaceTextCreator      WorkspaceTextCreator
+	WorkspaceTextUpdater      WorkspaceTextUpdater
+	GitReviewer               WorkspaceGitReviewer
 }
 
 // NewOAuthProgrammingHandler compõe explicitamente a superfície pública de
 // programação aprovada. O chamador deve estar no processo local confiável e
-// fornecer as quatro portas vinculadas à mesma concessão; não existe ativação
+// fornecer as portas vinculadas à mesma concessão; não existe ativação
 // equivalente por parâmetro HTTP, metadata OAuth ou configuração genérica.
 func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
-	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceWriter == nil || ports.GitReviewer == nil {
-		return nil, errors.New("programming composition requires read, list, write and Git review ports")
+	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.GitReviewer == nil {
+		return nil, errors.New("programming composition requires all typed filesystem, read, write and Git review ports")
 	}
 	if config.testRunner != nil {
 		return nil, errors.New("programming composition cannot publish test execution")
 	}
 	config.WorkspaceReader = ports.WorkspaceReader
 	config.WorkspaceLister = ports.WorkspaceLister
+	config.workspaceStatter = ports.WorkspaceStatter
+	config.workspaceFinder = ports.WorkspaceFinder
+	config.workspaceSearcher = ports.WorkspaceSearcher
 	config.workspaceWriter = ports.WorkspaceWriter
+	config.workspaceDirectoryCreator = ports.WorkspaceDirectoryCreator
+	config.workspaceTextCreator = ports.WorkspaceTextCreator
+	config.workspaceTextUpdater = ports.WorkspaceTextUpdater
 	config.gitReviewer = ports.GitReviewer
 	return NewOAuthHandler(config, verifier)
 }
@@ -103,8 +122,14 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	if config.WorkspaceLister != nil && config.WorkspaceReader == nil {
 		return nil, errors.New("workspace directory listing requires workspace reader")
 	}
+	if (config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil) && config.WorkspaceReader == nil {
+		return nil, errors.New("typed workspace read tools require workspace reader")
+	}
+	if (config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil) && config.workspaceWriter == nil {
+		return nil, errors.New("typed workspace write tools require workspace writer")
+	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.gitReviewer != nil || config.testRunner != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.gitReviewer != nil || config.testRunner != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
 			return nil, errors.New("workspace capabilities require verified OAuth client identity")
@@ -178,8 +203,11 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		if config.WorkspaceReader != nil {
 			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			readAccess = &readToolAccess{
-				reader: config.WorkspaceReader,
-				lister: config.WorkspaceLister,
+				reader:   config.WorkspaceReader,
+				lister:   config.WorkspaceLister,
+				statter:  config.workspaceStatter,
+				finder:   config.workspaceFinder,
+				searcher: config.workspaceSearcher,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
 					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceReadScope, config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
@@ -200,7 +228,10 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		if config.workspaceWriter != nil {
 			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			writeAccess = &writeToolAccess{
-				writer: config.workspaceWriter,
+				writer:           config.workspaceWriter,
+				directoryCreator: config.workspaceDirectoryCreator,
+				textCreator:      config.workspaceTextCreator,
+				textUpdater:      config.workspaceTextUpdater,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
 					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceWriteScope, config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {

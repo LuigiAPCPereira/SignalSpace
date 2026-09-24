@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -77,10 +79,10 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	gitToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeGit)
 	allToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeRead+" "+workspace.ScopeWrite+" "+workspace.ScopeGit)
 
-	assertPublicToolNames(t, handler, readToken, "connection_diagnostic", "read_file", "list_directory")
-	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text")
+	assertPublicToolNames(t, handler, readToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text")
+	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file")
 	assertPublicToolNames(t, handler, gitToken, "connection_diagnostic", "review_git_changes")
-	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "replace_text", "review_git_changes")
+	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "review_git_changes")
 	for _, token := range []string{readToken, writeToken, gitToken, allToken} {
 		listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 		if strings.Contains(listing.Body.String(), `"name":"run_workspace_tests"`) || strings.Contains(listing.Body.String(), `"name":"shell"`) {
@@ -88,13 +90,44 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 		}
 	}
 
-	assertPublicInitializeInstructions(t, handler, readToken, "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands.")
-	assertPublicInitializeInstructions(t, handler, writeToken, "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations.")
+	assertPublicInitializeInstructions(t, handler, readToken, "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands. Structured path metadata, bounded path search and literal text search are available without shell.")
+	assertPublicInitializeInstructions(t, handler, writeToken, "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations. Directory creation, create-only text files and hash-preconditioned full-file updates use the same separate write scope.")
 
 	readCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{"session_id":"` + sessionID + `","path":"tracked.txt"}}}`
 	readResponse := readRequest(t, handler, http.MethodPost, "/mcp", readCall, "application/json", readToken, nil)
 	if readResponse.Code != http.StatusOK || !strings.Contains(readResponse.Body.String(), `before\n`) {
 		t.Fatalf("authorized public read failed: %d %s", readResponse.Code, readResponse.Body.String())
+	}
+	statCall := `{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"stat_path","arguments":{"session_id":"` + sessionID + `","path":"tracked.txt"}}}`
+	statResponse := readRequest(t, handler, http.MethodPost, "/mcp", statCall, "application/json", readToken, nil)
+	if statResponse.Code != http.StatusOK || !strings.Contains(statResponse.Body.String(), `"kind":"regular_file"`) || strings.Contains(statResponse.Body.String(), root) {
+		t.Fatalf("authorized public stat failed or leaked root: %d %s", statResponse.Code, statResponse.Body.String())
+	}
+	findCall := `{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"find_paths","arguments":{"session_id":"` + sessionID + `","pattern":"*.txt"}}}`
+	findResponse := readRequest(t, handler, http.MethodPost, "/mcp", findCall, "application/json", readToken, nil)
+	if findResponse.Code != http.StatusOK || !strings.Contains(findResponse.Body.String(), "tracked.txt") {
+		t.Fatalf("authorized public find failed: %d %s", findResponse.Code, findResponse.Body.String())
+	}
+	searchCall := `{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"search_text","arguments":{"session_id":"` + sessionID + `","query":"before"}}}`
+	searchResponse := readRequest(t, handler, http.MethodPost, "/mcp", searchCall, "application/json", readToken, nil)
+	if searchResponse.Code != http.StatusOK || !strings.Contains(searchResponse.Body.String(), "tracked.txt") {
+		t.Fatalf("authorized public search failed: %d %s", searchResponse.Code, searchResponse.Body.String())
+	}
+	createDirectoryCall := `{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"create_directory","arguments":{"session_id":"` + sessionID + `","path":"generated"}}}`
+	createDirectoryResponse := readRequest(t, handler, http.MethodPost, "/mcp", createDirectoryCall, "application/json", writeToken, nil)
+	if createDirectoryResponse.Code != http.StatusOK || !strings.Contains(createDirectoryResponse.Body.String(), `"status":"created"`) {
+		t.Fatalf("authorized public directory creation failed: %d %s", createDirectoryResponse.Code, createDirectoryResponse.Body.String())
+	}
+	createFileCall := `{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"create_text_file","arguments":{"session_id":"` + sessionID + `","path":"generated/file.txt","content":"before"}}}`
+	createFileResponse := readRequest(t, handler, http.MethodPost, "/mcp", createFileCall, "application/json", writeToken, nil)
+	if createFileResponse.Code != http.StatusOK || !strings.Contains(createFileResponse.Body.String(), `"status":"created"`) {
+		t.Fatalf("authorized public file creation failed: %d %s", createFileResponse.Code, createFileResponse.Body.String())
+	}
+	fileSum := sha256.Sum256([]byte("before"))
+	writeFileCall := `{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"write_text_file","arguments":{"session_id":"` + sessionID + `","path":"generated/file.txt","expected_sha256":"` + hex.EncodeToString(fileSum[:]) + `","content":"after"}}}`
+	writeFileResponse := readRequest(t, handler, http.MethodPost, "/mcp", writeFileCall, "application/json", writeToken, nil)
+	if writeFileResponse.Code != http.StatusOK || !strings.Contains(writeFileResponse.Body.String(), `"status":"updated"`) {
+		t.Fatalf("authorized public full-file update failed: %d %s", writeFileResponse.Code, writeFileResponse.Body.String())
 	}
 
 	writeCall := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"replace_text","arguments":{"session_id":"` + sessionID + `","path":"tracked.txt","expected":"before\n","replacement":"after\n"}}}`

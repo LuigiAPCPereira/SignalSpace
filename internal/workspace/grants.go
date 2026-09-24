@@ -246,6 +246,80 @@ func (g *Grants) ListDirectory(owner, clientID, id, relative string) ([]string, 
 	return g.current.ListDirectory(relative)
 }
 
+// StatPath, FindPaths e SearchText compartilham a concessão READ e o mesmo
+// mutex de revogação das ferramentas de leitura existentes.
+func (g *Grants) StatPath(owner, clientID, id, relative string) (PathStat, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return PathStat{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+		return PathStat{}, ErrNotAuthorized
+	}
+	return g.current.StatPath(relative)
+}
+
+func (g *Grants) FindPaths(owner, clientID, id, root, pattern string, maxResults, maxDepth int) (FindResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return FindResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+		return FindResult{}, ErrNotAuthorized
+	}
+	return g.current.FindPaths(root, pattern, maxResults, maxDepth)
+}
+
+func (g *Grants) SearchText(owner, clientID, id, root, query string, maxResults int) (SearchResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return SearchResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+		return SearchResult{}, ErrNotAuthorized
+	}
+	return g.current.SearchText(root, query, maxResults)
+}
+
+func (g *Grants) CreateDirectory(owner, clientID, id, relative string) (DirectoryResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return DirectoryResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return DirectoryResult{}, ErrNotAuthorized
+	}
+	return g.current.CreateDirectory(relative)
+}
+
+func (g *Grants) CreateTextFile(owner, clientID, id, relative, content string) (TextFileResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return TextFileResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return TextFileResult{}, ErrNotAuthorized
+	}
+	return g.current.CreateTextFile(relative, content)
+}
+
+func (g *Grants) WriteTextFile(owner, clientID, id, relative, expectedSHA256, content string) (TextFileResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return TextFileResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return TextFileResult{}, ErrNotAuthorized
+	}
+	return g.current.WriteTextFile(relative, expectedSHA256, content)
+}
+
 // Revoke é um comando exclusivamente local, sem rota pública equivalente.
 func (g *Grants) Revoke(id string) error {
 	g.mu.Lock()

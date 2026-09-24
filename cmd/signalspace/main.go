@@ -203,10 +203,16 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 	var protected http.Handler
 	if plan.consoleMode == workspaceConsoleProgramming {
 		protected, err = mcp.NewOAuthProgrammingHandler(mcpConfig, mcp.ProgrammingPorts{
-			WorkspaceReader: mcpConfig.WorkspaceReader,
-			WorkspaceLister: mcpConfig.WorkspaceLister,
-			WorkspaceWriter: console.grants,
-			GitReviewer:     console.programmingGitReviewer,
+			WorkspaceReader:           mcpConfig.WorkspaceReader,
+			WorkspaceLister:           mcpConfig.WorkspaceLister,
+			WorkspaceStatter:          grants,
+			WorkspaceFinder:           grants,
+			WorkspaceSearcher:         grants,
+			WorkspaceWriter:           console.grants,
+			WorkspaceDirectoryCreator: grants,
+			WorkspaceTextCreator:      grants,
+			WorkspaceTextUpdater:      grants,
+			GitReviewer:               console.programmingGitReviewer,
 		}, verifier)
 	} else {
 		protected, err = mcp.NewOAuthHandler(mcpConfig, verifier)

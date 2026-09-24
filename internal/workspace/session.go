@@ -103,7 +103,7 @@ func (s *Session) WithProcessDir(operation func(string) error) error {
 }
 
 func validRelative(relative string) bool {
-	if relative == "" || relative == "." || len(relative) > 4096 || filepath.IsAbs(relative) ||
+	if relative == "" || relative == "." || len(relative) > MaxRelativePathBytes || filepath.IsAbs(relative) ||
 		filepath.Clean(relative) != relative || strings.ContainsAny(relative, "\\\x00") || !utf8.ValidString(relative) {
 		return false
 	}

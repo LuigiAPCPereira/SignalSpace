@@ -15,11 +15,17 @@ import (
 )
 
 const (
-	protocolVersion       = "2025-06-18"
-	maxBodyBytes          = 64 * 1024
-	toolName              = "connection_diagnostic"
-	readToolName          = "read_file"
-	listDirectoryToolName = "list_directory"
+	protocolVersion         = "2025-06-18"
+	maxBodyBytes            = 64 * 1024
+	toolName                = "connection_diagnostic"
+	readToolName            = "read_file"
+	listDirectoryToolName   = "list_directory"
+	statPathToolName        = "stat_path"
+	findPathsToolName       = "find_paths"
+	searchTextToolName      = "search_text"
+	createDirectoryToolName = "create_directory"
+	createTextFileToolName  = "create_text_file"
+	writeTextFileToolName   = "write_text_file"
 )
 
 type request struct {
@@ -214,12 +220,18 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			if readAccess.lister != nil {
 				instructions = "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
 			}
+			if readAccess.statter != nil || readAccess.finder != nil || readAccess.searcher != nil {
+				instructions += " Structured path metadata, bounded path search and literal text search are available without shell."
+			}
 		}
 		if writeAccess != nil && writeAccess.advertise {
 			if instructions == "Diagnostic only; no development tools are available." {
 				instructions = "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations."
 			} else {
 				instructions += " Workspace text replacement requires a separate OAuth write scope and an active local workspace write grant; no commands or Git mutations."
+			}
+			if writeAccess.directoryCreator != nil || writeAccess.textCreator != nil || writeAccess.textUpdater != nil {
+				instructions += " Directory creation, create-only text files and hash-preconditioned full-file updates use the same separate write scope."
 			}
 		}
 		if gitAccess != nil && gitAccess.advertise {
@@ -252,9 +264,27 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			if readAccess.lister != nil {
 				tools = append(tools, listDirectoryToolDefinition())
 			}
+			if readAccess.statter != nil {
+				tools = append(tools, statPathToolDefinition())
+			}
+			if readAccess.finder != nil {
+				tools = append(tools, findPathsToolDefinition())
+			}
+			if readAccess.searcher != nil {
+				tools = append(tools, searchTextToolDefinition())
+			}
 		}
 		if writeAccess != nil && writeAccess.advertise {
 			tools = append(tools, writeToolDefinition())
+			if writeAccess.directoryCreator != nil {
+				tools = append(tools, createDirectoryToolDefinition())
+			}
+			if writeAccess.textCreator != nil {
+				tools = append(tools, createTextFileToolDefinition())
+			}
+			if writeAccess.textUpdater != nil {
+				tools = append(tools, writeTextFileToolDefinition())
+			}
 		}
 		if gitAccess != nil && gitAccess.advertise {
 			tools = append(tools, gitReviewToolDefinition())
@@ -285,8 +315,32 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			readAccess.list(w, r.Context(), id, params.Arguments)
 			return
 		}
+		if params.Name == statPathToolName && readAccess != nil && readAccess.statter != nil {
+			readAccess.stat(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == findPathsToolName && readAccess != nil && readAccess.finder != nil {
+			readAccess.find(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == searchTextToolName && readAccess != nil && readAccess.searcher != nil {
+			readAccess.search(w, r.Context(), id, params.Arguments)
+			return
+		}
 		if params.Name == writeToolName && writeAccess != nil {
 			writeAccess.call(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == createDirectoryToolName && writeAccess != nil && writeAccess.directoryCreator != nil {
+			writeAccess.createDirectory(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == createTextFileToolName && writeAccess != nil && writeAccess.textCreator != nil {
+			writeAccess.createTextFile(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == writeTextFileToolName && writeAccess != nil && writeAccess.textUpdater != nil {
+			writeAccess.writeTextFile(w, r.Context(), id, params.Arguments)
 			return
 		}
 		if params.Name == gitReviewToolName && gitAccess != nil {
