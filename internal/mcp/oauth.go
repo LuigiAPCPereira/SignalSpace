@@ -56,7 +56,9 @@ type OAuthConfig struct {
 	workspacePatchApplier     WorkspacePatchApplier
 	// gitReviewer só é preenchido pelo construtor explícito de programação
 	// abaixo; a configuração OAuth padrão continua sem revisão Git.
-	gitReviewer WorkspaceGitReviewer
+	gitReviewer     WorkspaceGitReviewer
+	gitStatusReader WorkspaceGitStatusReader
+	gitIndexer      WorkspaceGitIndexMutator
 	// testRunner é deliberadamente não exportado: execução só pode ser
 	// composta pelo harness automatizado deste pacote nesta etapa.
 	testRunner WorkspaceTestRunner
@@ -144,7 +146,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		return nil, errors.New("typed workspace write tools require workspace writer")
 	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.workspaceCopier != nil || config.workspaceMover != nil || config.workspaceFileDeleter != nil || config.workspaceDirectoryDeleter != nil || config.workspacePatchApplier != nil || config.gitReviewer != nil || config.testRunner != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.workspaceCopier != nil || config.workspaceMover != nil || config.workspaceFileDeleter != nil || config.workspaceDirectoryDeleter != nil || config.workspacePatchApplier != nil || config.gitReviewer != nil || config.gitStatusReader != nil || config.gitIndexer != nil || config.testRunner != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
 			return nil, errors.New("workspace capabilities require verified OAuth client identity")
@@ -160,8 +162,11 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	if config.workspaceWriter != nil {
 		scopes = append(scopes, workspaceWriteScope)
 	}
-	if config.gitReviewer != nil {
+	if config.gitReviewer != nil || config.gitStatusReader != nil {
 		scopes = append(scopes, gitReviewScope)
+	}
+	if config.gitIndexer != nil {
+		scopes = append(scopes, gitIndexScope)
 	}
 	if config.testRunner != nil {
 		scopes = append(scopes, testRunScope)
@@ -271,10 +276,11 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			}
 		}
 		var gitAccess *gitToolAccess
-		if config.gitReviewer != nil {
+		if config.gitReviewer != nil || config.gitStatusReader != nil {
 			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			gitAccess = &gitToolAccess{
-				reviewer: config.gitReviewer,
+				reviewer:     config.gitReviewer,
+				statusReader: config.gitStatusReader,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
 					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitReviewScope, config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
@@ -289,6 +295,27 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			}
 			if _, err := gitAccess.verify(r.Context()); err == nil {
 				gitAccess.advertise = true
+			}
+		}
+		var gitIndexAccess *gitIndexToolAccess
+		if config.gitIndexer != nil {
+			accessToken := strings.TrimPrefix(bearer, "Bearer ")
+			gitIndexAccess = &gitIndexToolAccess{
+				mutator: config.gitIndexer,
+				verify: func(ctx context.Context) (VerifiedIdentity, error) {
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitIndexScope, config.OwnerSubject)
+					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
+						if err == nil {
+							err = errInvalidToken
+						}
+						return VerifiedIdentity{}, err
+					}
+					return identity, nil
+				},
+				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, gitIndexScope),
+			}
+			if _, err := gitIndexAccess.verify(r.Context()); err == nil {
+				gitIndexAccess.advertise = true
 			}
 		}
 		var testAccess *testToolAccess
@@ -312,7 +339,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				testAccess.advertise = true
 			}
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess, testAccess)
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, testAccess)
 	}), nil
 }
 

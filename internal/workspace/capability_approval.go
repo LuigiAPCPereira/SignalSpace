@@ -63,6 +63,17 @@ func NewCapabilityApproval(grants *Grants, eligible func(string) bool) (*Capabil
 // implicitamente. A ordem corresponde à metadata OAuth: leitura, escrita, Git,
 // teste. A ordem de entrada não é uma autoridade e não pode criar duplicatas.
 func NormalizeCapabilities(scopes ...string) ([]string, error) {
+	return normalizeCapabilities(false, scopes...)
+}
+
+// normalizeManagedCapabilities só é usada pela composição local do manager
+// de worktrees. O fluxo público de approval continua restrito a
+// NormalizeCapabilities, portanto não passa a conceder mutação do índice.
+func normalizeManagedCapabilities(scopes ...string) ([]string, error) {
+	return normalizeCapabilities(true, scopes...)
+}
+
+func normalizeCapabilities(managed bool, scopes ...string) ([]string, error) {
 	if len(scopes) == 0 {
 		return nil, ErrInvalidCapabilities
 	}
@@ -73,6 +84,10 @@ func NormalizeCapabilities(scopes ...string) ([]string, error) {
 		}
 		switch scope {
 		case ScopeRead, ScopeWrite, ScopeGit, ScopeTest:
+		case ScopeGitIndex:
+			if !managed {
+				return nil, ErrInvalidCapabilities
+			}
 		default:
 			return nil, ErrInvalidCapabilities
 		}
@@ -81,7 +96,7 @@ func NormalizeCapabilities(scopes ...string) ([]string, error) {
 		}
 		wanted[scope] = struct{}{}
 	}
-	canonical := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeTest}
+	canonical := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeTest}
 	result := make([]string, 0, len(wanted))
 	for _, scope := range canonical {
 		if _, exists := wanted[scope]; exists {

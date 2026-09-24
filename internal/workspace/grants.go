@@ -9,10 +9,11 @@ import (
 var ErrNotAuthorized = errors.New("workspace session not authorized")
 
 const (
-	ScopeRead  = "signalspace:workspace.read"
-	ScopeWrite = "signalspace:workspace.write"
-	ScopeGit   = "signalspace:git.review"
-	ScopeTest  = "signalspace:test.run"
+	ScopeRead     = "signalspace:workspace.read"
+	ScopeWrite    = "signalspace:workspace.write"
+	ScopeGit      = "signalspace:git.review"
+	ScopeGitIndex = "signalspace:git.index"
+	ScopeTest     = "signalspace:test.run"
 )
 
 // GrantSnapshot contém somente os metadados locais necessários para informar
@@ -98,7 +99,7 @@ func (g *Grants) grantWithMetadata(root, clientID string, metadata WorkspaceMeta
 	}
 	allowedScopes := make(map[string]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeWrite && scope != ScopeGit && scope != ScopeTest {
+		if scope != ScopeRead && scope != ScopeWrite && scope != ScopeGit && scope != ScopeGitIndex && scope != ScopeTest {
 			return "", ErrNotAuthorized
 		}
 		allowedScopes[scope] = struct{}{}
@@ -156,6 +157,24 @@ func (g *Grants) WithAuthorizedGitProcessDir(owner, clientID, id string, operati
 	return operation(g.current)
 }
 
+// WithAuthorizedManagedGitProcessDir autoriza mutações exclusivamente em uma
+// worktree gerenciada pelo SignalSpace. A sessão de checkout normal nunca
+// satisfaz esta porta, ainda que possua o escopo de índice.
+func (g *Grants) WithAuthorizedManagedGitProcessDir(owner, clientID, id string, operation func(ProcessDirectory) error) error {
+	if operation == nil {
+		return ErrNotAuthorized
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeGitIndex) || g.current.metadata.Mode != WorkspaceModeWorktree || g.current.metadata.ManagedWorkspaceID == "" {
+		return ErrManagedWorktreeRequired
+	}
+	return operation(g.current)
+}
+
 // WithAuthorizedTestProcessDir autoriza a execução fixa de testes somente com
 // a concessão de teste corrente. A chamada permanece serializada com edição,
 // revisão Git e revogação; a porta não expõe Session, raiz ou descritor.
@@ -204,7 +223,7 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 	}
 
 	scopes := make([]string, 0, len(g.scopes))
-	for _, scope := range []string{ScopeRead, ScopeWrite, ScopeGit, ScopeTest} {
+	for _, scope := range []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeTest} {
 		if g.hasScopeLocked(scope) {
 			scopes = append(scopes, scope)
 		}

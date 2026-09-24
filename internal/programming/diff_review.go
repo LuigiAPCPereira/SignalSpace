@@ -21,16 +21,18 @@ const defaultGitTimeout = 10 * time.Second
 type GitSnapshot struct {
 	Status          string
 	Diff            string
+	StagedDiff      string
 	OutputTruncated bool
 }
 
 // DiffReview compara duas observações feitas pela mesma sessão local.
 type DiffReview struct {
-	Before       GitSnapshot
-	After        GitSnapshot
-	Complete     bool
-	StatusChange bool
-	DiffChange   bool
+	Before           GitSnapshot
+	After            GitSnapshot
+	Complete         bool
+	StatusChange     bool
+	DiffChange       bool
+	StagedDiffChange bool
 }
 
 func CaptureGitSnapshot(ctx context.Context, session workspace.ProcessDirectory, outputLimit int) (GitSnapshot, error) {
@@ -49,7 +51,11 @@ func CaptureGitSnapshot(ctx context.Context, session workspace.ProcessDirectory,
 		if readErr != nil {
 			return readErr
 		}
-		snapshot = GitSnapshot{Status: status, Diff: diff, OutputTruncated: statusTruncated || diffTruncated}
+		stagedDiff, stagedTruncated, readErr := runGitRead(readCtx, dir, outputLimit, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--")
+		if readErr != nil {
+			return readErr
+		}
+		snapshot = GitSnapshot{Status: status, Diff: diff, StagedDiff: stagedDiff, OutputTruncated: statusTruncated || diffTruncated || stagedTruncated}
 		return nil
 	})
 	return snapshot, err
@@ -57,11 +63,12 @@ func CaptureGitSnapshot(ctx context.Context, session workspace.ProcessDirectory,
 
 func CompareGitSnapshots(before, after GitSnapshot) DiffReview {
 	return DiffReview{
-		Before:       before,
-		After:        after,
-		Complete:     !before.OutputTruncated && !after.OutputTruncated,
-		StatusChange: before.Status != after.Status,
-		DiffChange:   before.Diff != after.Diff,
+		Before:           before,
+		After:            after,
+		Complete:         !before.OutputTruncated && !after.OutputTruncated,
+		StatusChange:     before.Status != after.Status,
+		DiffChange:       before.Diff != after.Diff,
+		StagedDiffChange: before.StagedDiff != after.StagedDiff,
 	}
 }
 

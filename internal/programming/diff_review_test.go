@@ -76,6 +76,24 @@ func TestGitSnapshotDistinguishesProducedEditWithoutMutatingRepository(t *testin
 	}
 }
 
+func TestGitSnapshotIncludesStagedDiffSeparately(t *testing.T) {
+	session, root := gitFixture(t)
+	if err := session.ReplaceText("file.txt", "before\n", "staged\n"); err != nil {
+		t.Fatal(err)
+	}
+	runGitFixture(t, root, "add", "file.txt")
+	snapshot, err := CaptureGitSnapshot(context.Background(), session, 8192)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Diff != "" || !strings.Contains(snapshot.StagedDiff, "-before") || !strings.Contains(snapshot.StagedDiff, "+staged") {
+		t.Fatalf("staged and unstaged diffs were not separated: %+v", snapshot)
+	}
+	if review := CompareGitSnapshots(GitSnapshot{}, snapshot); !review.StagedDiffChange {
+		t.Fatalf("staged diff change was not reported: %+v", review)
+	}
+}
+
 func TestGitSnapshotRequiresLiveSessionAndValidLimit(t *testing.T) {
 	session, _ := gitFixture(t)
 	if _, err := CaptureGitSnapshot(context.Background(), session, maxOutputLimit+1); err != ErrInvalidDiffReview {

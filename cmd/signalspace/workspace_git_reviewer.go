@@ -74,6 +74,19 @@ func (r *workspaceGitReviewer) ReviewGit(ctx context.Context, owner, clientID, s
 	return programming.CompareGitSnapshots(baseline, after), nil
 }
 
+func (r *workspaceGitReviewer) GitStatus(ctx context.Context, owner, clientID, sessionID string) (workspace.GitIndexStatus, error) {
+	if r == nil || r.grants == nil || ctx == nil {
+		return workspace.GitIndexStatus{}, errors.New("Git status unavailable")
+	}
+	var status workspace.GitIndexStatus
+	err := r.grants.WithAuthorizedGitProcessDir(owner, clientID, sessionID, func(directory workspace.ProcessDirectory) error {
+		var err error
+		status, err = workspace.CaptureGitIndexStatus(directory)
+		return err
+	})
+	return status, err
+}
+
 func (r *workspaceGitReviewer) Forget(sessionID string) {
 	if r == nil {
 		return

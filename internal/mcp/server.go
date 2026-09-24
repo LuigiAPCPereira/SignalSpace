@@ -147,12 +147,12 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		serveMCP(w, r, "local_diagnostic", nil, nil, nil, nil, nil)
+		serveMCP(w, r, "local_diagnostic", nil, nil, nil, nil, nil, nil)
 	}), nil
 }
 
 // serveMCP processa o protocolo somente após a fronteira de autenticação.
-func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, testAccess *testToolAccess) {
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, testAccess *testToolAccess) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -201,7 +201,7 @@ func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent fu
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess, gitAccess, testAccess)
+	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, testAccess)
 }
 
 func isOversized(err error) bool {
@@ -209,7 +209,7 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, testAccess *testToolAccess) {
+func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, testAccess *testToolAccess) {
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -244,6 +244,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		}
 		if gitAccess != nil && gitAccess.advertise {
 			instructions += " Git review requires a separate OAuth Git review scope and active local Git review grant; it is read-only and never stages, commits or pushes."
+		}
+		if gitIndexAccess != nil && gitIndexAccess.advertise {
+			instructions += " Git index staging and unstaging require a separate Git index scope and an active managed SignalSpace worktree; checkout sessions, shell, commit and remote Git remain unavailable."
 		}
 		if testAccess != nil && testAccess.advertise {
 			instructions += " Test execution requires a separate OAuth test scope and active local test grant; it runs only go test ./... and is not a process sandbox."
@@ -309,8 +312,16 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				tools = append(tools, applyPatchToolDefinition())
 			}
 		}
-		if gitAccess != nil && gitAccess.advertise {
+		if gitAccess != nil && gitAccess.advertise && gitAccess.reviewer != nil {
 			tools = append(tools, gitReviewToolDefinition())
+		}
+		if gitAccess != nil && gitAccess.advertise {
+			if gitAccess.statusReader != nil {
+				tools = append(tools, gitStatusToolDefinition())
+			}
+		}
+		if gitIndexAccess != nil && gitIndexAccess.advertise {
+			tools = append(tools, stageGitPathsDefinition(), unstageGitPathsDefinition())
 		}
 		if testAccess != nil && testAccess.advertise {
 			tools = append(tools, testRunToolDefinition())
@@ -386,8 +397,20 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			writeAccess.applyPatch(w, r.Context(), id, params.Arguments)
 			return
 		}
-		if params.Name == gitReviewToolName && gitAccess != nil {
+		if params.Name == gitReviewToolName && gitAccess != nil && gitAccess.reviewer != nil {
 			gitAccess.call(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == gitStatusToolName && gitAccess != nil && gitAccess.statusReader != nil {
+			gitAccess.status(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == stageGitPathsName && gitIndexAccess != nil {
+			gitIndexAccess.call(w, r.Context(), id, params.Arguments, true)
+			return
+		}
+		if params.Name == unstageGitPathsName && gitIndexAccess != nil {
+			gitIndexAccess.call(w, r.Context(), id, params.Arguments, false)
 			return
 		}
 		if params.Name == testRunToolName && testAccess != nil {

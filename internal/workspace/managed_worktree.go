@@ -227,7 +227,7 @@ func (m *ManagedWorktreeManager) Activate(workspaceID, clientID string, grants *
 	if m.activeID != "" && m.activeID != workspaceID {
 		return "", ManagedWorkspaceDescriptor{}, ErrManagedWorkspaceBusy
 	}
-	canonical, err := NormalizeCapabilities(scopes...)
+	canonical, err := normalizeManagedCapabilities(scopes...)
 	if err != nil {
 		return "", ManagedWorkspaceDescriptor{}, err
 	}

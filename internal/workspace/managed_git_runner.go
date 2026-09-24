@@ -43,6 +43,11 @@ func (r managedGitRunner) run(directory string, args ...string) error {
 	return err
 }
 
+func (r managedGitRunner) runInput(directory string, input []byte, args ...string) error {
+	_, _, err := r.captureInput(directory, input, args...)
+	return err
+}
+
 func (r managedGitRunner) capture(directory string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), managedGitTimeout)
 	defer cancel()
@@ -85,6 +90,99 @@ func (r managedGitRunner) capture(directory string, args ...string) (string, err
 		<-done
 		return output.String(), errors.Join(ErrManagedGit, ctx.Err())
 	}
+}
+
+// captureOutput mantém stdout separado de stderr para comandos cujo formato
+// estruturado é consumido pelo domínio. A configuração e o ambiente são os
+// mesmos do runner mutável; nenhum argumento vem do cliente.
+func (r managedGitRunner) captureOutput(directory string, limit int, args ...string) ([]byte, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), managedGitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", r.arguments(args...)...)
+	cmd.Dir = directory
+	cmd.Env = managedGitEnvironment(cmd.Environ())
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	var stdout, stderr limitedManagedGitBuffer
+	stdout.limit = limit
+	stderr.limit = managedGitOutput
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return stdout.Bytes(), stdout.truncated, errors.Join(ErrManagedGit, err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err == nil && !stdout.truncated {
+			return stdout.Bytes(), false, nil
+		}
+		if err == nil {
+			return stdout.Bytes(), true, errors.Join(ErrManagedGit, errors.New("managed Git output exceeded limit"))
+		}
+		exitCode := -1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+		return stdout.Bytes(), stdout.truncated, &managedGitError{exitCode: exitCode, err: err}
+	case <-ctx.Done():
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = cmd.Process.Kill()
+		<-done
+		return stdout.Bytes(), stdout.truncated, errors.Join(ErrManagedGit, ctx.Err())
+	}
+}
+
+func (r managedGitRunner) captureInput(directory string, input []byte, args ...string) ([]byte, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), managedGitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", r.arguments(args...)...)
+	cmd.Dir = directory
+	cmd.Env = managedGitEnvironment(cmd.Environ())
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Stdin = bytes.NewReader(input)
+	var stdout, stderr limitedManagedGitBuffer
+	stdout.limit = managedGitOutput
+	stderr.limit = managedGitOutput
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return stdout.Bytes(), stdout.truncated, errors.Join(ErrManagedGit, err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err == nil && !stdout.truncated {
+			return stdout.Bytes(), false, nil
+		}
+		if err == nil {
+			return stdout.Bytes(), true, errors.Join(ErrManagedGit, errors.New("managed Git output exceeded limit"))
+		}
+		exitCode := -1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+		return stdout.Bytes(), stdout.truncated, &managedGitError{exitCode: exitCode, err: err}
+	case <-ctx.Done():
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = cmd.Process.Kill()
+		<-done
+		return stdout.Bytes(), stdout.truncated, errors.Join(ErrManagedGit, ctx.Err())
+	}
+}
+
+func (r managedGitRunner) arguments(args ...string) []string {
+	gitArgs := []string{
+		"--no-optional-locks",
+		"-c", "core.hooksPath=" + r.hooksPath,
+		"-c", "core.fsmonitor=false",
+		"-c", "core.untrackedCache=false",
+		"-c", "core.preloadIndex=false",
+	}
+	return append(gitArgs, args...)
 }
 
 func managedGitEnvironment(environment []string) []string {
