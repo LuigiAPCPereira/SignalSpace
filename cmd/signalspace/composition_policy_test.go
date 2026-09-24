@@ -38,8 +38,8 @@ func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 		gitScope      string
 		gitIndexScope string
 	}{
-		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", ""},
-		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", ""},
+		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", "", ""},
+		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", "", ""},
 		{"programming", compositionProgramming, workspace.ScopeRead, workspaceConsoleProgramming, compositionLocalOAuthJWTValidator, admin.PublicAddress, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex},
 	}
 	for _, test := range tests {
