@@ -167,7 +167,7 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *
 	}
 	statusCall := `{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"git_status","arguments":{"session_id":"` + sessionID + `"}}}`
 	statusResponse := readRequest(t, handler, http.MethodPost, "/mcp", statusCall, "application/json", gitToken, nil)
-	if statusResponse.Code != http.StatusOK || !strings.Contains(statusResponse.Body.String(), `"index_sha256"`) {
+	if statusResponse.Code != http.StatusOK || !strings.Contains(statusResponse.Body.String(), `\"index_sha256\"`) {
 		t.Fatalf("authorized public Git status failed: %d %s", statusResponse.Code, statusResponse.Body.String())
 	}
 
