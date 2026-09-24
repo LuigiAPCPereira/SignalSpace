@@ -68,3 +68,24 @@ func TestApplyPatchRejectsConflictingOperationsWithoutMutation(t *testing.T) {
 		t.Fatalf("invalid path status: %#v, %v", invalid, err)
 	}
 }
+
+func TestApplyPatchPreflightsExistingChildUnderExistingDirectory(t *testing.T) {
+	session, root := approvedSession(t)
+	if err := os.Mkdir(filepath.Join(root, "existing"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "existing", "file.txt"), []byte("before"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := session.ApplyPatch([]PatchOperation{
+		{Type: PatchCreateDirectory, Path: "existing"},
+		{Type: PatchCreateFile, Path: "existing/file.txt", Content: "overwrite"},
+	})
+	if !errors.Is(err, ErrPatchAlreadyExists) || result.Status != "already_exists" || result.OperationsApplied != 0 {
+		t.Fatalf("existing child was not rejected during preflight: %#v, %v", result, err)
+	}
+	if got, readErr := os.ReadFile(filepath.Join(root, "existing", "file.txt")); readErr != nil || string(got) != "before" {
+		t.Fatalf("preflight failure mutated existing child: %q, %v", got, readErr)
+	}
+}

@@ -147,6 +147,9 @@ func (s *Session) ApplyPatch(operations []PatchOperation) (PatchResult, error) {
 			item.Status = patchStatus(err)
 			item.Error = patchErrorCode(err)
 			result.Operations = append(result.Operations, item)
+			for remaining := index + 1; remaining < len(operations); remaining++ {
+				result.Operations = append(result.Operations, patchOperationResult(remaining, operations[remaining]))
+			}
 			if len(applied) == 0 {
 				result.Status = patchStatus(err)
 				result.Rollback = "not_started"
@@ -249,7 +252,7 @@ func validatePatchText(content string) error {
 func (s *Session) preflightPatch(operations []PatchOperation) ([]patchUndo, error) {
 	undo := make([]patchUndo, len(operations))
 	claimed := make([]string, 0, len(operations)*2)
-	plannedDirectories := make(map[string]struct{})
+	plannedDirectories := make(map[string]bool)
 	for index, operation := range operations {
 		endpoints := patchEndpoints(operation)
 		for _, endpoint := range endpoints {
@@ -346,13 +349,13 @@ func (s *Session) preflightPatch(operations []PatchOperation) ([]patchUndo, erro
 				return undo, ErrPatchAlreadyExists
 			}
 			undo[index] = patchUndo{operation: operation, directoryNoOp: stat.Found}
-			plannedDirectories[operation.Path] = struct{}{}
+			plannedDirectories[operation.Path] = stat.Found
 		}
 	}
 	return undo, nil
 }
 
-func (s *Session) ensurePatchParent(relative string, planned map[string]struct{}) error {
+func (s *Session) ensurePatchParent(relative string, planned map[string]bool) error {
 	parent := relative
 	if slash := strings.LastIndexByte(relative, '/'); slash >= 0 {
 		parent = relative[:slash]
@@ -377,10 +380,10 @@ func (s *Session) ensurePatchParent(relative string, planned map[string]struct{}
 	return nil
 }
 
-func (s *Session) statPatchPath(relative string, planned map[string]struct{}) (PathStat, error) {
+func (s *Session) statPatchPath(relative string, planned map[string]bool) (PathStat, error) {
 	parent := relative
 	for parent != "." {
-		if _, ok := planned[parent]; ok {
+		if existing, ok := planned[parent]; ok && !existing {
 			return PathStat{Path: relative, Kind: FileKindAbsent, Found: false}, nil
 		}
 		if slash := strings.LastIndexByte(parent, '/'); slash >= 0 {
@@ -486,6 +489,14 @@ func patchStatus(err error) string {
 		return "conflict"
 	case errors.Is(err, ErrUnsupportedType), errors.Is(err, ErrNotFile), errors.Is(err, ErrUnsafePath):
 		return "type_mismatch"
+	case errors.Is(err, ErrCrossDevice):
+		return "unsupported_operation"
+	case errors.Is(err, ErrOperationUnknown):
+		return "unknown"
+	case errors.Is(err, ErrNotAuthorized):
+		return "unauthorized"
+	case errors.Is(err, ErrClosed):
+		return "unknown"
 	default:
 		return "internal"
 	}

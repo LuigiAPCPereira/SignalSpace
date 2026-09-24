@@ -96,10 +96,24 @@ func (a *writeToolAccess) applyPatch(w http.ResponseWriter, ctx context.Context,
 	}
 	result, err := a.patchApplier.ApplyPatch(identity.OwnerSubject, identity.ClientID, sessionID, operations)
 	if err != nil {
+		if result.Status == "" {
+			result.Status = patchAuthorizationStatus(err)
+			result.Rollback = "not_started"
+		}
 		replyStructuredErrorWithMessage(w, id, "Structured workspace patch failed or was conflicted; inspect the bounded result.", result)
 		return
 	}
 	replyStructured(w, id, result, false)
+}
+
+func patchAuthorizationStatus(err error) string {
+	if errors.Is(err, workspace.ErrNotAuthorized) {
+		return "unauthorized"
+	}
+	if errors.Is(err, workspace.ErrClosed) {
+		return "unknown"
+	}
+	return "internal"
 }
 
 func parsePatchOperations(raw json.RawMessage) ([]workspace.PatchOperation, error) {
