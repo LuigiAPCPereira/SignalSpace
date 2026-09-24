@@ -76,3 +76,13 @@ Na criação, a origem precisa ser um repositório Git local canônico, não sym
 O runner Git usa argv fixo, timeout e limite de saída, desativa terminal/pager/editor/fsmonitor/untracked cache/hooks, impede configuração global/system e não usa shell. Filtros `clean`/`smudge`/`process`, submodules/gitlinks e associações Git inconsistentes são rejeitados; não há execução de LFS. Isso não é sandbox: processos autorizados mantêm os privilégios do usuário.
 
 O filesystem reserva o componente exato `.git` em leitura, stat, busca, criação, escrita, cópia, movimento, remoção e `apply_patch`; `list_directory(".")`, `find_paths` e `search_text` omitem esse componente. `.gitignore`, `.gitattributes` e `.gitmodules` continuam nomes normais quando não representam um gitlink. A implementação foi exercitada somente com fixtures descartáveis; não comprova worktree real do proprietário, HTTPS, túnel, ChatGPT Web, CI, merge ou deploy.
+
+## Git index v1 — fronteira de mutação local
+
+O escopo `signalspace:git.index` é independente de leitura de workspace, escrita textual, revisão Git, teste, shell e Git remoto. `git_status` permanece em `signalspace:git.review`; stage/unstage não são consequência desse escopo nem de `workspace.write`. A mutação exige sessão de worktree criada e associada pelo manager, nunca um checkout escolhido diretamente.
+
+Antes de `git add`, cada path é validado sem symlink nos componentes, sem `.git`, sem diretório/tipo especial, sem gitlink ou estado unmerged. O índice precisa corresponder ao `expected_index_sha256`; arquivos regulares exigem SHA-256 atual e deleções exigem OID de índice. A operação revalida filtros executáveis imediatamente antes do add. `unstage` usa somente `git restore --staged --source=HEAD` para paths validados e não recebe `--worktree`; a prova mantém os bytes do working tree.
+
+Os retornos distinguem sucesso, `failed_no_change` e `partial_or_unknown`, incluindo hashes anterior/novo e paths relativos. Uma falha ou resposta perdida não é tratada como transação externa: o índice é reobservado e não há reset/restore/checkout/clean/stash automático. O processo Git continua com privilégios do usuário; neutralização de hooks/configuração não é sandbox.
+
+**Limite de publicação:** o entrypoint público atual não injeta essa porta e não anuncia stage/unstage. O slice foi exercitado apenas em repositórios temporários/worktrees gerenciadas; HTTPS, túnel, navegador, OAuth externo, workspace real, CI e remoto permanecem não validados.

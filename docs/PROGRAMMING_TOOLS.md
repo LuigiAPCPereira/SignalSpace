@@ -177,3 +177,15 @@ Esta fatia adiciona managed worktrees persistentes sob o diretório privado de e
 O contrato usa `workspace_id` persistente e opaco, mas cria `session_id` novo ao ativar ou resumir. O checkout é detached em SHA local, não copia dirty/untracked da origem, rejeita filtros executáveis, submodules/gitlinks e associações inconsistentes, neutraliza hooks/configuração executável e não faz fetch, push, branch, commit ou limpeza. Revoke preserva a worktree; remove exige inatividade, associação íntegra e estado Git limpo. O diretório `.git` é reservado para as operações filesystem tipadas, com omissão controlada somente na listagem/varredura da raiz.
 
 **Estado:** implementado e validado no escopo local descartável desta missão; não publicado, não exposto no MCP e não aceito como integração ChatGPT Web/HTTPS/Quick Tunnel/CI. O próximo aceite deve usar `SS-MVP-002` e manter o gate de publicação separado.
+
+## Git local tipado v1 — status e índice
+
+Esta fatia adiciona `git_status` como observação estruturada sob `signalspace:git.review`. O resultado contém paths relativos e estados separados (`tracked`, `untracked`, `staged`, `unstaged`, `deleted`, `modified`, `added`, `renamed`, `conflict`), além de `index_sha256` calculado sobre a saída limitada/canônica de `git ls-files --stage -z`. Não retorna raiz absoluta, conteúdo, `.git/index` ou stderr bruto.
+
+`review_git_changes` preserva os campos anteriores e agora separa `staged_diff` de `diff` unstaged, com `staged_diff_changed`. A leitura staged continua somente observacional e usa `--cached`, sem alterar o índice.
+
+`stage_git_paths` e `unstage_git_paths` são portas MCP experimentais sob o escopo independente `signalspace:git.index`. Recebem `session_id`, `expected_index_sha256` e lista fechada de paths literais; cada entrada pode carregar `expected_sha256` do arquivo ou `expected_index_oid` para uma remoção. O limite é 128 paths e 32 KiB de paths acumulados. Não existem pathspec glob, `add -A`, `add .`, `add -u`, `add -p`, reset, clean, commit, branch, merge, rebase, stash, fetch, pull, push, shell ou Git remoto.
+
+As mutações só passam por `Grants.WithAuthorizedManagedGitProcessDir`: owner, cliente, sessão, escopo e associação `WorkspaceModeWorktree` gerenciada são revalidados sob o mesmo mutex. Checkout normal falha com `managed worktree required`. O runner usa argv fixo e stdin controlado (`--pathspec-from-file=-`, `--pathspec-file-nul`), neutraliza configuração global/system, hooks, pager/editor, fsmonitor, índices/objetos alternativos, askpass e SSH. Filtros executáveis, symlink, gitlink, conflito, tipo especial, path absoluto/traversal/glob/NUL, duplicata e precondições obsoletas falham fechado.
+
+**Estado:** implementado e validado localmente no commit `d1f46e7e704647a757d7329da09b53e416dcbd7d`; a composição `cmd/signalspace`/`NewOAuthProgrammingHandler` não injeta `git.index`, de modo que o entrypoint público atual permanece sem `stage_git_paths` e `unstage_git_paths`. O handler isolado/test harness pode compor as portas separadamente. Não houve push; o remoto permanece em `b1313ae8418086b8089a99c388e9065d67e61c7e`.
