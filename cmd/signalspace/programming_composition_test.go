@@ -80,9 +80,9 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	allToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeRead+" "+workspace.ScopeWrite+" "+workspace.ScopeGit)
 
 	assertPublicToolNames(t, handler, readToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text")
-	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file")
+	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory")
 	assertPublicToolNames(t, handler, gitToken, "connection_diagnostic", "review_git_changes")
-	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "review_git_changes")
+	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "review_git_changes")
 	for _, token := range []string{readToken, writeToken, gitToken, allToken} {
 		listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 		if strings.Contains(listing.Body.String(), `"name":"run_workspace_tests"`) || strings.Contains(listing.Body.String(), `"name":"shell"`) {
@@ -134,6 +134,30 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit(t *testing.T) {
 	writeResponse := readRequest(t, handler, http.MethodPost, "/mcp", writeCall, "application/json", writeToken, nil)
 	if writeResponse.Code != http.StatusOK || !strings.Contains(writeResponse.Body.String(), "Workspace text replaced.") {
 		t.Fatalf("authorized public write failed: %d %s", writeResponse.Code, writeResponse.Body.String())
+	}
+	copyCall := `{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"copy_path","arguments":{"session_id":"` + sessionID + `","source":"tracked.txt","destination":"copied.txt"}}}`
+	copyResponse := readRequest(t, handler, http.MethodPost, "/mcp", copyCall, "application/json", writeToken, nil)
+	if copyResponse.Code != http.StatusOK || !strings.Contains(copyResponse.Body.String(), `"status":"copied"`) {
+		t.Fatalf("authorized public copy failed: %d %s", copyResponse.Code, copyResponse.Body.String())
+	}
+	moveCall := `{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"move_path","arguments":{"session_id":"` + sessionID + `","source":"copied.txt","destination":"moved.txt"}}}`
+	moveResponse := readRequest(t, handler, http.MethodPost, "/mcp", moveCall, "application/json", writeToken, nil)
+	if moveResponse.Code != http.StatusOK || !strings.Contains(moveResponse.Body.String(), `"status":"moved"`) {
+		t.Fatalf("authorized public move failed: %d %s", moveResponse.Code, moveResponse.Body.String())
+	}
+	deleteFileCall := `{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"delete_file","arguments":{"session_id":"` + sessionID + `","path":"moved.txt"}}}`
+	deleteFileResponse := readRequest(t, handler, http.MethodPost, "/mcp", deleteFileCall, "application/json", writeToken, nil)
+	if deleteFileResponse.Code != http.StatusOK || !strings.Contains(deleteFileResponse.Body.String(), `"status":"deleted"`) {
+		t.Fatalf("authorized public file deletion failed: %d %s", deleteFileResponse.Code, deleteFileResponse.Body.String())
+	}
+	emptyDirectoryCall := `{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"create_directory","arguments":{"session_id":"` + sessionID + `","path":"empty"}}}`
+	if response := readRequest(t, handler, http.MethodPost, "/mcp", emptyDirectoryCall, "application/json", writeToken, nil); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"created"`) {
+		t.Fatalf("empty directory setup failed: %d %s", response.Code, response.Body.String())
+	}
+	deleteDirectoryCall := `{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"delete_directory","arguments":{"session_id":"` + sessionID + `","path":"empty"}}}`
+	deleteDirectoryResponse := readRequest(t, handler, http.MethodPost, "/mcp", deleteDirectoryCall, "application/json", writeToken, nil)
+	if deleteDirectoryResponse.Code != http.StatusOK || !strings.Contains(deleteDirectoryResponse.Body.String(), `"status":"deleted"`) {
+		t.Fatalf("authorized public directory deletion failed: %d %s", deleteDirectoryResponse.Code, deleteDirectoryResponse.Body.String())
 	}
 
 	gitCall := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"review_git_changes","arguments":{"session_id":"` + sessionID + `"}}}`

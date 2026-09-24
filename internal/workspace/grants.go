@@ -320,6 +320,54 @@ func (g *Grants) WriteTextFile(owner, clientID, id, relative, expectedSHA256, co
 	return g.current.WriteTextFile(relative, expectedSHA256, content)
 }
 
+func (g *Grants) Copy(owner, clientID, id, source, destination string) (CopyResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return CopyResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return CopyResult{}, ErrNotAuthorized
+	}
+	return g.current.Copy(source, destination)
+}
+
+func (g *Grants) Move(owner, clientID, id, source, destination string) (MoveResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return MoveResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return MoveResult{}, ErrNotAuthorized
+	}
+	return g.current.Move(source, destination)
+}
+
+func (g *Grants) DeleteFile(owner, clientID, id, relative string) (DeleteResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return DeleteResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return DeleteResult{}, ErrNotAuthorized
+	}
+	return g.current.DeleteFile(relative)
+}
+
+func (g *Grants) DeleteDirectory(owner, clientID, id, relative string) (DeleteResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return DeleteResult{}, ErrClosed
+	}
+	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+		return DeleteResult{}, ErrNotAuthorized
+	}
+	return g.current.DeleteDirectory(relative)
+}
+
 // Revoke é um comando exclusivamente local, sem rota pública equivalente.
 func (g *Grants) Revoke(id string) error {
 	g.mu.Lock()

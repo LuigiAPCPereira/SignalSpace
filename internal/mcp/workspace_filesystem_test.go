@@ -22,6 +22,8 @@ func typedFilesystemOAuthServer(t *testing.T, verifier *JWKSVerifier, grants *wo
 		workspaceStatter: grants, workspaceFinder: grants, workspaceSearcher: grants,
 		workspaceWriter: grants, workspaceDirectoryCreator: grants,
 		workspaceTextCreator: grants, workspaceTextUpdater: grants,
+		workspaceCopier: grants, workspaceMover: grants,
+		workspaceFileDeleter: grants, workspaceDirectoryDeleter: grants,
 	}, verifier)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +73,7 @@ func TestTypedFilesystemMCPScopesSchemasAndStructuredResults(t *testing.T) {
 		t.Fatalf("read tools were not typed and ordered: %v", names)
 	}
 	_, writeList := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, nil)
-	if names := toolNames(t, writeList); len(names) != 5 || names[1] != writeToolName || names[2] != createDirectoryToolName || names[3] != createTextFileToolName || names[4] != writeTextFileToolName {
+	if names := toolNames(t, writeList); len(names) != 9 || names[1] != writeToolName || names[2] != createDirectoryToolName || names[3] != createTextFileToolName || names[4] != writeTextFileToolName || names[5] != copyPathToolName || names[6] != movePathToolName || names[7] != deleteFileToolName || names[8] != deleteDirectoryToolName {
 		t.Fatalf("write tools were not typed and ordered: %v", names)
 	}
 
@@ -110,5 +112,30 @@ func TestTypedFilesystemMCPScopesSchemasAndStructuredResults(t *testing.T) {
 	invalidResponse, invalidResult := oauthRequest(t, server, http.MethodPost, "/mcp", readToken, callTool(statPathToolName, `{"session_id":"`+sessionID+`","path":"src/main.go","extra":true}`), nil)
 	if invalidResponse.StatusCode != http.StatusOK || invalidResult["error"] == nil {
 		t.Fatalf("stat accepted extra arguments: %d %v", invalidResponse.StatusCode, invalidResult)
+	}
+
+	copyResponse, copyResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(copyPathToolName, `{"session_id":"`+sessionID+`","source":"src/main.go","destination":"copied.go"}`), nil)
+	if copyResponse.StatusCode != http.StatusOK || !strings.Contains(copyResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), `"status":"copied"`) {
+		t.Fatalf("structured copy result missing: %d %v", copyResponse.StatusCode, copyResult)
+	}
+	moveResponse, moveResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(movePathToolName, `{"session_id":"`+sessionID+`","source":"copied.go","destination":"moved.go"}`), nil)
+	if moveResponse.StatusCode != http.StatusOK || !strings.Contains(moveResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), `"status":"moved"`) {
+		t.Fatalf("structured move result missing: %d %v", moveResponse.StatusCode, moveResult)
+	}
+	deleteResponse, deleteResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(deleteFileToolName, `{"session_id":"`+sessionID+`","path":"moved.go"}`), nil)
+	if deleteResponse.StatusCode != http.StatusOK || !strings.Contains(deleteResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), `"status":"deleted"`) {
+		t.Fatalf("structured file deletion result missing: %d %v", deleteResponse.StatusCode, deleteResult)
+	}
+	createEmptyResponse, createEmptyResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(createDirectoryToolName, `{"session_id":"`+sessionID+`","path":"empty"}`), nil)
+	if createEmptyResponse.StatusCode != http.StatusOK || createEmptyResult["error"] != nil {
+		t.Fatalf("empty directory setup failed: %d %v", createEmptyResponse.StatusCode, createEmptyResult)
+	}
+	deleteDirectoryResponse, deleteDirectoryResult := oauthRequest(t, server, http.MethodPost, "/mcp", writeToken, callTool(deleteDirectoryToolName, `{"session_id":"`+sessionID+`","path":"empty"}`), nil)
+	if deleteDirectoryResponse.StatusCode != http.StatusOK || !strings.Contains(deleteDirectoryResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), `"status":"deleted"`) {
+		t.Fatalf("structured directory deletion result missing: %d %v", deleteDirectoryResponse.StatusCode, deleteDirectoryResult)
+	}
+	readCopyResponse, readCopyResult := oauthRequest(t, server, http.MethodPost, "/mcp", readToken, callTool(copyPathToolName, `{"session_id":"`+sessionID+`","source":"src/main.go","destination":"blocked.go"}`), nil)
+	if readCopyResponse.StatusCode != http.StatusOK || !strings.Contains(readCopyResult["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string), "Workspace write authorization required") {
+		t.Fatalf("read bearer reached structural write tool: %d %v", readCopyResponse.StatusCode, readCopyResult)
 	}
 }

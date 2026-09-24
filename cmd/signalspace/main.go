@@ -212,6 +212,10 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 			WorkspaceDirectoryCreator: grants,
 			WorkspaceTextCreator:      grants,
 			WorkspaceTextUpdater:      grants,
+			WorkspaceCopier:           grants,
+			WorkspaceMover:            grants,
+			WorkspaceFileDeleter:      grants,
+			WorkspaceDirectoryDeleter: grants,
 			GitReviewer:               console.programmingGitReviewer,
 		}, verifier)
 	} else {

@@ -29,11 +29,31 @@ type WorkspaceTextUpdater interface {
 	WriteTextFile(owner, clientID, sessionID, relative, expectedSHA256, content string) (workspace.TextFileResult, error)
 }
 
+type WorkspaceStructuralCopy interface {
+	Copy(owner, clientID, sessionID, source, destination string) (workspace.CopyResult, error)
+}
+
+type WorkspaceStructuralMove interface {
+	Move(owner, clientID, sessionID, source, destination string) (workspace.MoveResult, error)
+}
+
+type WorkspaceStructuralFileDelete interface {
+	DeleteFile(owner, clientID, sessionID, relative string) (workspace.DeleteResult, error)
+}
+
+type WorkspaceStructuralDirectoryDelete interface {
+	DeleteDirectory(owner, clientID, sessionID, relative string) (workspace.DeleteResult, error)
+}
+
 type writeToolAccess struct {
 	writer           WorkspaceTextWriter
 	directoryCreator WorkspaceDirectoryCreator
 	textCreator      WorkspaceTextCreator
 	textUpdater      WorkspaceTextUpdater
+	copier           WorkspaceStructuralCopy
+	mover            WorkspaceStructuralMove
+	fileDeleter      WorkspaceStructuralFileDelete
+	directoryDeleter WorkspaceStructuralDirectoryDelete
 	verify           func(context.Context) (VerifiedIdentity, error)
 	challenge        string
 	advertise        bool
@@ -269,8 +289,16 @@ func replyStructuredWriteError(w http.ResponseWriter, id any, message string, er
 		status = "conflict"
 	case errors.Is(err, workspace.ErrPathExists):
 		status = "already_exists"
-	case errors.Is(err, workspace.ErrInvalidPath), errors.Is(err, workspace.ErrInvalidHash), errors.Is(err, workspace.ErrInvalidLimit), errors.Is(err, workspace.ErrNotText), errors.Is(err, workspace.ErrTooLarge):
+	case errors.Is(err, workspace.ErrInvalidPath), errors.Is(err, workspace.ErrInvalidHash), errors.Is(err, workspace.ErrInvalidLimit), errors.Is(err, workspace.ErrNotText), errors.Is(err, workspace.ErrTooLarge), errors.Is(err, workspace.ErrUnsafePath), errors.Is(err, workspace.ErrUnsupportedType), errors.Is(err, workspace.ErrNotFile):
 		status = "invalid_input"
+	case errors.Is(err, workspace.ErrDirectoryNotEmpty):
+		status = "not_empty"
+	case errors.Is(err, workspace.ErrCrossDevice):
+		status = "cross_device_unsupported"
+	case errors.Is(err, workspace.ErrStructuralLimit):
+		status = "limit_exceeded"
+	case errors.Is(err, workspace.ErrOperationUnknown):
+		status = "unknown"
 	}
 	replyStructuredErrorWithMessage(w, id, message, map[string]any{"status": status})
 }

@@ -26,6 +26,10 @@ const (
 	createDirectoryToolName = "create_directory"
 	createTextFileToolName  = "create_text_file"
 	writeTextFileToolName   = "write_text_file"
+	copyPathToolName        = "copy_path"
+	movePathToolName        = "move_path"
+	deleteFileToolName      = "delete_file"
+	deleteDirectoryToolName = "delete_directory"
 )
 
 type request struct {
@@ -285,6 +289,18 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			if writeAccess.textUpdater != nil {
 				tools = append(tools, writeTextFileToolDefinition())
 			}
+			if writeAccess.copier != nil {
+				tools = append(tools, copyPathToolDefinition())
+			}
+			if writeAccess.mover != nil {
+				tools = append(tools, movePathToolDefinition())
+			}
+			if writeAccess.fileDeleter != nil {
+				tools = append(tools, deleteFileToolDefinition())
+			}
+			if writeAccess.directoryDeleter != nil {
+				tools = append(tools, deleteDirectoryToolDefinition())
+			}
 		}
 		if gitAccess != nil && gitAccess.advertise {
 			tools = append(tools, gitReviewToolDefinition())
@@ -341,6 +357,22 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		}
 		if params.Name == writeTextFileToolName && writeAccess != nil && writeAccess.textUpdater != nil {
 			writeAccess.writeTextFile(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == copyPathToolName && writeAccess != nil && writeAccess.copier != nil {
+			writeAccess.copyPath(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == movePathToolName && writeAccess != nil && writeAccess.mover != nil {
+			writeAccess.movePath(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == deleteFileToolName && writeAccess != nil && writeAccess.fileDeleter != nil {
+			writeAccess.deleteFile(w, r.Context(), id, params.Arguments)
+			return
+		}
+		if params.Name == deleteDirectoryToolName && writeAccess != nil && writeAccess.directoryDeleter != nil {
+			writeAccess.deleteDirectory(w, r.Context(), id, params.Arguments)
 			return
 		}
 		if params.Name == gitReviewToolName && gitAccess != nil {

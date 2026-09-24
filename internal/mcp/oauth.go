@@ -49,6 +49,10 @@ type OAuthConfig struct {
 	workspaceDirectoryCreator WorkspaceDirectoryCreator
 	workspaceTextCreator      WorkspaceTextCreator
 	workspaceTextUpdater      WorkspaceTextUpdater
+	workspaceCopier           WorkspaceCopier
+	workspaceMover            WorkspaceMover
+	workspaceFileDeleter      WorkspaceFileDeleter
+	workspaceDirectoryDeleter WorkspaceDirectoryDeleter
 	// gitReviewer só é preenchido pelo construtor explícito de programação
 	// abaixo; a configuração OAuth padrão continua sem revisão Git.
 	gitReviewer WorkspaceGitReviewer
@@ -74,6 +78,10 @@ type ProgrammingPorts struct {
 	WorkspaceDirectoryCreator WorkspaceDirectoryCreator
 	WorkspaceTextCreator      WorkspaceTextCreator
 	WorkspaceTextUpdater      WorkspaceTextUpdater
+	WorkspaceCopier           WorkspaceCopier
+	WorkspaceMover            WorkspaceMover
+	WorkspaceFileDeleter      WorkspaceFileDeleter
+	WorkspaceDirectoryDeleter WorkspaceDirectoryDeleter
 	GitReviewer               WorkspaceGitReviewer
 }
 
@@ -82,7 +90,7 @@ type ProgrammingPorts struct {
 // fornecer as portas vinculadas à mesma concessão; não existe ativação
 // equivalente por parâmetro HTTP, metadata OAuth ou configuração genérica.
 func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
-	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.GitReviewer == nil {
+	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.WorkspaceCopier == nil || ports.WorkspaceMover == nil || ports.WorkspaceFileDeleter == nil || ports.WorkspaceDirectoryDeleter == nil || ports.GitReviewer == nil {
 		return nil, errors.New("programming composition requires all typed filesystem, read, write and Git review ports")
 	}
 	if config.testRunner != nil {
@@ -97,6 +105,10 @@ func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, veri
 	config.workspaceDirectoryCreator = ports.WorkspaceDirectoryCreator
 	config.workspaceTextCreator = ports.WorkspaceTextCreator
 	config.workspaceTextUpdater = ports.WorkspaceTextUpdater
+	config.workspaceCopier = ports.WorkspaceCopier
+	config.workspaceMover = ports.WorkspaceMover
+	config.workspaceFileDeleter = ports.WorkspaceFileDeleter
+	config.workspaceDirectoryDeleter = ports.WorkspaceDirectoryDeleter
 	config.gitReviewer = ports.GitReviewer
 	return NewOAuthHandler(config, verifier)
 }
@@ -125,11 +137,11 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	if (config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil) && config.WorkspaceReader == nil {
 		return nil, errors.New("typed workspace read tools require workspace reader")
 	}
-	if (config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil) && config.workspaceWriter == nil {
+	if (config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.workspaceCopier != nil || config.workspaceMover != nil || config.workspaceFileDeleter != nil || config.workspaceDirectoryDeleter != nil) && config.workspaceWriter == nil {
 		return nil, errors.New("typed workspace write tools require workspace writer")
 	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.gitReviewer != nil || config.testRunner != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.workspaceCopier != nil || config.workspaceMover != nil || config.workspaceFileDeleter != nil || config.workspaceDirectoryDeleter != nil || config.gitReviewer != nil || config.testRunner != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
 			return nil, errors.New("workspace capabilities require verified OAuth client identity")
@@ -232,6 +244,10 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				directoryCreator: config.workspaceDirectoryCreator,
 				textCreator:      config.workspaceTextCreator,
 				textUpdater:      config.workspaceTextUpdater,
+				copier:           config.workspaceCopier,
+				mover:            config.workspaceMover,
+				fileDeleter:      config.workspaceFileDeleter,
+				directoryDeleter: config.workspaceDirectoryDeleter,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
 					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceWriteScope, config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
