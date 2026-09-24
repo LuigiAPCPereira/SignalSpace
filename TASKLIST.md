@@ -317,6 +317,15 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 - Passaram os gates focais, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial de `internal/workspace`, `internal/mcp` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, `gofmt -l cmd internal` e `git diff --check`. Não houve CI, push, merge, deploy, túnel, OAuth externo, workspace real ou worktree funcional.
 - Subagents não foram utilizados: não havia runtime auxiliar independente disponível que trouxesse ganho material sem duplicar a revisão; a validação final foi executada e reconciliada pelo agente principal. A direção de worktrees continua apenas documental e a próxima escolha A/B/C não foi iniciada.
 
+### Atualização SS-MVP-002 — promotion gate local de Git index — 24/09/2026
+
+- O gate `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001`, aprovado pelo proprietário, foi implementado localmente no commit `e164415` (`feat(signalspace): promote managed Git index tools`) sobre o remoto live `6fcf46da1f9e1187a8067d8a71a745d31babc618`. A publicação remota continua expressamente fora desta missão.
+- A composição `programming` local agora injeta portas distintas para `git_status` (`signalspace:git.review`) e `stage_git_paths`/`unstage_git_paths` (`signalspace:git.index`). `diagnostic` e `read` permanecem sem o novo escopo; `test.run`, shell, commit, branch e Git remoto permanecem fora.
+- O emissor OAuth valida `GitIndexScope`/`CanIssueGitIndex` em `/authorize`, `/authorize/complete` e `/token`. `git.index` não é consequência de `workspace.write` ou `git.review`; cada chamada MCP revalida owner, cliente, sessão, scope e a associação managed-worktree.
+- `request-programming` genérico continua rejeitando `signalspace:git.index` antes de criar pedido/concessão. `request-worktree` e `request-worktree-resume` usam normalização owner-side managed-only e aceitam o escopo; não há lifecycle MCP/HTTP novo.
+- Regressões públicas cobrem metadata, `initialize`, `tools/list`, matriz de bearer independente, rejeição de checkout comum, concessão managed, revoke e fluxo público status → stage → unstage com preservação dos bytes. Os patches protegidos continuam não rastreados, não aplicados e intocados com os hashes aprovados anteriormente.
+- Estado: `SS-MVP-002` **IMPLEMENTAÇÃO LOCAL VALIDADA / PARCIAL NO ACEITE OPERACIONAL EXTERNO**; `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001` **APROVADO PELO PROPRIETÁRIO / IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**; CI **DESCONHECIDA**.
+
 ### Atualização SS-MVP-002 — filesystem estrutural local — 23/09/2026
 
 - A ref foi revalidada antes da implementação: `codex/mvp-vertical-programming`, HEAD e remoto live em `6b8adc5b44e4856a743f0df336241aff5b5da79e`; os dois patches protegidos permaneceram não rastreados, não aplicados, intocados e com os hashes preservados.

@@ -86,3 +86,11 @@ Antes de `git add`, cada path é validado sem symlink nos componentes, sem `.git
 Os retornos distinguem sucesso, `failed_no_change` e `partial_or_unknown`, incluindo hashes anterior/novo e paths relativos. Uma falha ou resposta perdida não é tratada como transação externa: o índice é reobservado e não há reset/restore/checkout/clean/stash automático. O processo Git continua com privilégios do usuário; neutralização de hooks/configuração não é sandbox.
 
 **Limite de publicação:** o entrypoint público atual não injeta essa porta e não anuncia stage/unstage. O slice foi exercitado apenas em repositórios temporários/worktrees gerenciadas; HTTPS, túnel, navegador, OAuth externo, workspace real, CI e remoto permanecem não validados.
+
+## Promotion gate local — Git index — 24/09/2026
+
+O proprietário aprovou `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001`. Na ref local do commit `e164415`, a composição opt-in `programming` anuncia `git_status` somente sob `signalspace:git.review` e `stage_git_paths`/`unstage_git_paths` somente sob `signalspace:git.index`. `GitIndexScope` possui validador OAuth próprio; pedir o escopo, encontrá-lo na metadata ou apresentar bearer com a string não cria grant local.
+
+O console genérico `request-programming` continua rejeitando `signalspace:git.index`. Somente `request-worktree` e `request-worktree-resume`, ambos owner-side e locais, usam `NormalizeManagedCapabilities` para aceitar o escopo. Cada mutação ainda passa por `WithAuthorizedManagedGitProcessDir`, exigindo owner, cliente, sessão, escopo e associação persistente de managed worktree; checkout comum continua falhando fechado. Não foram adicionados lifecycle MCP/HTTP, commit, branch, reset, clean, stash, fetch, pull, push, shell ou CI.
+
+O gate está **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. O remoto live permanece no commit anterior; HTTPS, túnel, navegador, workspace real, CI, merge e deploy continuam desconhecidos e não são inferidos a partir dos testes locais.

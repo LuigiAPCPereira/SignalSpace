@@ -597,6 +597,18 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 **Próxima ação vinculada:** `SS-MVP-002` — publicar este checkpoint ao ChatGPT Web e aguardar a próxima missão. Os commits permanecem locais: não fazer push/merge, não expor lifecycle por MCP, não usar shell arbitrário e não declarar aceite externo.
 
+## Checkpoint SS-MVP-002 — Git index promotion gate local — 24/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL/em andamento**; `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001` está **APROVADO PELO PROPRIETÁRIO / IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**; CI permanece **DESCONHECIDA**.
+
+**Ref e publicação:** branch `codex/mvp-vertical-programming`; o HEAD local contém a implementação funcional do gate em `e164415` e a documentação será registrada em commit separado. O remoto live observado antes da missão permanece `6fcf46da1f9e1187a8067d8a71a745d31babc618`; não houve push.
+
+**Implementação:** a autorização passou a tratar `signalspace:git.index` de forma independente em metadata, consentimento, authorize, complete e token. A composição programming injeta `git_status` e os operadores de stage/unstage por portas explícitas; a composição diagnostic/read continua sem Git index. `request-programming` genérico rejeita `git.index`; somente request/resume de managed worktree normalizam e aceitam essa capacidade no console owner-side. Nenhum lifecycle de worktree foi exposto por MCP.
+
+**Validação:** testes focais de `internal/auth`, `internal/workspace`, `internal/mcp` e `cmd/signalspace` passaram, incluindo metadata, initialize/tools/list, fluxo público status → stage → status staged → unstage, preservação do working tree, revogação e negativos de escopo/modo. Ainda devem ser executados os gates completos, race, vet, build, gofmt, diff check e checagem de processos/listeners residuais.
+
+**Limites e preservação:** não houve CI, HTTPS, túnel/cloudflared, navegador, grant OAuth externo, workspace real, merge ou deploy. Os patches `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` seguem não rastreados, não aplicados e intocados, com SHA-256 preservados. Próxima ação vinculada: executar os gates finais, registrar a documentação, enviar o relatório ao ChatGPT Web e aguardar a missão seguinte; não fazer push.
+
 ## Checkpoint SS-MVP-002 — Git local tipado v1 — 24/09/2026
 
 **Estado:** `SS-MVP-002` permanece **PARCIAL/em andamento**. A fatia `git_status` + stage/unstage está **IMPLEMENTADA E VALIDADA LOCALMENTE EM FIXTURES DESCARTÁVEIS**. O promotion gate anterior continua aprovado apenas para READ + WRITE + Git review observacional; `signalspace:git.index` não foi promovido ao entrypoint público. CI permanece **DESCONHECIDA**.

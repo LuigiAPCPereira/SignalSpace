@@ -28,6 +28,12 @@ Esta seção registra a nova frente autorizada pela missão de 20/09/2026 sem ap
 
 O próximo bloco não é repetir a promoção já implementada/publicada: é um aceite operacional externo de READ + WRITE + Git, caso seja autorizado, ou um contrato separado para shell. Ambos exigem missão própria; `SS-MVP-002` permanece PARCIAL.
 
+## Promotion gate de Git index — implementação local — 24/09/2026
+
+O proprietário aprovou `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001` para a composição opt-in `connect quick programming`. O commit local `e164415` implementa e valida `git_status` sob `signalspace:git.review` e `stage_git_paths`/`unstage_git_paths` sob `signalspace:git.index`, com o segundo escopo permitido somente em managed worktrees aprovadas no console local. O fluxo genérico de checkout permanece sem Git mutável.
+
+O gate está implementado/validado localmente e aguarda publicação remota em missão posterior autorizada. A fatia não autoriza commit, branch, Git remoto, shell, lifecycle MCP de worktree, CI, merge ou deploy; o próximo marco é revisar/publicar esse commit separadamente ou manter o gate pendente conforme nova decisão do proprietário.
+
 
 ## Direção pós-M6 — coding agent completo dentro de SS-MVP-002
 
