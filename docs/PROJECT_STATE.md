@@ -582,3 +582,17 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** `gofmt -l cmd internal`, `git diff --check`, testes focais, race dos três pacotes, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, `go vet ./...` e `go build ./...` passaram após o rebase. Não houve listeners em 7676/7677 nem processo `cloudflared` residual. Não houve CI, túnel, HTTPS, navegador, grant OAuth externo, workspace real, merge ou deploy.
 
 **Próxima ação:** retornar ao ChatGPT Web com o relatório desta missão. A direção de worktrees permanece documental; nenhuma worktree foi criada ou usada.
+
+## Checkpoint SS-MVP-002 — managed worktrees v1 local — 24/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL/em andamento**. A fatia managed worktree v1 está **IMPLEMENTADA E VALIDADA LOCALMENTE EM FIXTURES DESCARTÁVEIS**. O promotion gate anterior continua aprovado apenas para READ + WRITE + Git review observacional; esta missão não cria novo gate público nem promove lifecycle MCP. CI permanece **DESCONHECIDA**.
+
+**Ref e preservação:** branch `codex/mvp-vertical-programming`; HEAD local/remoto observado antes da alteração `d9893664725fe75b8b948790a2d33d9e38d9b3ed`. Os dois patches não rastreados do proprietário permaneceram fora do Git, não aplicados e intocados. Não houve push, merge, deploy ou criação de worktree a partir do checkout SignalSpace.
+
+**Implementação:** `internal/workspace/managed_worktree.go` persiste workspaces sob estado privado, associa origem/base SHA, reabre estados sem auto-reparo, cria detached sem copiar dirty/untracked, rejeita filtros executáveis/submodules/gitlinks e remove somente worktree limpa e inativa. `managed_git_runner.go` desabilita configuração global/system, hooks, fsmonitor, terminal/pager/editor e mantém timeout/limite. `Grants` registra metadados seguros; `workspace_id` persistente e `session_id` efêmero permanecem separados. O console local tem request/approve/cancel/resume/list/remove; a superfície MCP não ganhou lifecycle.
+
+**Segurança filesystem:** o componente exato `.git` foi reservado em leitura, stat, find/search, criação, escrita, cópia, movimento, remoção e `apply_patch`; listagem e varredura da raiz o omitem. Caminhos `.gitignore`, `.gitattributes` e `.gitmodules` não são bloqueados por nome.
+
+**Validação:** passaram `go test ./internal/workspace`, os testes direcionados de `cmd/signalspace` para programação/console, `go test ./internal/mcp` e os testes novos de lifecycle/restart/filtros/remoção/reserva `.git`. A suíte completa de `cmd/signalspace` não foi aceita porque a instância local já ocupava `127.0.0.1:7676`; os testes Quick falharam no bind antes da lógica da missão. Ainda faltam os gates finais serializados (`-race`, `go test ./...`, `go vet`, `go build`) após reconciliar essa colisão.
+
+**Próxima ação vinculada:** `SS-MVP-002` — executar os gates restantes sem a colisão de listener, revisar diff/estado/patches, criar commits locais focados sem push e enviar relatório ao ChatGPT Web. Não expor lifecycle por MCP, não usar shell arbitrário, não fazer fetch/push/merge e não declarar aceite externo.
