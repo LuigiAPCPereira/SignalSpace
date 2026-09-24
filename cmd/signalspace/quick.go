@@ -121,7 +121,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	}
 	defer authorization.Close()
 	if plan.consoleMode == workspaceConsoleApprovalsOnly {
-		console, err = newWorkspaceConsole(authorization)
+		console, err = newWorkspaceConsole(authorization, stateDir)
 		if err != nil {
 			return err
 		}

@@ -27,6 +27,17 @@ type pendingWorkspace struct {
 	expires  time.Time
 }
 
+type pendingManagedWorkspace struct {
+	id          string
+	clientID    string
+	scopes      []string
+	sourceRoot  string
+	baseRef     string
+	workspaceID string
+	resume      bool
+	expires     time.Time
+}
+
 // workspaceConsole recebe somente comandos do stdin do processo local. O MCP
 // não recebe o objeto de concessões e não pode criar sessões por HTTP.
 type workspaceConsole struct {
@@ -36,27 +47,38 @@ type workspaceConsole struct {
 	issuedClients          func() []auth.ClientInfo
 	readEnabled            bool
 	pending                *pendingWorkspace
+	managedPending         *pendingManagedWorkspace
+	managed                *workspace.ManagedWorktreeManager
 	programmingApproval    *workspace.CapabilityApproval
 	programmingGitReviewer *workspaceGitReviewer
 }
 
-func newWorkspaceConsole(authorization *auth.Server) (*workspaceConsole, error) {
+func newWorkspaceConsole(authorization *auth.Server, stateDir string) (*workspaceConsole, error) {
 	grants, err := workspace.NewGrants(authorization.OwnerSubject())
 	if err != nil {
 		return nil, err
 	}
-	return &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients}, nil
+	managed, err := workspace.NewManagedWorktreeManager(stateDir)
+	if err != nil {
+		_ = grants.Close()
+		return nil, err
+	}
+	return &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients, managed: managed}, nil
 }
 
 func (c *workspaceConsole) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.pending = nil
+	c.managedPending = nil
 	if c.programmingApproval != nil {
 		c.programmingApproval.Close()
 	}
 	if c.programmingGitReviewer != nil {
 		c.programmingGitReviewer.Close()
+	}
+	if c.managed != nil {
+		_ = c.managed.Close()
 	}
 	return c.grants.Close()
 }
@@ -144,6 +166,9 @@ func (c *workspaceConsole) printWorkspaceStatus(output io.Writer) {
 		fmt.Fprintln(output, "Nome declarado: indisponível na lista atual; isso não permite inferir revogação.")
 	}
 	fmt.Fprintf(output, "Escopos exatos: %s\n", strings.Join(snapshot.Scopes, " "))
+	if snapshot.Mode == workspace.WorkspaceModeWorktree {
+		fmt.Fprintf(output, "Managed workspace: id=%s base_ref=%q base_sha=%s dirty_source=%t\n", snapshot.ManagedWorkspaceID, snapshot.BaseRef, snapshot.BaseSHA, snapshot.DirtySource)
+	}
 	fmt.Fprintf(output, "Revogar: workspace revoke current (ou workspace revoke %s).\n", snapshot.SessionID)
 	c.printWorkspaceStatusLimits(output, snapshot.Scopes)
 }
@@ -206,13 +231,159 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 	}
 	if !hasArgument || argument == "" {
 		if c.programmingApproval != nil {
-			fmt.Fprintln(output, "use workspace clients | workspace status | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace revoke current|<session-id>")
+			fmt.Fprintln(output, "use workspace clients | workspace status | workspace worktrees | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref] | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace approve-worktree <id> | workspace approve-worktree-resume <id> | workspace cancel-worktree <id> | workspace remove-worktree <workspace-id> | workspace revoke current|<session-id>")
 		} else {
-			fmt.Fprintln(output, "use workspace clients | workspace status | workspace request <client-id> <absolute-path> | workspace approve <id> | workspace cancel <id> | workspace revoke current|<session-id>")
+			fmt.Fprintln(output, "use workspace clients | workspace status | workspace worktrees | workspace request <client-id> <absolute-path> | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref] | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id> | workspace approve <id> | workspace cancel <id> | workspace approve-worktree <id> | workspace approve-worktree-resume <id> | workspace cancel-worktree <id> | workspace remove-worktree <workspace-id> | workspace revoke current|<session-id>")
 		}
 		return true
 	}
 	switch operation {
+	case "worktrees":
+		if c.managed == nil {
+			fmt.Fprintln(output, "managed worktree lifecycle unavailable")
+			return true
+		}
+		if hasArgument {
+			fmt.Fprintln(output, "use workspace worktrees")
+			return true
+		}
+		workspaces, err := c.managed.List()
+		if err != nil {
+			fmt.Fprintf(output, "managed worktree listing unavailable: %v\n", err)
+			return true
+		}
+		if len(workspaces) == 0 {
+			fmt.Fprintln(output, "No managed worktrees.")
+			return true
+		}
+		for _, item := range workspaces {
+			fmt.Fprintf(output, "workspace_id=%s state=%s active=%t base_ref=%q base_sha=%s dirty_source=%t\n", item.WorkspaceID, item.State, item.Active, item.BaseRef, item.BaseSHA, item.DirtySource)
+		}
+		return true
+	case "request-worktree":
+		if c.managed == nil {
+			fmt.Fprintln(output, "managed worktree lifecycle unavailable")
+			return true
+		}
+		clientID, rest, valid := strings.Cut(argument, " ")
+		scopeText, sourceAndRef, validScopes := strings.Cut(rest, " ")
+		if !valid || !validScopes || clientID == "" || scopeText == "" || sourceAndRef == "" || !c.isIssuedClient(clientID) {
+			fmt.Fprintln(output, "use workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref]")
+			return true
+		}
+		sourceRoot, baseRef := splitManagedSourceAndRef(sourceAndRef)
+		if sourceRoot == "" || !localWorkspacePath(sourceRoot) {
+			fmt.Fprintln(output, "managed worktree source rejected: use a canonical absolute Git repository root")
+			return true
+		}
+		scopes, err := workspace.NormalizeCapabilities(strings.Split(scopeText, ",")...)
+		if err != nil {
+			fmt.Fprintf(output, "managed worktree request rejected: %v\n", err)
+			return true
+		}
+		if err := c.managed.ValidateCreateRequest(sourceRoot, baseRef); err != nil {
+			fmt.Fprintf(output, "managed worktree request rejected: %v\n", err)
+			return true
+		}
+		pending, err := newPendingManagedWorkspace(clientID, scopes, sourceRoot, baseRef, "", false)
+		if err != nil {
+			fmt.Fprintf(output, "managed worktree approval unavailable: %v\n", err)
+			return true
+		}
+		c.managedPending = pending
+		fmt.Fprintf(output, "Managed worktree solicitada (criação local após confirmação): source=%q client=%s scopes=%s", sourceRoot, clientID, strings.Join(scopes, ","))
+		if baseRef != "" {
+			fmt.Fprintf(output, " base_ref=%q", baseRef)
+		}
+		fmt.Fprintf(output, "\nConfirme com workspace approve-worktree %s ou cancele com workspace cancel-worktree %s (expira em 2 minutos).\n", pending.id, pending.id)
+		return true
+	case "request-worktree-resume":
+		if c.managed == nil {
+			fmt.Fprintln(output, "managed worktree lifecycle unavailable")
+			return true
+		}
+		clientID, rest, valid := strings.Cut(argument, " ")
+		scopeText, workspaceID, validID := strings.Cut(rest, " ")
+		if !valid || !validID || !c.isIssuedClient(clientID) {
+			fmt.Fprintln(output, "use workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id>")
+			return true
+		}
+		scopes, err := workspace.NormalizeCapabilities(strings.Split(scopeText, ",")...)
+		if err != nil {
+			fmt.Fprintf(output, "managed worktree resume rejected: %v\n", err)
+			return true
+		}
+		descriptor, err := c.managed.Descriptor(workspaceID)
+		if err != nil || descriptor.State == workspace.ManagedWorkspaceMissing || descriptor.State == workspace.ManagedWorkspaceInconsistent || descriptor.State == workspace.ManagedWorkspaceStale {
+			if err == nil {
+				err = workspace.ErrManagedWorkspaceInconsistent
+			}
+			fmt.Fprintf(output, "managed worktree resume rejected: %v\n", err)
+			return true
+		}
+		pending, err := newPendingManagedWorkspace(clientID, scopes, "", "", workspaceID, true)
+		if err != nil {
+			fmt.Fprintf(output, "managed worktree approval unavailable: %v\n", err)
+			return true
+		}
+		c.managedPending = pending
+		fmt.Fprintf(output, "Managed worktree resume solicitada: workspace_id=%s client=%s scopes=%s\nConfirme com workspace approve-worktree-resume %s ou cancele com workspace cancel-worktree %s (expira em 2 minutos).\n", workspaceID, clientID, strings.Join(scopes, ","), pending.id, pending.id)
+		return true
+	case "approve-worktree", "approve-worktree-resume", "cancel-worktree":
+		if c.managed == nil || c.managedPending == nil || argument != c.managedPending.id || time.Now().After(c.managedPending.expires) {
+			c.managedPending = nil
+			fmt.Fprintln(output, "managed worktree approval missing, expired or invalid")
+			return true
+		}
+		pending := c.managedPending
+		c.managedPending = nil
+		if operation == "cancel-worktree" {
+			fmt.Fprintln(output, "managed worktree request canceled; no worktree or grant created")
+			return true
+		}
+		if (operation == "approve-worktree-resume") != pending.resume {
+			fmt.Fprintln(output, "managed worktree approval command does not match request")
+			return true
+		}
+		if !c.isIssuedClient(pending.clientID) {
+			fmt.Fprintln(output, "workspace client no longer eligible")
+			return true
+		}
+		workspaceID := pending.workspaceID
+		if !pending.resume {
+			descriptor, err := c.managed.Create(pending.sourceRoot, pending.baseRef)
+			if err != nil {
+				fmt.Fprintf(output, "managed worktree creation rejected: %v\n", err)
+				return true
+			}
+			workspaceID = descriptor.WorkspaceID
+		}
+		sessionID, descriptor, err := c.managed.Activate(workspaceID, pending.clientID, c.grants, pending.scopes...)
+		if err != nil {
+			fmt.Fprintf(output, "managed worktree activation rejected: %v\n", err)
+			return true
+		}
+		if containsScope(pending.scopes, workspace.ScopeGit) && c.programmingGitReviewer != nil {
+			if err := c.programmingGitReviewer.CaptureBaseline(c.owner, pending.clientID, sessionID); err != nil {
+				_ = c.grants.Revoke(sessionID)
+				_ = c.managed.Deactivate(workspaceID)
+				fmt.Fprintf(output, "managed worktree Git baseline rejected: %v\n", err)
+				return true
+			}
+		}
+		fmt.Fprintf(output, "Managed worktree grant created: workspace_id=%s state=%s session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", descriptor.WorkspaceID, descriptor.State, sessionID, pending.clientID, strings.Join(pending.scopes, ","), sessionID)
+		return true
+	case "remove-worktree":
+		if c.managed == nil || !hasArgument || argument == "" || strings.ContainsAny(argument, " \t\r\n") {
+			fmt.Fprintln(output, "use workspace remove-worktree <workspace-id>")
+			return true
+		}
+		if err := c.managed.Remove(argument); err != nil {
+			fmt.Fprintf(output, "managed worktree removal rejected: %v\n", err)
+			return true
+		}
+		fmt.Fprintln(output, "managed worktree removed")
+		return true
 	case "request":
 		clientID, root, valid := strings.Cut(argument, " ")
 		if !valid || !c.isIssuedClient(clientID) {
@@ -270,6 +441,7 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintf(output, "workspace programming approval rejected: %v\n", err)
 			return true
 		}
+		c.deactivateManagedAfterGrant()
 		if containsScope(pending.Scopes, workspace.ScopeGit) && c.programmingGitReviewer != nil {
 			if err := c.programmingGitReviewer.CaptureBaseline(c.owner, pending.ClientID, sessionID); err != nil {
 				_ = c.grants.Revoke(sessionID)
@@ -309,6 +481,7 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintf(output, "workspace grant rejected: %v\n", err)
 			return true
 		}
+		c.deactivateManagedAfterGrant()
 		fmt.Fprintf(output, "Local workspace grant created: session=%s client=%s. Revoke using workspace revoke %s\n", id, pending.clientID, id)
 		if c.readEnabled {
 			fmt.Fprintln(output, "A leitura requer um novo consentimento OAuth com signalspace:workspace.read e o ID da sessão. Revogue com workspace revoke <session-id>.")
@@ -347,10 +520,44 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			if c.programmingGitReviewer != nil {
 				c.programmingGitReviewer.Forget(argument)
 			}
+			c.deactivateManagedAfterGrant()
 			fmt.Fprintln(output, "workspace grant revoked")
 		}
 	default:
 		fmt.Fprintln(output, "unknown workspace command")
 	}
 	return true
+}
+
+func newPendingManagedWorkspace(clientID string, scopes []string, sourceRoot, baseRef, workspaceID string, resume bool) (*pendingManagedWorkspace, error) {
+	var rawID [16]byte
+	if _, err := rand.Read(rawID[:]); err != nil {
+		return nil, err
+	}
+	return &pendingManagedWorkspace{id: hex.EncodeToString(rawID[:]), clientID: clientID, scopes: append([]string(nil), scopes...), sourceRoot: sourceRoot, baseRef: baseRef, workspaceID: workspaceID, resume: resume, expires: time.Now().Add(workspaceApprovalTTL)}, nil
+}
+
+func splitManagedSourceAndRef(value string) (string, string) {
+	if localWorkspacePath(value) {
+		if info, err := os.Stat(value); err == nil && info.IsDir() {
+			return value, ""
+		}
+	}
+	if !strings.Contains(value, " ") {
+		return value, ""
+	}
+	index := strings.LastIndexByte(value, ' ')
+	if index <= 0 || index == len(value)-1 {
+		return value, ""
+	}
+	return value[:index], value[index+1:]
+}
+
+func (c *workspaceConsole) deactivateManagedAfterGrant() {
+	if c.managed == nil {
+		return
+	}
+	if workspaceID := c.managed.ActiveID(); workspaceID != "" {
+		_ = c.managed.Deactivate(workspaceID)
+	}
 }

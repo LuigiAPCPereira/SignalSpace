@@ -165,7 +165,11 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 		if err != nil {
 			return closeFailure(err)
 		}
-		console = &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients, readEnabled: true}
+		managed, managedErr := workspace.NewManagedWorktreeManager(stateDir)
+		if managedErr != nil {
+			return closeFailure(managedErr)
+		}
+		console = &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients, readEnabled: true, managed: managed}
 		if plan.consoleMode == workspaceConsoleProgramming {
 			approval, approvalErr := workspace.NewCapabilityApproval(grants, func(clientID string) bool {
 				return console.isIssuedClient(clientID)

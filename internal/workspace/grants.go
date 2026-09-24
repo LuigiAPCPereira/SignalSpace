@@ -18,10 +18,15 @@ const (
 // GrantSnapshot contém somente os metadados locais necessários para informar
 // o estado de uma concessão. Ele não expõe Session, descritor ou raiz.
 type GrantSnapshot struct {
-	Active    bool
-	SessionID string
-	ClientID  string
-	Scopes    []string
+	Active             bool
+	SessionID          string
+	ClientID           string
+	Scopes             []string
+	Mode               string
+	ManagedWorkspaceID string
+	BaseRef            string
+	BaseSHA            string
+	DirtySource        bool
 }
 
 // ProcessDirectory é a menor porta necessária para operações locais que
@@ -74,6 +79,20 @@ func (g *Grants) Grant(root, clientID string) (string, error) {
 // que já possui a decisão do proprietário. Escopos desconhecidos falham
 // fechado para impedir que uma string futura seja aceita por acidente.
 func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (string, error) {
+	return g.grantWithMetadata(root, clientID, WorkspaceMetadata{Mode: WorkspaceModeCheckout}, scopes...)
+}
+
+// GrantManagedWithScopes registra uma sessão cuja raiz foi criada pelo
+// manager local de worktrees. O método continua sujeito à mesma cardinalidade
+// de Grants: conceder uma nova sessão revoga a sessão corrente.
+func (g *Grants) GrantManagedWithScopes(root, clientID string, metadata WorkspaceMetadata, scopes ...string) (string, error) {
+	if metadata.Mode != WorkspaceModeWorktree || metadata.ManagedWorkspaceID == "" {
+		return "", ErrNotAuthorized
+	}
+	return g.grantWithMetadata(root, clientID, metadata, scopes...)
+}
+
+func (g *Grants) grantWithMetadata(root, clientID string, metadata WorkspaceMetadata, scopes ...string) (string, error) {
 	if !validClientID(clientID) {
 		return "", ErrNotAuthorized
 	}
@@ -87,7 +106,13 @@ func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (strin
 	if len(allowedScopes) == 0 {
 		return "", ErrNotAuthorized
 	}
-	opened, err := OpenApprovedRoot(root)
+	var opened *Session
+	var err error
+	if metadata.Mode == WorkspaceModeWorktree {
+		opened, err = OpenManagedRoot(root, metadata)
+	} else {
+		opened, err = OpenApprovedRoot(root)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -185,10 +210,15 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 		}
 	}
 	return GrantSnapshot{
-		Active:    true,
-		SessionID: g.current.ID(),
-		ClientID:  g.clientID,
-		Scopes:    scopes,
+		Active:             true,
+		SessionID:          g.current.ID(),
+		ClientID:           g.clientID,
+		Scopes:             scopes,
+		Mode:               g.current.metadata.Mode,
+		ManagedWorkspaceID: g.current.metadata.ManagedWorkspaceID,
+		BaseRef:            g.current.metadata.BaseRef,
+		BaseSHA:            g.current.metadata.BaseSHA,
+		DirtySource:        g.current.metadata.DirtySource,
 	}, nil
 }
 

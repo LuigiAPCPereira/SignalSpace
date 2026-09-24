@@ -180,6 +180,49 @@ func TestWorkspaceConsoleRequiresIssuedClientAndDoesNotBindToChat(t *testing.T) 
 	}
 }
 
+func TestWorkspaceConsoleManagedWorktreeLifecycleUsesSeparateApproval(t *testing.T) {
+	console := testWorkspaceConsole(t)
+	manager, err := workspace.NewManagedWorktreeManager(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	console.managed = manager
+	root := gitWorkspaceFixture(t)
+	var out bytes.Buffer
+	command := "workspace request-worktree " + testConsoleClient + " " + workspace.ScopeRead + "," + workspace.ScopeWrite + " " + root
+	if !console.handleWorkspaceCommand(command, &out) || console.managedPending == nil {
+		t.Fatalf("managed request was not pending: %s", out.String())
+	}
+	approvalID := console.managedPending.id
+	console.handleWorkspaceCommand("workspace approve-worktree "+approvalID, &out)
+	snapshot, err := console.grants.Snapshot()
+	if err != nil || !snapshot.Active || snapshot.Mode != workspace.WorkspaceModeWorktree || snapshot.ManagedWorkspaceID == "" {
+		t.Fatalf("managed grant snapshot: %#v %v\n%s", snapshot, err, out.String())
+	}
+	oldSession := snapshot.SessionID
+	if text, err := console.grants.ReadText("local-owner", testConsoleClient, oldSession, "tracked.txt"); err != nil || text != "before\n" {
+		t.Fatalf("managed console read: %q %v", text, err)
+	}
+	console.handleWorkspaceCommand("workspace revoke "+oldSession, &out)
+	if console.managed.ActiveID() != "" {
+		t.Fatal("revoke left managed workspace active")
+	}
+	console.handleWorkspaceCommand("workspace request-worktree-resume "+testConsoleClient+" "+workspace.ScopeRead+" "+snapshot.ManagedWorkspaceID, &out)
+	if console.managedPending == nil {
+		t.Fatalf("resume request was not pending: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace approve-worktree-resume "+console.managedPending.id, &out)
+	resumed, err := console.grants.Snapshot()
+	if err != nil || !resumed.Active || resumed.SessionID == oldSession || resumed.ManagedWorkspaceID != snapshot.ManagedWorkspaceID {
+		t.Fatalf("managed resume snapshot: %#v %v\n%s", resumed, err, out.String())
+	}
+	console.handleWorkspaceCommand("workspace revoke "+resumed.SessionID, &out)
+	console.handleWorkspaceCommand("workspace remove-worktree "+snapshot.ManagedWorkspaceID, &out)
+	if _, err := console.managed.Descriptor(snapshot.ManagedWorkspaceID); !errors.Is(err, workspace.ErrManagedWorkspaceNotFound) {
+		t.Fatalf("managed worktree was not removed: %v\n%s", err, out.String())
+	}
+}
+
 func TestWorkspaceConsoleProgrammingApprovalIsExplicitAndIndependent(t *testing.T) {
 	grants, err := workspace.NewGrants("local-owner")
 	if err != nil {
