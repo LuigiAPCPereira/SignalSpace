@@ -2,6 +2,18 @@
 
 **Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. **Último commit de código validado localmente em 20/09/2026:** [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1), branch `feat/m1-local-mcp-diagnostic`, [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1) aberto/draft/não mesclado; CI remota deste SHA não consultada conforme orientação do proprietário, estado desconhecido. `gofmt`, `go test ./...`, race dos pacotes afetados, `go vet ./...`, `go build ./...`, `node --check` e teste funcional Node passaram localmente.
 
+## Checkpoint vigente — SS-MVP-002 filesystem tipado base — 23/09/2026
+
+**Ref e preservação:** branch `codex/mvp-vertical-programming`; HEAD local observado antes do slice `41966e1300072f8dc4519f3a7837eccbb41fafd2`. O `git ls-remote` live da branch retornou `1cf598a5222a8118d268752dbf2bbd0993f437ff`; não houve rewind, commit ou push nesta missão. A ref tracking local `origin/...` em `ac5b6ee` é stale e não foi usada como estado remoto atual. Os patches `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` continuam não rastreados, fora do Git, não aplicados e preservados com os hashes registrados. PR #1, `feat/m1-local-mcp-diagnostic` e `feat/frontend-oauth-consent` não foram integrados.
+
+**Implementado localmente:** núcleo comum em `internal/workspace/filesystem.go` e wrappers revogáveis em `internal/workspace/grants.go`; seis tools MCP tipadas e resultados estruturados em `internal/mcp/workspace_read.go`/`workspace_write.go`/`server.go`; portas explícitas e composição `programming` em `internal/mcp/oauth.go` e `cmd/signalspace/main.go`. A matriz é READ (`stat_path`, `find_paths`, `search_text`) e WRITE (`create_directory`, `create_text_file`, `write_text_file`) sob os escopos existentes. `read_file`, `list_directory`, `replace_text`, scopes e modos `diagnostic`/`read` mantêm regressões; `test.run`, shell, mutação Git e worktree não foram habilitados.
+
+**Validado:** `go test ./internal/workspace ./internal/mcp ./cmd/signalspace -p=1 -parallel=1 -count=1 -timeout=300s`; `go test -race ./internal/workspace ./internal/mcp ./cmd/signalspace -p=1 -parallel=1 -count=1 -timeout=300s`; `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`; `go vet ./...`; `go build ./...`; teste público focal `TestPublicProgrammingCompositionPromotesOnlyReadWriteAndGit`; `gofmt -l cmd internal`; `git diff --check`. Os testes cobrem path/traversal/symlink, tipo/ausência, limites, UTF-8/NUL, glob literal, busca bounded, create-only, hash/precondition conflict, owner/client/session/scope/revoke, argumentos inválidos, resultados estruturados e ausência de leak de caminho absoluto.
+
+**Não validado/desconhecido:** não houve validação operacional de 7676/7677, HTTPS, túnel, navegador, grant ChatGPT Web, workspace real, OAuth externo, merge ou deploy. CI permanece desconhecida. Os gates Go desta missão passaram com as portas livres no fechamento; nenhum processo foi interrompido.
+
+**Worktree futura:** somente direção documental em `docs/PROGRAMMING_TOOLS.md`; nenhuma worktree foi criada/removida. Invariantes propostos e questões abertas permanecem explicitamente futuros. **Próxima ação:** retornar ao ChatGPT Web para a decisão A/B/C da missão; não executar commit/push nem iniciar copy/move/delete/apply_patch, Git mutável, worktree ou shell.
+
 ## Fontes e fronteiras
 
 - Protocolo canônico na ref: [`DOCUMENTATION_AND_CONTINUITY.md`](../DOCUMENTATION_AND_CONTINUITY.md) v2.0 adaptado e [`AGENTS.md`](../AGENTS.md). Anexo geral do Project estático, sem sincronização automática; acesso Codex/agendamentos não presumido.
@@ -536,3 +548,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Fronteiras aprovadas para desenho:** filesystem normal não deverá depender de shell; Git local mutável terá capacidade própria e tools tipadas; Git remoto terá gate separado; hooks/configuração executável não podem virar execução implícita; operações Git destrutivas e shell exigem decisão própria. UX pode especializar workspace/filesystem/search/diff/test/process/artifacts, mas autorização continua no backend e plain MCP deve permanecer funcional.
 
 **Próxima ação vinculada:** `SS-MVP-002` — especificar e implementar o primeiro slice do motor de filesystem: `stat_path`, `find_paths`, `search_text`, `create_directory`, `create_text_file` e `write_text_file`, reutilizando a fronteira segura existente de workspace e emitindo resultados estruturados desde o início. Não incluir copy/move/delete/apply_patch, Git mutável, shell ou aceite externo no mesmo slice.
+
+## Checkpoint vigente — SS-MVP-002 filesystem tipado base após rebase — 23/09/2026
+
+**Estado:** o primeiro slice está **implementado e validado localmente**, rebaseado sobre `1cf598a5222a8118d268752dbf2bbd0993f437ff`, mas ainda não foi publicado nesta missão. `SS-MVP-002` permanece parcial quanto ao aceite operacional externo; `SS-BE-007` permanece parcial/em andamento; CI permanece desconhecida. O gate anterior segue aprovado somente para READ + WRITE + Git review observacional.
+
+**Commits e preservação:** o commit de implementação é `e39d7d9` (`feat(signalspace): add typed workspace filesystem tools`); o commit documental é o HEAD desta missão (`docs(signalspace): record filesystem slice and worktree direction`). O histórico remoto não foi reescrito: a branch local está dois commits à frente do remoto, sem push. PR #1, as branches protegidas e os dois patches não rastreados permanecem fora desta alteração.
+
+**Implementação:** seis tools MCP foram adicionadas ao motor comum: READ (`stat_path`, `find_paths`, `search_text`) e WRITE (`create_directory`, `create_text_file`, `write_text_file`). Caminhos, symlink, limites, tipo, precondição/hash, owner, cliente, sessão, escopo e concessão são tratados fail-closed. `diagnostic`/`read` não ganham escrita; `test.run`, shell, Git mutável, copy/move/delete/apply_patch e worktree funcional permanecem fora.
+
+**Validação:** `gofmt -l cmd internal`, `git diff --check`, testes focais, race dos três pacotes, `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, `go vet ./...` e `go build ./...` passaram após o rebase. Não houve listeners em 7676/7677 nem processo `cloudflared` residual. Não houve CI, túnel, HTTPS, navegador, grant OAuth externo, workspace real, merge ou deploy.
+
+**Próxima ação:** retornar ao ChatGPT Web com o relatório desta missão. A direção de worktrees permanece documental; nenhuma worktree foi criada ou usada.

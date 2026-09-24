@@ -1,6 +1,6 @@
 # SignalSpace — contrato inicial de programação local
 
-**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada, validada localmente no commit `e97aaf7ec84577f2999f0bb725db5d2b8a451ce2`, documentada em `d1bff2c925e83061bcbc15cef299b22846ac897b` e publicada em `origin/codex/mvp-vertical-programming`; `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
+**Estado vigente (23/09/2026):** o promotion gate `SS-MVP-002-PROMOTION-GATE-001` foi **APROVADO PELO PROPRIETÁRIO**. A composição pública opt-in `programming` foi implementada e publicada anteriormente; nesta missão, o slice de filesystem tipado base foi implementado no commit local `e39d7d9` e rebaseado sobre o remoto live `1cf598a5222a8118d268752dbf2bbd0993f437ff`, sem push. `test.run`, shell, comandos arbitrários e mutações Git continuam fora dela. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
 
 O estado do MVP continua **PARCIAL**: a decisão do gate é distinta da conclusão de `SS-MVP-002`, e a evidência atual é local/automatizada. O modo público exige seleção explícita `connect quick programming`, OAuth com escopo exato e concessão terminal-local ativa; a presença de JWT, `client_id`, metadata ou configuração não cria concessão.
 
@@ -106,6 +106,21 @@ O Git evoluirá em camadas. `signalspace:git.review` permanece observacional. Gi
 Cada tool deverá publicar um resultado estruturado estável que possa alimentar UX especializada sem fazer a segurança depender do frontend. A direção visual é ter variantes por domínio — workspace, filesystem/search, diff/review, teste/processo e artifacts — reutilizando componentes quando possível. Não existe requisito de iframe/widget pesado para cada leitura ou mutação; plain MCP deve continuar suficiente para o modelo operar corretamente.
 
 **Sequência recomendada:** primeiro consolidar o motor de filesystem e os contratos estruturados; depois completar operações estruturais/destrutivas seguras; então promover Git local tipado; só depois decidir Git remoto, execução genérica/shell e superfícies visuais mais ricas. O aceite HTTPS/ChatGPT Web continua um gate operacional distinto.
+
+## Implementação local reconciliada — filesystem tipado base — SS-MVP-002
+
+O primeiro slice da direção aprovada está implementado localmente sobre o motor comum de workspace. A superfície MCP acrescenta seis tools, todas sob revalidação de owner, cliente, sessão, escopo e concessão na chamada:
+
+| Família | Tools implementadas | Escopo | Estado |
+| --- | --- | --- | --- |
+| inspeção | `stat_path`, `find_paths`, `search_text` | `signalspace:workspace.read` | implementadas e validadas localmente |
+| criação/edição | `create_directory`, `create_text_file`, `write_text_file` | `signalspace:workspace.write` | implementadas e validadas localmente |
+
+O motor comum normaliza caminhos relativos, rejeita traversal e symlink, limita profundidade/entradas/conteúdo, mantém resultados estruturados, aplica create-only onde indicado e exige hash/precondição para escrita integral. A publicação é local/atômica quando aplicável; falhas de autorização, tipo, limite ou precondição falham fechado. Nenhum tool recebe shell, comando arbitrário, raiz absoluta ou autoridade do frontend.
+
+As regressões existentes de `read_file`, `list_directory`, `replace_text` e `review_git_changes` foram preservadas. A composição pública `programming` continua sendo a única composição opt-in que reúne READ + WRITE + Git review; `diagnostic`/`read` não ganham escrita; `test.run`, shell, Git mutável, copy/move/delete/apply_patch e worktree funcional permanecem fora desta fatia.
+
+O registro de worktrees é apenas direção arquitetural/documental: worktree poderá ser uma futura superfície separada para isolamento, mas nenhuma foi criada, removida ou usada nesta missão. O código continua no checkout corrente e a segurança não depende de uma worktree.
 
 
 ## Edição segura inicial

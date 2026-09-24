@@ -1,8 +1,10 @@
-# Fronteira de workspace — leitura experimental (M2)
+# Fronteira de workspace — leitura e filesystem tipado opt-in
+
+**Estado de validação (23/09/2026):** `programming` expõe localmente seis tools tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`. Passaram os testes focais, a suíte Go serial completa, race de `internal/workspace`/`internal/mcp`/`cmd/signalspace`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check`. Isso não valida HTTPS, túnel, navegador, grant externo, workspace real, CI ou worktree gerenciada. `diagnostic` e `read` continuam sem write.
 
 ## Estado e modos
 
-O `connect quick` continua oferecendo somente `connection_diagnostic`. As ferramentas MCP `read_file` e `list_directory` são habilitadas apenas por `connect quick read`, que exige a confirmação local `PUBLICAR LEITURA`. A listagem exige a injeção explícita de `WorkspaceLister` junto de `WorkspaceReader`; não é habilitada apenas por existir uma implementação no domínio. A URL Quick Tunnel é pública e temporária: use somente pastas descartáveis sem segredos. Em 20/09/2026, o proprietário relatou testes reais pelo ChatGPT Web de leitura e listagem, ambas com negativa após revogação na sessão observada. Git, escrita, edição e shell permanecem indisponíveis. O modo OAuth integrado persistente e o modo bearer local não habilitam arquivos.
+`connect quick` continua oferecendo somente `connection_diagnostic`, e `connect quick read` continua oferecendo `read_file` e `list_directory` após confirmação local `PUBLICAR LEITURA`. A composição explicitamente opt-in `connect quick programming` agora possui, localmente nesta frente, o slice adicional de filesystem tipado descrito em `docs/PROGRAMMING_TOOLS.md`: três tools READ (`stat_path`, `find_paths`, `search_text`) e três WRITE (`create_directory`, `create_text_file`, `write_text_file`), sempre com os escopos independentes e concessão terminal-local. Isso não amplia os modos `diagnostic`/`read`, não habilita shell, test.run, Git mutável ou worktree. A listagem e cada nova porta exigem composição explícita; não são habilitadas apenas por existir uma implementação no domínio. A URL Quick Tunnel é pública e temporária: use somente pastas descartáveis sem segredos. O modo OAuth integrado persistente e o modo bearer local não habilitam arquivos sem composição autorizada.
 
 ## Raiz e conteúdo
 

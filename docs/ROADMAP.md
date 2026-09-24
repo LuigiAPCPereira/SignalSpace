@@ -2,7 +2,7 @@
 
 **Status:** plano de execução documental da frente de backend do [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), não compromisso de datas ou autorização de ampliar o MVP. Fontes do escopo: [produto](PRODUCT.md), [MVP](MVP.md), [contrato administrativo](LOCAL_ADMIN_AUTHORIZATION.md) e pedido do proprietário para continuar o backend mantendo o PR draft. Detalhes executáveis/estado por ID: [`../TASKLIST.md`](../TASKLIST.md). Revalidar branch e HEAD na retomada.
 
-**Estado reconciliado antes desta decisão (23/09/2026):** a composição opt-in READ + WRITE + Git observacional de `SS-MVP-002` foi implementada, validada localmente e publicada; a reconciliação documental correspondente foi publicada em `41966e1300072f8dc4519f3a7837eccbb41fafd2`. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell ou mutação Git.
+**Estado reconciliado antes desta decisão (23/09/2026):** a composição opt-in READ + WRITE + Git observacional de `SS-MVP-002` foi implementada, validada localmente e publicada. O remoto live desta retomada é `1cf598a5222a8118d268752dbf2bbd0993f437ff`; o slice de filesystem tipado base foi implementado e rebaseado localmente sobre ele, sem push. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell ou mutação Git.
 
 | Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
 | --- | --- | --- | --- | --- | --- |
@@ -24,7 +24,7 @@ Esta seção registra a nova frente autorizada pela missão de 20/09/2026 sem ap
 | Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
 | --- | --- | --- | --- | --- | --- |
 | M5 — integração administrativa local | Página funcional no listener 7677 consulta sessão, pareia/desbloqueia, lista e decide pedidos com cookie HttpOnly/CSRF em memória. | SS-BE-003/005; contrato frontend reaberto na branch frontend | SS-MVP-001 | implementada não validada | `internal/admin/ui/`, `internal/admin/ui.go`, `internal/admin/ui_test.go`, commits `9fdf575` e `9e26c19`; HTTP local, CSRF bootstrap e sintaxe JS passaram. Sem navegador real. |
-| M6 — programação vertical local | Composição opt-in pública com concessão local e escopos independentes para READ, edição e revisão Git somente leitura, com negação após revogação. `test.run` permanece separado. | WORKSPACE_SECURITY; `PROGRAMMING_TOOLS.md`; promotion gate | SS-MVP-002…006 | implementação e validação local confirmadas; publicação remota confirmada; aceite operacional externo pendente | `e97aaf7` e `d1bff2c`; testes OAuth/MCP, suíte Go, race, vet, build, gofmt e diff-check passaram. Não é HTTPS/ChatGPT Web, workspace real ou sandbox de processo; shell e mutação Git permanecem fora. |
+| M6 — programação vertical local | Composição opt-in pública com concessão local e escopos independentes para READ, edição, seis tools de filesystem tipado e revisão Git somente leitura, com negação após revogação. `test.run` permanece separado. | WORKSPACE_SECURITY; `PROGRAMMING_TOOLS.md`; promotion gate | SS-MVP-002…006 | implementação e validação local confirmadas; slice rebaseado sobre `1cf598a`; aceite operacional externo pendente | Promoção anterior em `e97aaf7`/`d1bff2c`; seis tools em `internal/workspace`/`internal/mcp`; suíte Go serial, race afetado, vet, build, gofmt e diff-check passaram. Não houve push nesta missão. Não é HTTPS/ChatGPT Web, workspace real ou sandbox de processo; shell, mutação Git e worktree funcional permanecem fora. |
 
 O próximo bloco não é repetir a promoção já implementada/publicada: é um aceite operacional externo de READ + WRITE + Git, caso seja autorizado, ou um contrato separado para shell. Ambos exigem missão própria; `SS-MVP-002` permanece PARCIAL.
 
@@ -43,3 +43,9 @@ Sequenciamento recomendado dentro da frente existente:
 6. manter shell/execução arbitrária e operações Git destrutivas sob decisões/gates próprios.
 
 O próximo slice técnico recomendado é o item 1. Ele deve preservar `replace_text`, `read_file`, `list_directory` e `review_git_changes` como regressões e não promover shell, `test.run` ou mutação Git por consequência.
+
+## SS-MVP-002 — slice de filesystem tipado base concluído localmente
+
+O item 1 foi executado nesta retomada em dois commits locais: implementação/testes e documentação/checkpoint/direção de worktrees. O motor comum adiciona `stat_path`, `find_paths`, `search_text`, `create_directory`, `create_text_file` e `write_text_file`, com resultados estruturados, limites explícitos, validação de caminho/no-symlink, create-only e precondição/hash para escrita integral. A matriz de escopos permanece separada: READ em `signalspace:workspace.read` e WRITE em `signalspace:workspace.write`.
+
+O segundo commit também registra que worktrees são direção futura, não capacidade exercitada. Nenhuma worktree foi criada; não houve alteração das branches protegidas, integração do frontend, Git mutável, shell, `test.run`, copy/move/delete/apply_patch, CI, túnel, OAuth externo, workspace real, merge ou deploy. Os dois commits foram rebaseados sobre o remoto live sem merge, sem force-push e sem push.
