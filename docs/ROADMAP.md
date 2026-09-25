@@ -2,7 +2,7 @@
 
 **Status:** plano de execução documental da frente de backend do [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), não compromisso de datas ou autorização de ampliar o MVP. Fontes do escopo: [produto](PRODUCT.md), [MVP](MVP.md), [contrato administrativo](LOCAL_ADMIN_AUTHORIZATION.md) e pedido do proprietário para continuar o backend mantendo o PR draft. Detalhes executáveis/estado por ID: [`../TASKLIST.md`](../TASKLIST.md). Revalidar branch e HEAD na retomada.
 
-**Estado reconciliado nesta retomada (23/09/2026):** a composição opt-in READ + WRITE + Git observacional de `SS-MVP-002` e o slice estrutural `copy_path`/`move_path`/`delete_file`/`delete_directory` estão publicados em `3628d2fe4b08053c63af50d7d18c1d62fc37613f`. O `apply_patch` estruturado foi implementado e validado localmente nesta missão, mas permanece sem push. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell, mutação Git ou worktree.
+**Estado reconciliado nesta retomada (24/09/2026):** a base publicada de `SS-MVP-002` permanece separada das fatias locais posteriores; a missão atual partiu do remoto live `60c290a88a5c85a411237b53e04313b6d35dfc19` e registrou o commit gate local em `b3f2add`, sem push. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell, branch ou Git remoto.
 
 | Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
 | --- | --- | --- | --- | --- | --- |
@@ -34,6 +34,12 @@ O proprietário aprovou `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001` para a composi
 
 O gate está implementado/validado localmente e aguarda publicação remota em missão posterior autorizada. A fatia não autoriza commit, branch, Git remoto, shell, lifecycle MCP de worktree, CI, merge ou deploy; o próximo marco é revisar/publicar esse commit separadamente ou manter o gate pendente conforme nova decisão do proprietário.
 
+
+## Commit gate Git local — `SS-MVP-002-GIT-COMMIT-GATE-001` — 24/09/2026
+
+O proprietário aprovou a implementação local do próximo degrau tipado de Git, sem push ou alteração remota. A ref foi reconciliada na branch `codex/mvp-vertical-programming`, com remoto live `60c290a88a5c85a411237b53e04313b6d35dfc19` antes da alteração; a implementação foi registrada em `b3f2add`. `signalspace:git.commit` é separado de `workspace.write`, `git.review` e `git.index` e só entra na composição pública opt-in `programming`.
+
+O resultado é limitado a um commit staged-only em managed worktree detached, com identidade owner-local privada, precondições HEAD/índice, ref privada `refs/signalspace/workspaces/<workspace_id>/head` e atualização CAS atômica. Branch, merge, rebase, reset, clean, stash, shell, hooks/signing e Git remoto permanecem fora. A fatia está **IMPLEMENTADA E VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**; CI, HTTPS, túnel, navegador, grant externo, workspace real, merge e deploy permanecem desconhecidos/não validados.
 
 ## Direção pós-M6 — coding agent completo dentro de SS-MVP-002
 

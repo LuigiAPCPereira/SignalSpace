@@ -1,8 +1,20 @@
 # SignalSpace — checkpoint de continuidade
 
-**Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é o de filesystem estrutural logo a seguir. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
+**Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é o de Git local commit gate acima. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
-## Checkpoint vigente — SS-MVP-002 apply_patch estruturado — 24/09/2026
+## Checkpoint vigente — SS-MVP-002 Git local commit gate — 24/09/2026
+
+**Ref observada:** branch `codex/mvp-vertical-programming`; antes da alteração, o remoto live confirmado era `60c290a88a5c85a411237b53e04313b6d35dfc19`. A implementação foi registrada no commit local `b3f2add` (`feat(signalspace): add managed Git commit gate`); não houve push, merge, deploy ou mutação remota.
+
+**Objetivo/estado:** `SS-MVP-002` está **IMPLEMENTADA E VALIDADA LOCALMENTE NESTA FATIA / PARCIAL NO ACEITE OPERACIONAL EXTERNO**. `SS-MVP-002-GIT-COMMIT-GATE-001` está **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. CI, HTTPS, túnel, navegador, grant ChatGPT Web, workspace real, merge e deploy permanecem **DESCONHECIDOS/NÃO VALIDADOS**.
+
+**Implementação:** `signalspace:git.commit` é independente de READ, WRITE, `signalspace:git.review` e `signalspace:git.index`; `commit_git_index` aceita somente `session_id`, `expected_head_oid`, `expected_index_sha256` e `message`. A identidade owner-local é privada e versionada. O manager exige managed worktree detached, base ancestral sem merge, índice staged-only, `write-tree`, `commit-tree` por stdin e transação CAS única de HEAD/ref privada; falhas e estado incerto não viram sucesso. Worktrees com commits locais não podem ser removidas.
+
+**Validação:** passaram `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial de `internal/workspace`, `internal/mcp` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, `gofmt -l cmd internal` e `git diff --check`. Não há listener/processo SignalSpace ou cloudflared residual. Os dois patches protegidos seguem não rastreados, não aplicados e com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+
+**Próxima ação vinculada:** enviar este checkpoint/relatório ao ChatGPT Web usando `<continuidade_codex>` e aguardar a próxima missão; não publicar remotamente sem autorização posterior.
+
+## Checkpoint histórico — SS-MVP-002 apply_patch estruturado — 24/09/2026
 
 **Ref observada:** branch `codex/mvp-vertical-programming`; a sequência local `f2bed05` → `4e597c9` → `e4d5dd2` inclui a implementação, a documentação e o endurecimento local do preflight, enquanto o remoto live foi confirmado em `3628d2fe4b08053c63af50d7d18c1d62fc37613f` antes desta missão. A árvore preserva somente os dois patches não rastreados do proprietário, fora do Git, não aplicados e com os hashes `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
 
