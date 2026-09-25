@@ -1,8 +1,18 @@
 # SignalSpace — checkpoint de continuidade
 
-**Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é o de Git local commit gate acima. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
+**Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é a reconciliação publicada abaixo. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
-## Checkpoint vigente — SS-MVP-002 Git local commit gate — 24/09/2026
+## Checkpoint vigente — reconciliação do Git commit v1 — 25/09/2026
+
+**Ref observada:** `codex/mvp-vertical-programming`; remoto live final `0420c9ae14768e099fbb51452ee71e7dc5af7916`. A cadeia publicada real é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`. O commit `ccc4d17a9ed8b8c744d432edd9da3db5687ac853` é exclusivamente documental e registra o gate já autorizado.
+
+**Estado:** `SS-MVP-002-GIT-COMMIT-GATE-001` está **APROVADO / IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE**. `SS-MVP-002-GIT-COMMIT-PUBLISH-001` está **CONCLUÍDO COM DESVIO PROCEDURAL DE PRÉ-CHECAGEM**: o push foi fast-forward normal, mas a checagem de exatamente três commits revelou posteriormente o commit documental intermediário. Não há motivo técnico para reescrever histórico válido. `SS-MVP-002` permanece **PARCIAL/em andamento** quanto ao aceite operacional externo; `SS-BE-007` permanece **PARCIAL**; CI permanece **DESCONHECIDA**.
+
+**Preservação e limites:** os dois patches protegidos permanecem não rastreados, não aplicados e intocados; PR #1, `feat/m1-local-mcp-diagnostic` e `feat/frontend-oauth-consent` não foram alvo. Não houve force-push, merge, rebase, CI ou deploy. HTTPS, túnel, navegador, grant ChatGPT Web, workspace real e aceite operacional externo continuam não validados.
+
+**Próxima ação vinculada:** entregar o handoff consolidado ao ChatGPT Web usando `<continuidade_codex>` e aguardar nova missão; não iniciar nova capability.
+
+## Checkpoint histórico — SS-MVP-002 Git local commit gate — 24/09/2026
 
 **Ref observada:** branch `codex/mvp-vertical-programming`; antes da alteração, o remoto live confirmado era `60c290a88a5c85a411237b53e04313b6d35dfc19`. A implementação foi registrada no commit local `b3f2add` (`feat(signalspace): add managed Git commit gate`) e o hardening em `247ad3d`; não houve push, merge, deploy ou mutação remota.
 
