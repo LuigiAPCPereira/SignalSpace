@@ -4,13 +4,13 @@
 
 ## Checkpoint vigente — SS-MVP-002 Git local commit gate — 24/09/2026
 
-**Ref observada:** branch `codex/mvp-vertical-programming`; antes da alteração, o remoto live confirmado era `60c290a88a5c85a411237b53e04313b6d35dfc19`. A implementação foi registrada no commit local `b3f2add` (`feat(signalspace): add managed Git commit gate`); não houve push, merge, deploy ou mutação remota.
+**Ref observada:** branch `codex/mvp-vertical-programming`; antes da alteração, o remoto live confirmado era `60c290a88a5c85a411237b53e04313b6d35dfc19`. A implementação foi registrada no commit local `b3f2add` (`feat(signalspace): add managed Git commit gate`) e o hardening em `247ad3d`; não houve push, merge, deploy ou mutação remota.
 
 **Objetivo/estado:** `SS-MVP-002` está **IMPLEMENTADA E VALIDADA LOCALMENTE NESTA FATIA / PARCIAL NO ACEITE OPERACIONAL EXTERNO**. `SS-MVP-002-GIT-COMMIT-GATE-001` está **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. CI, HTTPS, túnel, navegador, grant ChatGPT Web, workspace real, merge e deploy permanecem **DESCONHECIDOS/NÃO VALIDADOS**.
 
 **Implementação:** `signalspace:git.commit` é independente de READ, WRITE, `signalspace:git.review` e `signalspace:git.index`; `commit_git_index` aceita somente `session_id`, `expected_head_oid`, `expected_index_sha256` e `message`. A identidade owner-local é privada e versionada. O manager exige managed worktree detached, base ancestral sem merge, índice staged-only, `write-tree`, `commit-tree` por stdin e transação CAS única de HEAD/ref privada; falhas e estado incerto não viram sucesso. Worktrees com commits locais não podem ser removidas.
 
-**Validação:** passaram `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial de `internal/workspace`, `internal/mcp` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, `gofmt -l cmd internal` e `git diff --check`. Não há listener/processo SignalSpace ou cloudflared residual. Os dois patches protegidos seguem não rastreados, não aplicados e com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+**Validação:** passaram `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, race serial de `internal/workspace`, `internal/auth`, `internal/mcp` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, `gofmt -l cmd internal` e `git diff --check`. Não há listener/processo SignalSpace ou cloudflared residual. Os dois patches protegidos seguem não rastreados, não aplicados e com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
 
 **Próxima ação vinculada:** enviar este checkpoint/relatório ao ChatGPT Web usando `<continuidade_codex>` e aguardar a próxima missão; não publicar remotamente sem autorização posterior.
 
