@@ -177,6 +177,15 @@ func (m *ManagedWorktreeManager) commitGitIndexLocked(directory string, record *
 		return result, ErrManagedGit
 	}
 	result.CommitOID = commitOID
+	// commit-tree materializa um objeto antes do CAS. Revalidar o índice após
+	// essa etapa evita publicar um commit calculado a partir de um índice que
+	// mudou durante a criação do objeto; se houver corrida, o objeto fica sem
+	// referência e nenhuma ref é avançada.
+	finalIndex, finalIndexErr := readGitIndexStatus(directory)
+	if finalIndexErr != nil || finalIndex.IndexSHA256 != request.ExpectedIndexSHA256 {
+		result.Status = "conflict_no_ref_change"
+		return result, ErrGitCommitConflict
+	}
 
 	ref := managedHeadRef(record.WorkspaceID)
 	var transaction string
@@ -240,21 +249,19 @@ func (m *ManagedWorktreeManager) readManagedGitRefs(directory, workspaceID strin
 	if headErr != nil || headTruncated || !validObjectID(strings.TrimSpace(string(headBytes))) {
 		return managedGitState{}, ErrManagedWorkspaceInconsistent
 	}
-	refBytes, refTruncated, refErr := m.runner.captureOutput(directory, 128, "rev-parse", "--verify", "--end-of-options", managedHeadRef(workspaceID)+"^{commit}")
-	if refTruncated {
-		return managedGitState{}, ErrManagedWorkspaceInconsistent
-	}
 	state := managedGitState{HeadSHA: strings.TrimSpace(string(headBytes))}
-	if refErr == nil {
-		state.PrivateRefSHA = strings.TrimSpace(string(refBytes))
-		state.PrivateRefSeen = validObjectID(state.PrivateRefSHA)
-		if !state.PrivateRefSeen {
+	ref := managedHeadRef(workspaceID)
+	refSeen, err := m.managedRefExists(directory, ref)
+	if err != nil {
+		return managedGitState{}, err
+	}
+	if refSeen {
+		refBytes, refTruncated, refErr := m.runner.captureOutput(directory, 128, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+		if refErr != nil || refTruncated || !validObjectID(strings.TrimSpace(string(refBytes))) {
 			return managedGitState{}, ErrManagedWorkspaceInconsistent
 		}
-		return state, nil
-	}
-	if code, ok := managedGitExitCode(refErr); !ok || code != 128 || len(refBytes) != 0 {
-		return managedGitState{}, ErrManagedWorkspaceInconsistent
+		state.PrivateRefSHA = strings.TrimSpace(string(refBytes))
+		state.PrivateRefSeen = validObjectID(state.PrivateRefSHA)
 	}
 	return state, nil
 }

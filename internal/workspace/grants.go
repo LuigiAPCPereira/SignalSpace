@@ -241,7 +241,7 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 	}
 
 	scopes := make([]string, 0, len(g.scopes))
-	for _, scope := range []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeTest} {
+	for _, scope := range []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeGitCommit, ScopeTest} {
 		if g.hasScopeLocked(scope) {
 			scopes = append(scopes, scope)
 		}

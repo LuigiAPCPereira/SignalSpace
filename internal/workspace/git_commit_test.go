@@ -57,6 +57,13 @@ func TestManagedGitCommitCreatesPrivateRefAndSurvivesResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hookMarker := filepath.Join(t.TempDir(), "commit-hook-ran")
+	for _, hookName := range []string{"pre-commit", "prepare-commit-msg", "commit-msg", "post-commit"} {
+		hookPath := filepath.Join(source, ".git", "hooks", hookName)
+		if err := os.WriteFile(hookPath, []byte("#!/bin/sh\nprintf ran > "+shellQuote(hookMarker)+"\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	grants, err := NewGrants("local-owner")
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +133,9 @@ func TestManagedGitCommitCreatesPrivateRefAndSurvivesResume(t *testing.T) {
 	if got := gitTestOutput(t, managedRoot, "show", "-s", "--format=%an <%ae>", newHead); got != "Owner Local <owner@example.invalid>" {
 		t.Fatalf("commit identity changed: %q", got)
 	}
+	if _, err := os.Stat(hookMarker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("commit plumbing executed a repository hook: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(managedRoot, "tracked.txt"), []byte("committed\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -183,6 +193,32 @@ func TestManagedGitCommitCreatesPrivateRefAndSurvivesResume(t *testing.T) {
 	}
 	if err := restarted.Remove(descriptor.WorkspaceID); !errors.Is(err, ErrManagedWorkspaceLocalCommits) {
 		t.Fatalf("local commit worktree was removable: %v", err)
+	}
+}
+
+func TestManagedGitStateRejectsPrivateRefThatIsNotACommit(t *testing.T) {
+	source := managedGitTestRepo(t)
+	stateDir := filepath.Join(t.TempDir(), "state")
+	manager, err := NewManagedWorktreeManager(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := manager.SetGitIdentity("owner@example.invalid", "Owner Local"); err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := manager.Create(source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	managedRoot := filepath.Join(stateDir, "worktrees", descriptor.WorkspaceID)
+	blobOID := gitTestOutput(t, managedRoot, "hash-object", "-w", "--stdin")
+	if err := runManagedTestGit(managedRoot, "update-ref", managedHeadRef(descriptor.WorkspaceID), blobOID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := manager.Descriptor(descriptor.WorkspaceID)
+	if err != nil || got.State != ManagedWorkspaceInconsistent {
+		t.Fatalf("invalid private ref was not rejected: descriptor=%+v err=%v", got, err)
 	}
 }
 

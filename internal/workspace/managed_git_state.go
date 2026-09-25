@@ -48,19 +48,20 @@ func (m *ManagedWorktreeManager) inspectManagedGitState(record *managedWorkspace
 	}
 
 	ref := managedHeadRef(record.WorkspaceID)
-	refBytes, refTruncated, refErr := m.runner.captureOutput(record.ManagedRoot, 128, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
-	refSHA := strings.TrimSpace(string(refBytes))
-	refSeen := refErr == nil
-	if refErr != nil {
-		if refTruncated {
-			return managedGitState{}, ErrManagedWorkspaceInconsistent
-		}
-		if code, ok := managedGitExitCode(refErr); !ok || code != 128 || refSHA != "" {
-			return managedGitState{}, ErrManagedWorkspaceInconsistent
-		}
+	refSeen, err := m.managedRefExists(record.ManagedRoot, ref)
+	if err != nil {
+		return managedGitState{}, err
 	}
-	if refSeen && !validObjectID(refSHA) {
-		return managedGitState{}, ErrManagedWorkspaceInconsistent
+	refSHA := ""
+	if refSeen {
+		refBytes, refTruncated, refErr := m.runner.captureOutput(record.ManagedRoot, 128, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+		if refErr != nil || refTruncated {
+			return managedGitState{}, ErrManagedWorkspaceInconsistent
+		}
+		refSHA = strings.TrimSpace(string(refBytes))
+		if !validObjectID(refSHA) {
+			return managedGitState{}, ErrManagedWorkspaceInconsistent
+		}
 	}
 
 	state := managedGitState{HeadSHA: head, PrivateRefSHA: refSHA, PrivateRefSeen: refSeen, HasLocalCommits: head != base}
@@ -86,4 +87,18 @@ func (m *ManagedWorktreeManager) inspectManagedGitState(record *managedWorkspace
 		}
 	}
 	return state, nil
+}
+
+// managedRefExists separa "ref ausente" de "ref existente apontando para um
+// objeto que não é commit". Rev-parse com ^{commit} sozinho transforma os
+// dois casos no mesmo erro e poderia aceitar uma corrupção como estado inicial.
+func (m *ManagedWorktreeManager) managedRefExists(directory, ref string) (bool, error) {
+	output, err := m.runner.capture(directory, "show-ref", "--verify", "--quiet", ref)
+	if err == nil {
+		return true, nil
+	}
+	if code, ok := managedGitExitCode(err); ok && code == 1 && strings.TrimSpace(output) == "" {
+		return false, nil
+	}
+	return false, ErrManagedWorkspaceInconsistent
 }

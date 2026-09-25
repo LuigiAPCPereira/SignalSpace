@@ -174,7 +174,7 @@ func TestGrantsSnapshotIsAbsentSafeOrderedAndIndependent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "file"), []byte(privateContents), 0600); err != nil {
 		t.Fatal(err)
 	}
-	id, err := g.GrantWithScopes(root, testClientA, ScopeTest, ScopeRead, ScopeGit, ScopeWrite)
+	id, err := g.GrantWithScopes(root, testClientA, ScopeTest, ScopeRead, ScopeGit, ScopeGitCommit, ScopeWrite)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestGrantsSnapshotIsAbsentSafeOrderedAndIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantScopes := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeTest}
+	wantScopes := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitCommit, ScopeTest}
 	if !snapshot.Active || snapshot.SessionID != id || snapshot.ClientID != testClientA || !reflect.DeepEqual(snapshot.Scopes, wantScopes) {
 		t.Fatalf("active snapshot = %+v, want scopes %v", snapshot, wantScopes)
 	}
