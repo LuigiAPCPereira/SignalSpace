@@ -1,6 +1,8 @@
 # Quick Tunnel: conexão experimental guiada
 
-**Estado observado em 19/09/2026:** `connect quick` passou no preflight HTTPS na máquina do proprietário. Após corrigir a compatibilidade DCR, o ChatGPT solicitou autorização e o proprietário a aprovou no terminal; a interface passou a mostrar uma conta conectada. O proprietário comparou um `diagnosticID` aleatório devolvido na conversa com o ID idêntico no log local de `connection_diagnostic`, após um `tools/list` autenticado. A invocação MCP daquela sessão está comprovada por correlação; a identidade do cliente não foi atestada criptograficamente. Apenas `connection_diagnostic` está disponível; não há arquivos, Git ou terminal.
+**Estado vigente (25/09/2026):** `connect quick programming` é uma composição opt-in publicada que pode anunciar READ, WRITE, Git review, Git index e Git commit somente após OAuth e aprovação owner-side explícita de uma managed worktree descartável. `connect quick` permanece diagnóstico e `connect quick read` permanece leitura. Nenhum modo habilita shell, branch, Git remoto ou `test.run` público; a aceitação operacional externa desta composição ainda é o bloco corrente, não um aceite de produção.
+
+**Registro histórico de 19/09/2026:** `connect quick` passou no preflight HTTPS na máquina do proprietário. Após corrigir a compatibilidade DCR, o ChatGPT solicitou autorização e o proprietário a aprovou no terminal; a interface passou a mostrar uma conta conectada. O proprietário comparou um `diagnosticID` aleatório devolvido na conversa com o ID idêntico no log local de `connection_diagnostic`, após um `tools/list` autenticado. A invocação MCP daquela sessão está comprovada por correlação; a identidade do cliente não foi atestada criptograficamente. Naquele estado, apenas `connection_diagnostic` estava disponível; não havia arquivos, Git ou terminal.
 
 O Cloudflare Quick Tunnel cria uma URL aleatória `https://...trycloudflare.com`, gratuitamente e sem conta ou domínio. É uma opção **exclusivamente para testes**; não oferece SLA, não suporta SSE e pode limitar requisições. O SignalSpace usa o transporte MCP de respostas HTTP JSON nesta fase. Consulte a [documentação oficial de Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/).
 
@@ -15,10 +17,9 @@ O Cloudflare Quick Tunnel cria uma URL aleatória `https://...trycloudflare.com`
 Enquanto a PR não for mesclada, execute a branch de desenvolvimento:
 
 ```bash
-git clone --branch feat/m1-local-mcp-diagnostic https://github.com/LuigiAPCPereira/SignalSpace.git
+git clone --branch codex/mvp-vertical-programming https://github.com/LuigiAPCPereira/SignalSpace.git
 cd SignalSpace
-go test ./...
-go run ./cmd/signalspace connect quick
+go run ./cmd/signalspace connect quick programming
 ```
 
 O SignalSpace explica que o túnel publicará um endereço acessível pela internet e solicita que você digite **`PUBLICAR`**. Qualquer outra resposta cancela a ação sem iniciar o túnel. Após a confirmação, o SignalSpace:
@@ -30,6 +31,8 @@ O SignalSpace explica que o túnel publicará um endereço acessível pela inter
 5. Apresenta o endpoint `https://<subdomínio>.trycloudflare.com/mcp` para cadastrar no ChatGPT Web, caso o plano e a configuração permitam conectar um servidor MCP personalizado.
 
 Quando o ChatGPT solicitar autorização, confira o nome declarado pelo cliente e a URL de retorno exibidos. Digite `approve IDENTIFICADOR` ou `deny IDENTIFICADOR` **no terminal que executa o SignalSpace**. O consentimento só prossegue após a decisão local. Não divulgue a URL a terceiros: a descoberta e a autorização são públicas e a identidade do proprietário depende de quem controla esse terminal.
+
+No modo `programming`, depois da troca OAuth, use o cliente exibido por `workspace clients` e solicite a managed worktree pelo console local com `workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref]`; confirme com `workspace approve-worktree <id>`. Para o ciclo Git, configure antes `workspace git-identity set <email> <display-name>`. O fluxo `workspace request-programming` é o caminho de checkout comum e não concede os escopos managed `git.index`/`git.commit`.
 
 ## Cadastro OAuth (DCR) no ChatGPT
 
@@ -45,7 +48,7 @@ A tela de configuração pode mostrar «Nenhuma ação de aplicativo disponível
 
 Para reproduzir a correlação de uma nova sessão, mantenha **o mesmo túnel e terminal abertos**; mencione o plugin numa nova conversa e solicite a execução de `connection_diagnostic`. O servidor imprime `Authenticated MCP tool discovery served: tools/list` quando atende uma lista autenticada e `Authenticated MCP connection_diagnostic handled: diagnosticID=...` ao responder à ferramenta. Compare o `diagnosticID` aleatório retornado no resultado com o ID do log: IDs iguais comprovam que a resposta observada veio daquela execução; não são uma atestação criptográfica de identidade do ChatGPT. Logs nunca incluem tokens ou argumentos. O teste do proprietário em 19/09/2026 encontrou IDs idênticos na resposta exibida e no evento do servidor; sem ID correlacionado em outra sessão, mantenha o resultado dessa nova sessão como **não verificado**, mesmo se outra conversa repetir `connected: true`.
 
-Essas mensagens não ativam arquivos, Git ou shell. A ausência de ações no painel deve ser tratada como uma questão separada da execução real; não habilite permissões mais amplas para resolver um problema visual.
+No modo diagnóstico/read, essas mensagens não ativam arquivos mutáveis, Git ou shell. No modo `programming`, arquivos e Git só aparecem após OAuth, escopos exatos e aprovação local de managed worktree; a ausência de ações no painel continua sendo uma questão separada da execução real e não deve ser resolvida ampliando permissões.
 
 ## DNS temporariamente indisponível
 
@@ -69,7 +72,7 @@ Pressione **Ctrl+C**. O SignalSpace fecha o servidor, encerra e aguarda o proces
 
 Uma nova execução gera outra URL, chave e registro de cliente. **Será necessário atualizar ou recriar a conexão no ChatGPT**; Quick Tunnel não oferece URL estável. A expiração dos tokens de 15 minutos e a ausência de refresh/revogação seguem limitações. O fluxo de diagnóstico foi correlacionado em uma sessão real do ChatGPT, sem garantia de continuidade em novas URLs ou de compatibilidade com outras contas. A aprovação no `doctor transport` não demonstra que o ChatGPT invocou uma ferramenta.
 
-**Proibido neste modo experimental:** compartilhar chaves OAuth; ativar ferramentas de shell, Git ou arquivos; tratar esta conexão como uma implantação de produção ou sem riscos. Esta documentação descreve um teste autorizado pelo usuário, não uma garantia de segurança para exposição contínua.
+**Proibido neste modo experimental:** compartilhar chaves OAuth; ativar shell, branch, Git remoto ou `test.run` público; tratar esta conexão como uma implantação de produção ou sem riscos. Arquivos e Git local só podem ser ativados pela composição `programming` com managed worktree e aprovação owner-side. Esta documentação descreve um teste autorizado pelo usuário, não uma garantia de segurança para exposição contínua.
 
 ## Diagnóstico seguro de conexão do cloudflared
 

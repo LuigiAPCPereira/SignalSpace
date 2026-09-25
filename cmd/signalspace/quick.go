@@ -64,7 +64,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	confirmation := "PUBLICAR"
 	if plan.consoleMode == workspaceConsoleProgramming {
 		confirmation = "PUBLICAR PROGRAMAÇÃO"
-		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública com READ + WRITE + GIT somente após OAuth e aprovação local explícita. Sem testes, shell, comandos ou mutações Git.")
+		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública com READ + WRITE + GIT (revisão, stage/unstage e commit local em managed worktree) somente após OAuth e aprovação local explícita. Sem branch, Git remoto, testes ou shell.")
 	} else if plan.workspaceReadScope != "" {
 		confirmation = "PUBLICAR LEITURA"
 		fmt.Fprintln(output, "Quick Tunnel experimental: a URL ficará pública. read_file poderá ler texto de uma pasta aprovada para um cliente OAuth; nunca use pastas com segredos nesta fase. Sem edição, Git ou shell.")
@@ -200,7 +200,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 		fmt.Fprintln(output, "A autorização requer approve <id> ou deny <id> neste terminal. ChatGPT Web ainda não foi verificado.")
 	}
 	if plan.consoleMode == workspaceConsoleProgramming {
-		fmt.Fprintln(output, "Programação experimental: workspace clients; workspace request-programming <client-id> <scope1,scope2,...> <absolute-path>; workspace approve-programming <id>. A concessão local é obrigatória; sem test.run, shell ou mutações Git.")
+		fmt.Fprintln(output, "Programação experimental: workspace clients; workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref]; workspace approve-worktree <id>; workspace git-identity set <email> <display-name>. A managed worktree e a concessão local são obrigatórias para filesystem e Git; sem branch, Git remoto, test.run público ou shell. Revogue com workspace revoke <session-id>.")
 	} else if plan.workspaceReadScope != "" {
 		fmt.Fprintln(output, "Leitura experimental: conclua OAuth de diagnóstico; workspace clients; workspace request <client-id> <absolute-path>; workspace approve <id>. Uma nova autorização OAuth com escopo de leitura é obrigatória; informe o session ID da concessão ao chat somente se quiser usar a ferramenta.")
 	} else {
