@@ -32,6 +32,7 @@ var (
 	ErrManagedWorkspaceNotFound     = errors.New("managed workspace not found")
 	ErrManagedWorkspaceMissing      = errors.New("managed workspace is missing")
 	ErrManagedWorkspaceDirty        = errors.New("managed workspace is dirty")
+	ErrManagedWorkspaceLocalCommits = errors.New("managed workspace contains local commits")
 	ErrManagedWorkspaceActive       = errors.New("managed workspace is active")
 	ErrManagedWorkspaceStale        = errors.New("managed workspace source is stale")
 	ErrManagedWorkspaceInconsistent = errors.New("managed workspace metadata is inconsistent")
@@ -46,13 +47,15 @@ var (
 // ManagedWorkspaceDescriptor é seguro para exibição e transporte: não inclui
 // raiz do checkout, raiz de origem, .git ou qualquer caminho absoluto.
 type ManagedWorkspaceDescriptor struct {
-	WorkspaceID string                `json:"workspace_id"`
-	Mode        string                `json:"mode"`
-	State       ManagedWorkspaceState `json:"state"`
-	Active      bool                  `json:"active"`
-	BaseRef     string                `json:"base_ref"`
-	BaseSHA     string                `json:"base_sha"`
-	DirtySource bool                  `json:"dirty_source"`
+	WorkspaceID     string                `json:"workspace_id"`
+	Mode            string                `json:"mode"`
+	State           ManagedWorkspaceState `json:"state"`
+	Active          bool                  `json:"active"`
+	BaseRef         string                `json:"base_ref"`
+	BaseSHA         string                `json:"base_sha"`
+	DirtySource     bool                  `json:"dirty_source"`
+	HeadSHA         string                `json:"head_sha,omitempty"`
+	HasLocalCommits bool                  `json:"has_local_commits"`
 }
 
 type managedWorkspaceMetadata struct {
@@ -231,6 +234,11 @@ func (m *ManagedWorktreeManager) Activate(workspaceID, clientID string, grants *
 	if err != nil {
 		return "", ManagedWorkspaceDescriptor{}, err
 	}
+	if containsManagedScope(canonical, ScopeGitCommit) {
+		if _, err := m.gitIdentityLocked(); err != nil {
+			return "", ManagedWorkspaceDescriptor{}, errors.Join(ErrGitIdentityMissing, err)
+		}
+	}
 	metadata := WorkspaceMetadata{Mode: WorkspaceModeWorktree, ManagedWorkspaceID: record.WorkspaceID, BaseRef: record.BaseRef, BaseSHA: record.BaseSHA, DirtySource: record.DirtySource}
 	sessionID, err := grants.GrantManagedWithScopes(record.ManagedRoot, clientID, metadata, canonical...)
 	if err != nil {
@@ -316,6 +324,13 @@ func (m *ManagedWorktreeManager) Remove(workspaceID string) error {
 	}
 	if err := m.validateManagedAssociation(record); err != nil {
 		return errors.Join(ErrManagedWorkspaceInconsistent, err)
+	}
+	gitState, err := m.inspectManagedGitState(record)
+	if err != nil {
+		return errors.Join(ErrManagedWorkspaceInconsistent, err)
+	}
+	if gitState.HasLocalCommits {
+		return ErrManagedWorkspaceLocalCommits
 	}
 	if err := m.runner.run(record.SourceRoot, "worktree", "remove", record.ManagedRoot); err != nil {
 		return err
@@ -475,18 +490,8 @@ func (m *ManagedWorktreeManager) validateManagedAssociation(record *managedWorks
 	if err != nil || sourceCommon != managedCommon {
 		return ErrManagedWorkspaceInconsistent
 	}
-	if output, err := m.runner.capture(record.ManagedRoot, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil || strings.TrimSpace(output) != "" {
-		return ErrManagedWorkspaceInconsistent
-	} else if code, ok := managedGitExitCode(err); !ok || code != 1 {
-		return ErrManagedWorkspaceInconsistent
-	}
-	if output, err := m.runner.capture(record.ManagedRoot, "rev-parse", "HEAD"); err != nil || strings.TrimSpace(output) != record.BaseSHA {
-		return ErrManagedWorkspaceInconsistent
-	}
-	if err := m.validateNoUnsupportedFeatures(record.ManagedRoot); err != nil {
-		return err
-	}
-	return nil
+	_, err = m.inspectManagedGitState(record)
+	return err
 }
 
 func (m *ManagedWorktreeManager) gitCommonDir(directory string) (string, error) {
@@ -545,7 +550,11 @@ func (m *ManagedWorktreeManager) descriptorLocked(record *managedWorkspaceMetada
 	if m.activeID == record.WorkspaceID {
 		state = ManagedWorkspaceActive
 	}
-	return ManagedWorkspaceDescriptor{WorkspaceID: record.WorkspaceID, Mode: record.Mode, State: state, Active: m.activeID == record.WorkspaceID, BaseRef: record.BaseRef, BaseSHA: record.BaseSHA, DirtySource: record.DirtySource}
+	gitState, err := m.inspectManagedGitState(record)
+	if err != nil {
+		return ManagedWorkspaceDescriptor{WorkspaceID: record.WorkspaceID, Mode: record.Mode, State: ManagedWorkspaceInconsistent, Active: m.activeID == record.WorkspaceID, BaseRef: record.BaseRef, BaseSHA: record.BaseSHA, DirtySource: record.DirtySource}
+	}
+	return ManagedWorkspaceDescriptor{WorkspaceID: record.WorkspaceID, Mode: record.Mode, State: state, Active: m.activeID == record.WorkspaceID, BaseRef: record.BaseRef, BaseSHA: record.BaseSHA, DirtySource: record.DirtySource, HeadSHA: gitState.HeadSHA, HasLocalCommits: gitState.HasLocalCommits}
 }
 
 func (m *ManagedWorktreeManager) metadataPath(workspaceID string) string {

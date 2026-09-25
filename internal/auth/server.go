@@ -29,6 +29,7 @@ const (
 	workspaceWriteScope  = "signalspace:workspace.write"
 	gitReviewScope       = "signalspace:git.review"
 	gitIndexScope        = "signalspace:git.index"
+	gitCommitScope       = "signalspace:git.commit"
 	testRunScope         = "signalspace:test.run"
 	maxRegistrationBytes = 16 << 10
 	maxFormBytes         = 8 << 10
@@ -64,7 +65,8 @@ var (
 {{if .Test}}<p><strong>Permissão adicional:</strong> executar o teste predefinido do projeto autorizado. Os testes podem executar código com os privilégios do usuário. O workspace não é sandbox.</p>{{end}}
 {{if .Git}}<p><strong>Permissão adicional:</strong> inspecionar status e diff Git do workspace. O diff pode conter conteúdo sensível. Esta permissão não autoriza commit ou push.</p>{{end}}
 {{if .GitIndex}}<p><strong>Permissão adicional:</strong> fazer staging/unstaging explícito de paths literais no índice Git da managed worktree aprovada. Esta permissão não cria commit, branch ou push.</p>{{end}}
-{{if and (not .Read) (not .Write) (not .Test) (not .Git) (not .GitIndex)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
+{{if .GitCommit}}<p><strong>Permissão adicional:</strong> criar commits locais somente do que já está staged na managed worktree aprovada, usando a identidade local do proprietário. Esta permissão não roda hooks, signing, branch, shell ou push.</p>{{end}}
+{{if and (not .Read) (not .Write) (not .Test) (not .Git) (not .GitIndex) (not .GitCommit)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
 <p>Escopos solicitados: <code>{{.Scope}}</code></p>
 <p>Destino do retorno: <code>{{.Redirect}}</code></p>
 <p id="authorization-status" role="status" aria-live="polite">Confirme na janela do terminal em que o SignalSpace está em execução.</p>
@@ -106,6 +108,10 @@ type Config struct {
 	// emitido quando o grant local corrente inclui a managed worktree aprovada.
 	GitIndexScope    string
 	CanIssueGitIndex func(clientID string) bool
+	// GitCommitScope é uma fronteira independente para commits locais
+	// staged-only em managed worktrees.
+	GitCommitScope    string
+	CanIssueGitCommit func(clientID string) bool
 	// TestScope é uma extensão experimental: só pode ser oferecida junto de um
 	// verificador local explícito. A configuração padrão nunca a preenche.
 	TestScope    string
@@ -181,6 +187,9 @@ func New(config Config) (*Server, error) {
 	}
 	if (config.GitIndexScope != "" && (config.Scope != diagnosticScope || config.GitIndexScope != gitIndexScope || config.CanIssueGitIndex == nil || config.OnRequest == nil)) || (config.GitIndexScope == "" && config.CanIssueGitIndex != nil) {
 		return nil, errors.New("Git index scope requires an explicit local grant validator")
+	}
+	if (config.GitCommitScope != "" && (config.Scope != diagnosticScope || config.GitCommitScope != gitCommitScope || config.CanIssueGitCommit == nil || config.OnRequest == nil)) || (config.GitCommitScope == "" && config.CanIssueGitCommit != nil) {
+		return nil, errors.New("Git commit scope requires an explicit local grant validator")
 	}
 	if (config.TestScope != "" && (config.Scope != diagnosticScope || config.TestScope != testRunScope || config.CanIssueTest == nil || config.OnRequest == nil)) || (config.TestScope == "" && config.CanIssueTest != nil) {
 		return nil, errors.New("test execution scope requires an explicit local grant validator")
@@ -375,6 +384,9 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	if s.config.GitIndexScope != "" {
 		scopes = append(scopes, s.config.GitIndexScope)
 	}
+	if s.config.GitCommitScope != "" {
+		scopes = append(scopes, s.config.GitCommitScope)
+	}
 	if s.config.TestScope != "" {
 		scopes = append(scopes, s.config.TestScope)
 	}
@@ -382,11 +394,12 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 }
 
 type capabilities struct {
-	Read     bool
-	Write    bool
-	Git      bool
-	GitIndex bool
-	Test     bool
+	Read      bool
+	Write     bool
+	Git       bool
+	GitIndex  bool
+	GitCommit bool
+	Test      bool
 }
 
 // requestedCapabilities aceita qualquer subconjunto explicitamente configurado
@@ -399,7 +412,7 @@ func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
 	if len(parts) == 0 || strings.Join(parts, " ") != scope || parts[0] != s.config.Scope {
 		return capabilities{}, false
 	}
-	configured := make([]string, 0, 5)
+	configured := make([]string, 0, 6)
 	configured = append(configured, s.config.Scope)
 	if s.config.ReadScope != "" {
 		configured = append(configured, s.config.ReadScope)
@@ -412,6 +425,9 @@ func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
 	}
 	if s.config.GitIndexScope != "" {
 		configured = append(configured, s.config.GitIndexScope)
+	}
+	if s.config.GitCommitScope != "" {
+		configured = append(configured, s.config.GitCommitScope)
 	}
 	if s.config.TestScope != "" {
 		configured = append(configured, s.config.TestScope)
@@ -442,6 +458,8 @@ func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
 			result.Git = true
 		case s.config.GitIndexScope:
 			result.GitIndex = true
+		case s.config.GitCommitScope:
+			result.GitCommit = true
 		case s.config.TestScope:
 			result.Test = true
 		}
@@ -468,6 +486,10 @@ func (s *Server) gitAllowed(clientID string) bool {
 
 func (s *Server) gitIndexAllowed(clientID string) bool {
 	return s.config.CanIssueGitIndex != nil && s.config.CanIssueGitIndex(clientID)
+}
+
+func (s *Server) gitCommitAllowed(clientID string) bool {
+	return s.config.CanIssueGitCommit != nil && s.config.CanIssueGitCommit(clientID)
 }
 
 func (s *Server) testAllowed(clientID string) bool {
@@ -613,7 +635,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		bad(w, 400, "invalid_redirect_uri")
 		return
 	}
-	if (requested.Read && !s.readAllowed(id)) || (requested.Write && !s.writeAllowed(id)) || (requested.Git && !s.gitAllowed(id)) || (requested.GitIndex && !s.gitIndexAllowed(id)) || (requested.Test && !s.testAllowed(id)) {
+	if (requested.Read && !s.readAllowed(id)) || (requested.Write && !s.writeAllowed(id)) || (requested.Git && !s.gitAllowed(id)) || (requested.GitIndex && !s.gitIndexAllowed(id)) || (requested.GitCommit && !s.gitCommitAllowed(id)) || (requested.Test && !s.testAllowed(id)) {
 		bad(w, 403, "access_denied")
 		return
 	}
@@ -654,8 +676,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = consentPage.Execute(w, struct {
 		ID, Client, ClientID, Redirect, CSRF, Scope string
-		Read, Write, Test, Git, GitIndex            bool
-	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git, requested.GitIndex})
+		Read, Write, Test, Git, GitIndex, GitCommit bool
+	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git, requested.GitIndex, requested.GitCommit})
 }
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -694,7 +716,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requested, supported := s.requestedCapabilities(p.Scope)
-	if !supported || (requested.Read && !s.readAllowed(p.ClientID)) || (requested.Write && !s.writeAllowed(p.ClientID)) || (requested.Git && !s.gitAllowed(p.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(p.ClientID)) || (requested.Test && !s.testAllowed(p.ClientID)) {
+	if !supported || (requested.Read && !s.readAllowed(p.ClientID)) || (requested.Write && !s.writeAllowed(p.ClientID)) || (requested.Git && !s.gitAllowed(p.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(p.ClientID)) || (requested.GitCommit && !s.gitCommitAllowed(p.ClientID)) || (requested.Test && !s.testAllowed(p.ClientID)) {
 		s.mu.Unlock()
 		bad(w, 403, "access_denied")
 		return
@@ -778,7 +800,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requested, supported := s.requestedCapabilities(g.Scope)
-	if !supported || (requested.Read && !s.readAllowed(g.ClientID)) || (requested.Write && !s.writeAllowed(g.ClientID)) || (requested.Git && !s.gitAllowed(g.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(g.ClientID)) || (requested.Test && !s.testAllowed(g.ClientID)) {
+	if !supported || (requested.Read && !s.readAllowed(g.ClientID)) || (requested.Write && !s.writeAllowed(g.ClientID)) || (requested.Git && !s.gitAllowed(g.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(g.ClientID)) || (requested.GitCommit && !s.gitCommitAllowed(g.ClientID)) || (requested.Test && !s.testAllowed(g.ClientID)) {
 		bad(w, 400, "invalid_grant")
 		return
 	}

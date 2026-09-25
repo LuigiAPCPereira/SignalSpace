@@ -83,7 +83,7 @@ func normalizeCapabilities(managed bool, scopes ...string) ([]string, error) {
 			return nil, ErrInvalidCapabilities
 		}
 		switch scope {
-		case ScopeRead, ScopeWrite, ScopeGit, ScopeTest:
+		case ScopeRead, ScopeWrite, ScopeGit, ScopeGitCommit, ScopeTest:
 		case ScopeGitIndex:
 			if !managed {
 				return nil, ErrInvalidCapabilities
@@ -96,7 +96,7 @@ func normalizeCapabilities(managed bool, scopes ...string) ([]string, error) {
 		}
 		wanted[scope] = struct{}{}
 	}
-	canonical := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeTest}
+	canonical := []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeGitCommit, ScopeTest}
 	result := make([]string, 0, len(wanted))
 	for _, scope := range canonical {
 		if _, exists := wanted[scope]; exists {

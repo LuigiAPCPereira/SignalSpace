@@ -59,6 +59,7 @@ type OAuthConfig struct {
 	gitReviewer     WorkspaceGitReviewer
 	gitStatusReader WorkspaceGitStatusReader
 	gitIndexer      WorkspaceGitIndexMutator
+	gitCommitter    WorkspaceGitCommitter
 	// testRunner é deliberadamente não exportado: execução só pode ser
 	// composta pelo harness automatizado deste pacote nesta etapa.
 	testRunner WorkspaceTestRunner
@@ -89,6 +90,7 @@ type ProgrammingPorts struct {
 	GitReviewer               WorkspaceGitReviewer
 	GitStatusReader           WorkspaceGitStatusReader
 	GitIndexer                WorkspaceGitIndexMutator
+	GitCommitter              WorkspaceGitCommitter
 }
 
 // NewOAuthProgrammingHandler compõe explicitamente a superfície pública de
@@ -96,8 +98,8 @@ type ProgrammingPorts struct {
 // fornecer as portas vinculadas à mesma concessão; não existe ativação
 // equivalente por parâmetro HTTP, metadata OAuth ou configuração genérica.
 func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
-	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.WorkspaceCopier == nil || ports.WorkspaceMover == nil || ports.WorkspaceFileDeleter == nil || ports.WorkspaceDirectoryDeleter == nil || ports.WorkspacePatchApplier == nil || ports.GitReviewer == nil || ports.GitStatusReader == nil || ports.GitIndexer == nil {
-		return nil, errors.New("programming composition requires all typed filesystem, read, write, Git review and Git index ports")
+	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.WorkspaceCopier == nil || ports.WorkspaceMover == nil || ports.WorkspaceFileDeleter == nil || ports.WorkspaceDirectoryDeleter == nil || ports.WorkspacePatchApplier == nil || ports.GitReviewer == nil || ports.GitStatusReader == nil || ports.GitIndexer == nil || ports.GitCommitter == nil {
+		return nil, errors.New("programming composition requires all typed filesystem, read, write, Git review, Git index and Git commit ports")
 	}
 	if config.testRunner != nil {
 		return nil, errors.New("programming composition cannot publish test execution")
@@ -119,6 +121,7 @@ func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, veri
 	config.gitReviewer = ports.GitReviewer
 	config.gitStatusReader = ports.GitStatusReader
 	config.gitIndexer = ports.GitIndexer
+	config.gitCommitter = ports.GitCommitter
 	return NewOAuthHandler(config, verifier)
 }
 
@@ -150,7 +153,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		return nil, errors.New("typed workspace write tools require workspace writer")
 	}
 	var identityVerifier IdentityVerifier
-	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.workspaceCopier != nil || config.workspaceMover != nil || config.workspaceFileDeleter != nil || config.workspaceDirectoryDeleter != nil || config.workspacePatchApplier != nil || config.gitReviewer != nil || config.gitStatusReader != nil || config.gitIndexer != nil || config.testRunner != nil {
+	if config.WorkspaceReader != nil || config.workspaceWriter != nil || config.workspaceStatter != nil || config.workspaceFinder != nil || config.workspaceSearcher != nil || config.workspaceDirectoryCreator != nil || config.workspaceTextCreator != nil || config.workspaceTextUpdater != nil || config.workspaceCopier != nil || config.workspaceMover != nil || config.workspaceFileDeleter != nil || config.workspaceDirectoryDeleter != nil || config.workspacePatchApplier != nil || config.gitReviewer != nil || config.gitStatusReader != nil || config.gitIndexer != nil || config.gitCommitter != nil || config.testRunner != nil {
 		identityVerifier, _ = verifier.(IdentityVerifier)
 		if identityVerifier == nil {
 			return nil, errors.New("workspace capabilities require verified OAuth client identity")
@@ -171,6 +174,9 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 	}
 	if config.gitIndexer != nil {
 		scopes = append(scopes, gitIndexScope)
+	}
+	if config.gitCommitter != nil {
+		scopes = append(scopes, gitCommitScope)
 	}
 	if config.testRunner != nil {
 		scopes = append(scopes, testRunScope)
@@ -322,6 +328,27 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				gitIndexAccess.advertise = true
 			}
 		}
+		var gitCommitAccess *gitCommitToolAccess
+		if config.gitCommitter != nil {
+			accessToken := strings.TrimPrefix(bearer, "Bearer ")
+			gitCommitAccess = &gitCommitToolAccess{
+				committer: config.gitCommitter,
+				verify: func(ctx context.Context) (VerifiedIdentity, error) {
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitCommitScope, config.OwnerSubject)
+					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
+						if err == nil {
+							err = errInvalidToken
+						}
+						return VerifiedIdentity{}, err
+					}
+					return identity, nil
+				},
+				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, gitCommitScope),
+			}
+			if _, err := gitCommitAccess.verify(r.Context()); err == nil {
+				gitCommitAccess.advertise = true
+			}
+		}
 		var testAccess *testToolAccess
 		if config.testRunner != nil {
 			accessToken := strings.TrimPrefix(bearer, "Bearer ")
@@ -343,7 +370,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				testAccess.advertise = true
 			}
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, testAccess)
+		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess)
 	}), nil
 }
 

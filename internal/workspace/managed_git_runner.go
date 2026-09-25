@@ -58,11 +58,12 @@ func (r managedGitRunner) capture(directory string, args ...string) (string, err
 		"-c", "core.fsmonitor=false",
 		"-c", "core.untrackedCache=false",
 		"-c", "core.preloadIndex=false",
+		"-c", "commit.gpgSign=false",
 	}
 	gitArgs = append(gitArgs, args...)
 	cmd := exec.CommandContext(ctx, "git", gitArgs...)
 	cmd.Dir = directory
-	cmd.Env = managedGitEnvironment(cmd.Environ())
+	cmd.Env = managedGitEnvironment(cmd.Environ(), nil)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var output limitedManagedGitBuffer
 	output.limit = managedGitOutput
@@ -100,7 +101,7 @@ func (r managedGitRunner) captureOutput(directory string, limit int, args ...str
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", r.arguments(args...)...)
 	cmd.Dir = directory
-	cmd.Env = managedGitEnvironment(cmd.Environ())
+	cmd.Env = managedGitEnvironment(cmd.Environ(), nil)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stdout, stderr limitedManagedGitBuffer
 	stdout.limit = limit
@@ -135,11 +136,15 @@ func (r managedGitRunner) captureOutput(directory string, limit int, args ...str
 }
 
 func (r managedGitRunner) captureInput(directory string, input []byte, args ...string) ([]byte, bool, error) {
+	return r.captureInputEnv(directory, input, nil, args...)
+}
+
+func (r managedGitRunner) captureInputEnv(directory string, input []byte, overrides map[string]string, args ...string) ([]byte, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), managedGitTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", r.arguments(args...)...)
 	cmd.Dir = directory
-	cmd.Env = managedGitEnvironment(cmd.Environ())
+	cmd.Env = managedGitEnvironment(cmd.Environ(), overrides)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdin = bytes.NewReader(input)
 	var stdout, stderr limitedManagedGitBuffer
@@ -181,20 +186,28 @@ func (r managedGitRunner) arguments(args ...string) []string {
 		"-c", "core.fsmonitor=false",
 		"-c", "core.untrackedCache=false",
 		"-c", "core.preloadIndex=false",
+		"-c", "commit.gpgSign=false",
 	}
 	return append(gitArgs, args...)
 }
 
-func managedGitEnvironment(environment []string) []string {
+func managedGitEnvironment(environment []string, overrides map[string]string) []string {
 	filtered := make([]string, 0, len(environment)+8)
+	keysToOverride := make(map[string]struct{}, len(overrides))
+	for key := range overrides {
+		keysToOverride[key] = struct{}{}
+	}
 	for _, entry := range environment {
 		key, _, _ := strings.Cut(entry, "=")
 		if strings.HasPrefix(key, "GIT_") {
 			continue
 		}
+		if _, replace := keysToOverride[key]; replace {
+			continue
+		}
 		filtered = append(filtered, entry)
 	}
-	return append(filtered,
+	filtered = append(filtered,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_SYSTEM=/dev/null",
 		"GIT_CONFIG_GLOBAL=/dev/null",
@@ -202,9 +215,14 @@ func managedGitEnvironment(environment []string) []string {
 		"GIT_PAGER=cat",
 		"GIT_EDITOR=true",
 		"GIT_SEQUENCE_EDITOR=true",
+		"GIT_NO_REPLACE_OBJECTS=1",
 		"GIT_OPTIONAL_LOCKS=0",
 		"LC_ALL=C",
 	)
+	for key, value := range overrides {
+		filtered = append(filtered, key+"="+value)
+	}
+	return filtered
 }
 
 type limitedManagedGitBuffer struct {

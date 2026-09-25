@@ -153,6 +153,12 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeGitIndex)
 		}
 	}
+	if plan.gitCommitScope != "" {
+		authConfig.GitCommitScope = plan.gitCommitScope
+		authConfig.CanIssueGitCommit = func(clientID string) bool {
+			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeGitCommit)
+		}
+	}
 	authorization, err := auth.New(authConfig)
 	if err != nil {
 		return nil, nil, nil, err
@@ -230,6 +236,7 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 			GitReviewer:               console.programmingGitReviewer,
 			GitStatusReader:           console.programmingGitReviewer,
 			GitIndexer:                newWorkspaceGitIndexOperator(console.grants),
+			GitCommitter:              newWorkspaceGitCommitter(console.grants, console.managed),
 		}, verifier)
 	} else {
 		protected, err = mcp.NewOAuthHandler(mcpConfig, verifier)

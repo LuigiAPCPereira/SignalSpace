@@ -136,6 +136,8 @@ func capabilityDescriptions(scopes []string) string {
 			descriptions = append(descriptions, "Git: inspeção de status/diff potencialmente sensíveis, sem commit/push")
 		case workspace.ScopeGitIndex:
 			descriptions = append(descriptions, "índice Git: staging/unstaging explícito da managed worktree; sem commit, branch ou push")
+		case workspace.ScopeGitCommit:
+			descriptions = append(descriptions, "commit Git: cria histórico local staged-only na managed worktree; sem hooks, signing, branch ou push")
 		case workspace.ScopeTest:
 			descriptions = append(descriptions, "execução: go test ./... com privilégios do usuário; não é sandbox")
 		}
@@ -180,9 +182,9 @@ func (c *workspaceConsole) printWorkspaceStatusLimits(output io.Writer, scopes [
 	if !c.readEnabled && c.programmingApproval == nil {
 		fmt.Fprintln(output, "Modo diagnóstico: uma concessão interna não publica read_file; o MCP permanece limitado a connection_diagnostic.")
 	}
-	if c.programmingApproval != nil && (containsScope(scopes, workspace.ScopeWrite) || containsScope(scopes, workspace.ScopeGit) || containsScope(scopes, workspace.ScopeGitIndex) || containsScope(scopes, workspace.ScopeTest)) {
+	if c.programmingApproval != nil && (containsScope(scopes, workspace.ScopeWrite) || containsScope(scopes, workspace.ScopeGit) || containsScope(scopes, workspace.ScopeGitIndex) || containsScope(scopes, workspace.ScopeGitCommit) || containsScope(scopes, workspace.ScopeTest)) {
 		if c.programmingGitReviewer != nil {
-			fmt.Fprintln(output, "Escopos públicos opt-in ativos para READ, WRITE, Git review e Git index managed-only; test.run, shell, commit, branch e Git remoto permanecem fora da composição.")
+			fmt.Fprintln(output, "Escopos públicos opt-in ativos para READ, WRITE, Git review, Git index e Git commit managed-only; shell, branch e Git remoto permanecem fora da composição.")
 		} else {
 			fmt.Fprintln(output, "Escopos de programação são experimentais e não estão ativados remotamente.")
 		}
@@ -233,13 +235,64 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 	}
 	if !hasArgument || argument == "" {
 		if c.programmingApproval != nil {
-			fmt.Fprintln(output, "use workspace clients | workspace status | workspace worktrees | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref] | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace approve-worktree <id> | workspace approve-worktree-resume <id> | workspace cancel-worktree <id> | workspace remove-worktree <workspace-id> | workspace revoke current|<session-id>")
+			fmt.Fprintln(output, "use workspace clients | workspace status | workspace git-identity show|set <email> <display-name>|clear | workspace worktrees | workspace request <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path> | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref] | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id> | workspace approve <id> | workspace cancel <id> | workspace approve-programming <id> | workspace cancel-programming <id> | workspace approve-worktree <id> | workspace approve-worktree-resume <id> | workspace cancel-worktree <id> | workspace remove-worktree <workspace-id> | workspace revoke current|<session-id>")
 		} else {
 			fmt.Fprintln(output, "use workspace clients | workspace status | workspace worktrees | workspace request <client-id> <absolute-path> | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref] | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id> | workspace approve <id> | workspace cancel <id> | workspace approve-worktree <id> | workspace approve-worktree-resume <id> | workspace cancel-worktree <id> | workspace remove-worktree <workspace-id> | workspace revoke current|<session-id>")
 		}
 		return true
 	}
 	switch operation {
+	case "git-identity":
+		if c.managed == nil || !hasArgument {
+			fmt.Fprintln(output, "use workspace git-identity show | workspace git-identity set <email> <display-name> | workspace git-identity clear")
+			return true
+		}
+		subcommand, value, hasValue := strings.Cut(argument, " ")
+		switch subcommand {
+		case "show":
+			if hasValue {
+				fmt.Fprintln(output, "use workspace git-identity show")
+				return true
+			}
+			identity, err := c.managed.GitIdentity()
+			if err != nil {
+				if errors.Is(err, workspace.ErrGitIdentityMissing) {
+					fmt.Fprintln(output, "Git identity: not configured")
+				} else {
+					fmt.Fprintf(output, "Git identity unavailable: %v\n", err)
+				}
+				return true
+			}
+			fmt.Fprintf(output, "Git identity: name=%q email=%q\n", identity.DisplayName, identity.Email)
+		case "set":
+			if !hasValue || strings.TrimSpace(value) == "" {
+				fmt.Fprintln(output, "use workspace git-identity set <email> <display-name>")
+				return true
+			}
+			email, displayName, valid := strings.Cut(value, " ")
+			if !valid || strings.TrimSpace(displayName) == "" {
+				fmt.Fprintln(output, "use workspace git-identity set <email> <display-name>")
+				return true
+			}
+			if err := c.managed.SetGitIdentity(email, strings.TrimSpace(displayName)); err != nil {
+				fmt.Fprintf(output, "Git identity rejected: %v\n", err)
+				return true
+			}
+			fmt.Fprintln(output, "Git identity configured locally")
+		case "clear":
+			if hasValue {
+				fmt.Fprintln(output, "use workspace git-identity clear")
+				return true
+			}
+			if err := c.managed.ClearGitIdentity(); err != nil {
+				fmt.Fprintf(output, "Git identity clear rejected: %v\n", err)
+				return true
+			}
+			fmt.Fprintln(output, "Git identity cleared; future commits fail closed")
+		default:
+			fmt.Fprintln(output, "use workspace git-identity show | workspace git-identity set <email> <display-name> | workspace git-identity clear")
+		}
+		return true
 	case "worktrees":
 		if c.managed == nil {
 			fmt.Fprintln(output, "managed worktree lifecycle unavailable")

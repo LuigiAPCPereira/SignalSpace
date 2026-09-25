@@ -36,7 +36,7 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *
 	if err := json.Unmarshal(metadata.Body.Bytes(), &metadataPayload); err != nil {
 		t.Fatal(err)
 	}
-	wantScopes := []string{compositionDiagnosticScope, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex}
+	wantScopes := []string{compositionDiagnosticScope, workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex, workspace.ScopeGitCommit}
 	if strings.Join(metadataPayload.Scopes, " ") != strings.Join(wantScopes, " ") {
 		t.Fatalf("unexpected programming metadata scopes: %v", metadataPayload.Scopes)
 	}

@@ -28,19 +28,20 @@ func (r *countedReader) Read([]byte) (int, error) {
 
 func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 	tests := []struct {
-		name          string
-		mode          compositionMode
-		readScope     string
-		consoleMode   workspaceConsoleMode
-		validator     compositionValidatorMode
-		mcpAddress    string
-		writeScope    string
-		gitScope      string
-		gitIndexScope string
+		name           string
+		mode           compositionMode
+		readScope      string
+		consoleMode    workspaceConsoleMode
+		validator      compositionValidatorMode
+		mcpAddress     string
+		writeScope     string
+		gitScope       string
+		gitIndexScope  string
+		gitCommitScope string
 	}{
-		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", "", ""},
-		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", "", ""},
-		{"programming", compositionProgramming, workspace.ScopeRead, workspaceConsoleProgramming, compositionLocalOAuthJWTValidator, admin.PublicAddress, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex},
+		{"diagnostic", compositionDiagnostic, "", workspaceConsoleApprovalsOnly, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", "", "", ""},
+		{"read", compositionRead, workspace.ScopeRead, workspaceConsoleRead, compositionLocalOAuthJWTValidator, admin.PublicAddress, "", "", "", ""},
+		{"programming", compositionProgramming, workspace.ScopeRead, workspaceConsoleProgramming, compositionLocalOAuthJWTValidator, admin.PublicAddress, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex, workspace.ScopeGitCommit},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -48,7 +49,7 @@ func TestCompositionPolicyAllowsOnlyDiagnosticAndRead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if plan.mode != test.mode || plan.oauthScope != compositionDiagnosticScope || plan.workspaceReadScope != test.readScope || plan.workspaceWriteScope != test.writeScope || plan.gitReviewScope != test.gitScope || plan.gitIndexScope != test.gitIndexScope || plan.consoleMode != test.consoleMode || plan.validatorMode != test.validator || plan.mcpAddress != test.mcpAddress {
+			if plan.mode != test.mode || plan.oauthScope != compositionDiagnosticScope || plan.workspaceReadScope != test.readScope || plan.workspaceWriteScope != test.writeScope || plan.gitReviewScope != test.gitScope || plan.gitIndexScope != test.gitIndexScope || plan.gitCommitScope != test.gitCommitScope || plan.consoleMode != test.consoleMode || plan.validatorMode != test.validator || plan.mcpAddress != test.mcpAddress {
 				t.Fatalf("unexpected composition plan: %+v", plan)
 			}
 		})
