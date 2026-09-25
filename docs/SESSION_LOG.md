@@ -2,6 +2,14 @@
 
 Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), Git/CI. Comportamento: [produto](PRODUCT.md), [workspace](WORKSPACE_SECURITY.md), [contrato admin](LOCAL_ADMIN_AUTHORIZATION.md). Autoridade de IDs/estado: [TASKLIST](../TASKLIST.md), checkpoint derivado [PROJECT_STATE](PROJECT_STATE.md). Não inventar eventos.
 
+## 25/09/2026 — aceite operacional externo programming — SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001
+
+- A ref foi revalidada em `codex/mvp-vertical-programming`; a correção publicada `a0fada0141c314037ec09037b4fb7214d3f3bded` alinhou as mensagens do entrypoint programming e foi confirmada no remoto live. Os dois patches protegidos permaneceram não rastreados, não aplicados e intocados.
+- Em fixture Git descartável, o SignalSpace iniciou com Quick Tunnel HTTPS real. O aplicativo MCP foi criado no ChatGPT Web; a aprovação owner-side local do pedido OAuth inicial foi registrada e a página do provedor chegou a `Concluindo autorização…`. Não houve retorno ao callback da conversa. `workspace clients` informou ausência de cliente OAuth com token emitido nesta instância.
+- O aplicativo não apareceu na composição da conversa após o cadastro. A conta Web observada era Plus, e a orientação exibida apontou que escrita/modificação MCP dependia do suporte beta de planos Business/Enterprise/Edu. Isso é o bloqueio de interoperabilidade observado; não foi inferida falha no contrato local nem criada ampliação de capability.
+- Não houve token programming, grant, sessão MCP externa, managed worktree, chamada READ/WRITE/filesystem/Git, revogação ou negação. Não houve bypass TLS/OAuth, edição de credencial, workspace real, shell, `test.run`, branch, Git remoto, merge, rebase, reset, clean, stash, fetch, pull, deploy ou CI.
+- Limpeza confirmada: processo SignalSpace/cloudflared encerrado, portas `7676`/`7677` livres, estado Quick temporário ausente e fixture descartável removida. O estado final é **BLOQUEADO/PARCIAL**; a próxima ação depende de ambiente ChatGPT Web com suporte efetivo à escrita/modificação MCP e exigirá nova URL Quick Tunnel.
+
 ## 19–20/09/2026 — diagnóstico e leitura experimental (SS-BE-001)
 
 - Proprietário relatou conexão OAuth com `diagnosticID` correlacionado após `tools/list`; [QUICK_TUNNEL.md](QUICK_TUNNEL.md) e PR. Software não atestado.

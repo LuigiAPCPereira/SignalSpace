@@ -1,6 +1,12 @@
 # Fronteira de workspace — leitura e filesystem tipado opt-in
 
-**Estado de validação (25/09/2026):** `programming` é a composição opt-in publicada para onze tools de workspace tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`, revisão Git, Git index e Git commit. O slice estrutural foi publicado em `3628d2f` e o Git commit v1 está publicado em `0420c9a`; esta missão valida operacionalmente a composição em workspace descartável. Isso ainda não é aceite de produção nem valida workspace real do proprietário, CI, merge ou deploy. `diagnostic` e `read` continuam sem write ou Git mutável.
+**Estado de validação (25/09/2026):** `programming` é a composição opt-in publicada para onze tools de workspace tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`, revisão Git, Git index e Git commit. O slice estrutural foi publicado em `3628d2f`, o Git commit v1 em `0420c9a` e a correção corrente em `a0fada0`; o aceite externo desta composição foi tentado em workspace descartável e ficou bloqueado antes do token. Isso ainda não é aceite de produção nem valida workspace real do proprietário, CI, merge ou deploy. `diagnostic` e `read` continuam sem write ou Git mutável.
+
+## Aceite operacional externo programming — 25/09/2026
+
+A missão usou somente fixture descartável e Quick Tunnel HTTPS real. O aplicativo MCP foi criado no ChatGPT Web e a decisão owner-side local do pedido OAuth inicial foi registrada. O fluxo, contudo, permaneceu em `Concluindo autorização…`, sem callback para a conversa e sem cliente OAuth com token emitido segundo `workspace clients`. A conta observada era Plus e o aplicativo não ficou disponível na composição da conversa para chamadas.
+
+Não existe evidência de grant programming, sessão externa, managed worktree, READ/WRITE/filesystem, Git review/index/commit, revogação ou negação no ChatGPT Web. O estado é **BLOQUEADO/PARCIAL**, compatível com a fronteira fail-closed: não houve bypass, token fabricado, workspace real ou ampliação de capability. O túnel/processos e a fixture foram limpos. A retomada exige ambiente Web com suporte efetivo a escrita/modificação MCP e nova URL Quick Tunnel.
 
 **Reconciliação posterior:** o promotion gate `SS-MVP-002-GIT-INDEX-PROMOTION-GATE-001` foi confirmado pelo ChatGPT Web como publicado no remoto live `60c290a88a5c85a411237b53e04313b6d35dfc19`. O `SS-MVP-002-GIT-COMMIT-GATE-001`, registrado em `b3f2add`, endurecido em `247ad3d` e reconciliado documentalmente em `4a103a6`, também está publicado no remoto. Essas fronteiras permanecem independentes e não promovem branch, Git remoto, shell ou `test.run` público.
 

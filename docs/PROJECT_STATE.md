@@ -2,6 +2,16 @@
 
 **Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é a reconciliação publicada abaixo. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
+## Checkpoint vigente — `SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001` — 25/09/2026
+
+**Estado:** `SS-MVP-002` permanece **PARCIAL** e o aceite operacional externo está **BLOQUEADO** antes da emissão de token programming. O aplicativo MCP foi criado e a aprovação local do primeiro pedido OAuth foi registrada, mas a página ficou em `Concluindo autorização…`; `workspace clients` confirmou que não havia cliente com token emitido. Não há evidência de grant, sessão MCP ou chamada externa de ferramenta.
+
+**Ref/publicação:** branch `codex/mvp-vertical-programming`; correção publicada em `a0fada0141c314037ec09037b4fb7214d3f3bded`, com remoto live confirmado diretamente por `git ls-remote`. A documentação foi reconciliada sem alterar código, contrato ou patches protegidos.
+
+**Limites:** Quick Tunnel HTTPS e cadastro do aplicativo foram observados; READ/WRITE/filesystem, Git review/index/commit, managed worktree, revogação e negação não foram validados no Web. A conta observada era Plus e o aplicativo não ficou disponível na composição da conversa; a orientação exibida apontou suporte beta de escrita/modificação MCP em planos superiores.
+
+**Limpeza/próxima ação:** processo e túnel encerrados, portas `7676`/`7677` livres, estado Quick temporário e fixture descartável removidos. Repetir somente em ambiente Web com suporte efetivo à escrita/modificação MCP, usando nova URL Quick Tunnel; não contornar OAuth nem editar tokens.
+
 ## Checkpoint vigente — reconciliação do Git commit v1 — 25/09/2026
 
 **Ref observada:** `codex/mvp-vertical-programming`; remoto live final `0420c9ae14768e099fbb51452ee71e7dc5af7916`. A cadeia publicada real é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`. O commit `ccc4d17a9ed8b8c744d432edd9da3db5687ac853` é exclusivamente documental e registra o gate já autorizado.

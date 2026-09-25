@@ -2,7 +2,13 @@
 
 **Status:** plano de execução documental da frente de backend do [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), não compromisso de datas ou autorização de ampliar o MVP. Fontes do escopo: [produto](PRODUCT.md), [MVP](MVP.md), [contrato administrativo](LOCAL_ADMIN_AUTHORIZATION.md) e pedido do proprietário para continuar o backend mantendo o PR draft. Detalhes executáveis/estado por ID: [`../TASKLIST.md`](../TASKLIST.md). Revalidar branch e HEAD na retomada.
 
-**Estado reconciliado nesta retomada (25/09/2026):** a implementação de Git commit v1 está publicada no remoto live `0420c9ae14768e099fbb51452ee71e7dc5af7916` na branch `codex/mvp-vertical-programming`. A cadeia real é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`; `ccc4d17` é somente documental. A publicação foi fast-forward normal e o desvio procedural de pré-checagem está registrado. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell, branch ou Git remoto como capability.
+## Aceite operacional externo — `SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001` — 25/09/2026
+
+O aceite autorizado usou somente fixture descartável e Quick Tunnel HTTPS real. O aplicativo MCP foi criado no ChatGPT Web e a aprovação local do primeiro pedido OAuth foi registrada, mas o fluxo não emitiu token nem retornou ao callback; `workspace clients` confirmou ausência de cliente com token emitido. A conta observada era Plus e a conversa não expôs o aplicativo criado para invocação após o cadastro.
+
+Resultado: **BLOQUEADO / PARCIAL**. Nenhuma tool programming externa foi chamada, nenhum grant ou managed worktree externo foi criado e não se validou revogação/negação. O processo, túnel e fixture foram limpos. O próximo passo depende de ambiente Web com suporte efetivo a escrita/modificação MCP; a URL Quick Tunnel deverá ser recriada na retomada.
+
+**Estado reconciliado nesta retomada (25/09/2026):** a correção posterior ao Git commit v1 está publicada no remoto live `a0fada0141c314037ec09037b4fb7214d3f3bded` na branch `codex/mvp-vertical-programming`. A cadeia anterior é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`; `ccc4d17` é somente documental. As publicações foram fast-forward normais, sem merge, rebase ou force-push. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell, branch ou Git remoto como capability.
 
 | Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
 | --- | --- | --- | --- | --- | --- |

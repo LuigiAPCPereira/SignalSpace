@@ -2,6 +2,12 @@
 
 **Estado vigente (25/09/2026):** `connect quick programming` é uma composição opt-in publicada que pode anunciar READ, WRITE, Git review, Git index e Git commit somente após OAuth e aprovação owner-side explícita de uma managed worktree descartável. `connect quick` permanece diagnóstico e `connect quick read` permanece leitura. Nenhum modo habilita shell, branch, Git remoto ou `test.run` público; a aceitação operacional externa desta composição ainda é o bloco corrente, não um aceite de produção.
 
+## Resultado do aceite externo programming — 25/09/2026
+
+`SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001` iniciou este entrypoint com Quick Tunnel HTTPS real e aplicativo MCP criado no ChatGPT Web. A aprovação owner-side local do pedido OAuth inicial foi registrada, porém o callback não retornou à conversa e `workspace clients` informou que não havia cliente com token emitido. A página Web permaneceu em `Concluindo autorização…` e a composição da conversa não expôs o aplicativo para chamadas.
+
+O resultado é **BLOQUEADO/PARCIAL**, não aceite de produção: nenhum grant programming, managed worktree ou tool READ/WRITE/Git foi exercido externamente. O processo, túnel e fixture descartável foram encerrados. Na retomada, recriar o Quick Tunnel e usar uma conta/ambiente Web que exponha efetivamente escrita/modificação MCP; não editar tokens nem contornar TLS/OAuth.
+
 **Registro histórico de 19/09/2026:** `connect quick` passou no preflight HTTPS na máquina do proprietário. Após corrigir a compatibilidade DCR, o ChatGPT solicitou autorização e o proprietário a aprovou no terminal; a interface passou a mostrar uma conta conectada. O proprietário comparou um `diagnosticID` aleatório devolvido na conversa com o ID idêntico no log local de `connection_diagnostic`, após um `tools/list` autenticado. A invocação MCP daquela sessão está comprovada por correlação; a identidade do cliente não foi atestada criptograficamente. Naquele estado, apenas `connection_diagnostic` estava disponível; não havia arquivos, Git ou terminal.
 
 O Cloudflare Quick Tunnel cria uma URL aleatória `https://...trycloudflare.com`, gratuitamente e sem conta ou domínio. É uma opção **exclusivamente para testes**; não oferece SLA, não suporta SSE e pode limitar requisições. O SignalSpace usa o transporte MCP de respostas HTTP JSON nesta fase. Consulte a [documentação oficial de Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/).
