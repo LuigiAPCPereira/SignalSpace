@@ -418,8 +418,8 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 
 ## Tarefa `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001` — 26/09/2026
 
-- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**.
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICADA REMOTAMENTE** em `24dfc6e1b8176adc268fd079519f38acd8ea329a`.
 - Implementação: decisions `ALLOW_ONCE`, `ALLOW_SESSION`, `ALLOW_WORKSPACE` e `DENY`; callback transacional antes do terminal; store privado versionado/atômico com lock e fail-closed; policies persistentes limitadas a owner/client/managed-workspace/capability; rotas administrativas de listagem/revogação; painel separado para OAuth, approvals e policies.
 - Limites: `ALLOW_SESSION` é memória da instância; `ALLOW_WORKSPACE` exige managed worktree estável; policy não substitui grant ativo, não executa operação e não altera MCP público. Common checkout não é elegível. Quick usa diretório privado descartável da instância atual.
 - Evidência: testes de decisão concorrente, persistência/reload, corrupção/unknown fields, revoke/evaluate concorrente, HTTP CSRF/Host/Origin e 23 testes Node do painel. `go test ./...` passou; CI, navegador/ChatGPT Web, HTTPS, túnel e workspace real continuam desconhecidos.
-- Próxima ação: commit focado, gates finais, push normal fast-forward autorizado nesta missão e relatório ao ChatGPT Web. Não iniciar `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` automaticamente.
+- Próxima ação: enviar o relatório ao ChatGPT Web e aguardar a próxima missão. Não iniciar `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` automaticamente.

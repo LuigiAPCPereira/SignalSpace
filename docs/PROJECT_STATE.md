@@ -717,7 +717,7 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 ## Checkpoint `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001` — 26/09/2026
 
-**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. `SS-MVP-002` permanece **PARCIAL/em andamento**; CI, HTTPS, túnel, navegador, grant externo e workspace real permanecem **DESCONHECIDOS/NÃO VALIDADOS**.
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `24dfc6e1b8176adc268fd079519f38acd8ea329a`. `SS-MVP-002` permanece **PARCIAL/em andamento**; CI, HTTPS, túnel, navegador, grant externo e workspace real permanecem **DESCONHECIDOS/NÃO VALIDADOS**.
 
 **Ref e preservação:** branch `codex/mvp-vertical-programming`, base verificada em `741692300e17c3f3a4f915a3c4c62069c1c55b47`. Os patches não rastreados permanecem fora do Git, não aplicados e intocados: `signalspace-oauth-read-scope.patch` SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b`; `signalspace-workspace-client-binding.patch` SHA-256 `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
 
@@ -725,4 +725,6 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 **Validação:** `go test ./...` PASS; Node `internal/admin/ui/admin_js_test.mjs` PASS (23/23); testes adicionais de decisão concorrente, store/reload/corrupção, revoke/evaluate concorrente e HTTP CSRF/Host/Origin PASS; `git diff --check` PASS. Não houve Quick Tunnel, OAuth ChatGPT Web, bridge MCP público ou teste de workspace real.
 
-**Próxima ação:** executar gates finais, commits focados e push normal fast-forward; depois enviar relatório com `<continuidade_codex>` ao ChatGPT Web. A missão seguinte recomendada (`SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`) permanece apenas recomendação e não foi iniciada.
+**Publicação:** commits focados `8eb3fb0` (implementação/testes) e `24dfc6e` (documentação) foram publicados por push normal fast-forward; `git ls-remote` confirmou o SHA acima. Não houve merge, rebase ou force-push.
+
+**Próxima ação:** enviar relatório com `<continuidade_codex>` ao ChatGPT Web. A missão seguinte recomendada (`SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`) permanece apenas recomendação e não foi iniciada.

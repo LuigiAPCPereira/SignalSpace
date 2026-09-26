@@ -98,4 +98,4 @@ O estado é **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `3
 
 Esta etapa implementa o primeiro slice operacional da arquitetura v2 sem migrar o bridge MCP: approvals carregam decisões permitidas, `ALLOW_SESSION` fica em memória e `ALLOW_WORKSPACE` grava somente identidade owner/client/managed-workspace/capability em store privado versionado. O painel local separa solicitações OAuth, approvals de programação e policies persistentes, com revoke protegido por sessão, CSRF e same-origin.
 
-Estado: **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. A etapa seguinte recomendada é `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`, que não foi iniciada nesta missão.
+Estado: **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `24dfc6e1b8176adc268fd079519f38acd8ea329a`. A etapa seguinte recomendada é `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`, que não foi iniciada nesta missão.

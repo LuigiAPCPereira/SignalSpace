@@ -249,4 +249,4 @@ O slice implementa o contrato local sem alterar discovery ou o catálogo MCP. A 
 
 O painel administrativo separa `/api/admin/v1/requests`, `/api/admin/v1/capability-approvals` e `/api/admin/v1/capability-policies`. As rotas de policy exigem sessão, CSRF e Host/Origin local; a UI respeita `allowed_decisions`, reconcilia perda de resposta e não trata erro como fila vazia. A policy mantém a exigência de grant ativo: autorização local não é grant OAuth nem escopo.
 
-Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** nesta missão. Não houve MCP bridge, nova tool/scope, Quick Tunnel, OAuth externo, navegador real, workspace real, CI, merge ou deploy.
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `24dfc6e1b8176adc268fd079519f38acd8ea329a`. Não houve MCP bridge, nova tool/scope, Quick Tunnel, OAuth externo, navegador real, workspace real, CI, merge ou deploy.
