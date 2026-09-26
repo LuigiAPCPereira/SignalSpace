@@ -456,3 +456,12 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 - O Quick Tunnel registrou uma conexão, mas fechou antes de anunciar uma URL utilizável: `public HTTPS verification failed; protected resource metadata does not match the configured resource, issuer or diagnostic scope`. Nenhum OAuth/PKCE, connector novo, discovery ou tool MCP foi exercitado.
 - Cleanup confirmado: `7676`/`7677` livres, nenhum processo residual; fixture Git descartável e managed workspace não chegaram a ser ativados. Os patches protegidos continuam untracked, não aplicados e intocados.
 - Próxima ação: novo gate para diagnosticar/corrigir somente a divergência de metadata/URL do runtime Quick; não alterar código nem prosseguir com aceite externo nesta missão bloqueada.
+
+## Tarefa `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001` — 26/09/2026
+
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** na branch `codex/mvp-vertical-programming`.
+- Preflight HTTPS do Quick Tunnel tornado composition-aware: `CheckEmbeddedTransportForScope` valida contra o escopo fechado esperado; `CheckEmbeddedTransport` preserva `signalspace:diagnostic`.
+- `connect quick programming` deriva o escopo esperado `signalspace:programming` exclusivamente do plano local fechado (`plan.expectedCompositionScope`); `connect quick diagnostic` e `connect quick read` utilizam `signalspace:diagnostic`.
+- O preflight valida: Protected-Resource Metadata (`scopes_supported`), Authorization Server Metadata (`scopes_supported`), desafio HTTP `WWW-Authenticate` sem bearer e desafio MCP `tools/call` de `connection_diagnostic` não autenticado.
+- Evidência: matriz unitária completa de validação em `internal/mcp/transport_preflight_test.go`, verificação de `scopes_supported` em `internal/mcp/oauth_preflight_test.go` e testes de preflight/wiring em `cmd/signalspace/programming_v2_test.go`. Suíte Go completa serial, race em pacotes afetados, `go vet ./...`, `go build ./...`, 23 testes Node do painel, 8 testes Node de consentimento, `gofmt` e `git diff --check` passaram.
+- `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` permanece **BLOQUEADO / PENDENTE DE REPETIÇÃO EXTERNA**.

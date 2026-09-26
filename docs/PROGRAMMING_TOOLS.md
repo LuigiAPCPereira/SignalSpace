@@ -280,3 +280,7 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a
 ## Aceite externo v2 — resultado do preflight
 
 `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` ficou **BLOQUEADO / PARCIAL** antes do OAuth: o Quick Tunnel registrou conexão, mas a verificação HTTPS recusou a metadata do protected resource por incompatibilidade com resource/issuer/scope. Nenhuma tool, connector, discovery ou workspace foi exercitada; não há resultado externo positivo ou negativo sobre o bridge. Retomar somente após novo gate de runtime.
+
+## Preflight HTTPS composition-aware — `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001`
+
+A divergência entre a metadata pública de Programming v2 (`signalspace:programming`) e o preflight de transporte foi eliminada com `CheckEmbeddedTransportForScope`. `connect quick programming` fornece `signalspace:programming` derivado exclusivamente do composition plan fechado; `connect quick diagnostic` preserva `signalspace:diagnostic`. Validação unitária e de matriz cobre correspondência, incompatibilidades, escopos extras e desafios não autenticados.

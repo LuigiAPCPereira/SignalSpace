@@ -771,3 +771,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Cleanup:** portas `7676` e `7677` livres; nenhum processo residual; fixture Git descartável movida para a lixeira do sistema. Patches protegidos preservados com os hashes já registrados.
 
 **Limite e retomada:** não corrigir automaticamente neste gate. É necessário novo gate para investigar a divergência de metadata/URL do runtime Quick; depois disso, repetir o aceite externo desde o preflight.
+
+## Checkpoint — `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001` — 26/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** na branch `codex/mvp-vertical-programming`.
+
+**Implementação:** preflight HTTPS do Quick Tunnel tornado composition-aware através de `CheckEmbeddedTransportForScope(ctx, resourceURL, expectedCompositionScope, client)`, preservando `CheckEmbeddedTransport(...)` com escopo de diagnóstico para compatibilidade. Wiring de `cmd/signalspace` deriva o escopo esperado exclusivamente de `plan.expectedCompositionScope` (`signalspace:programming` para Programming; `signalspace:diagnostic` para Diagnostic). O preflight valida Protected-Resource Metadata, Authorization Server Metadata (`scopes_supported`), desafio HTTP WWW-Authenticate e desafio MCP de `connection_diagnostic` coerentes com a composição esperada.
+
+**Evidência:** matriz de validação em `internal/mcp` cobrindo diagnósticos e programming válidos, rejeição cruzada entre eles, incompatibilidade de resource/issuer, escopo ausente, escopo extra permitido e desafios não autenticados; wiring testado em `cmd/signalspace`; suíte completa serial, race proporcional em pacotes afetados, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram limpos.
+
+**Patches protegidos:** preservados untracked e intocados com os hashes de referência (`02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`).
+
+**Próxima ação:** repetição externa controlada com Quick Tunnel novo e fixture descartável, publicando commits por fast-forward normal e gerando handoff com `<continuidade_codex>`.

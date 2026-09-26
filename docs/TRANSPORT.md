@@ -54,3 +54,15 @@ O desenho aceito em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2
 **Reconciliação da ponte v2 (26/09/2026):** a discovery Programming anuncia somente o scope da composição e exatamente as tools aprovadas. Cada `tools/call` exige OAuth Programming e autorização local antes do dispatch; `LOCAL_APPROVAL_REQUIRED` é resultado pendente sem efeito e o retry exato consome o permit uma vez. A prova feita foi HTTP local sem Quick Tunnel; aceite ChatGPT Web/HTTPS externo permanece desconhecido.
 
 Quick Tunnel continua temporário e apropriado somente a dev/smoke. A experiência persistente exigirá uma origem estável, a escolher em tarefa própria; esta reconciliação não escolhe Named Tunnel, domínio, provedor ou relay e não altera o endpoint atual.
+
+## Preflight HTTPS composition-aware (`SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001`)
+
+O preflight HTTPS público é composition-aware:
+- `CheckEmbeddedTransportForScope(ctx, resourceURL, expectedCompositionScope, client)` valida o transporte público contra o escopo fechado esperado pela composição planejada.
+- O wrapper `CheckEmbeddedTransport(...)` preserva compatibilidade exigindo `signalspace:diagnostic`.
+- `connect quick programming` deriva exclusivamente do plano local fechado o escopo `signalspace:programming`; `connect quick diagnostic` e `connect quick read` utilizam `signalspace:diagnostic`.
+- O preflight valida:
+  1. Protected-Resource Metadata (`/.well-known/oauth-protected-resource`): `resource` igual à URL canônica configurada, `authorization_servers` contendo exatamente a origem do emissor e `scopes_supported` contendo o escopo esperado da composição.
+  2. Authorization Server Metadata (`/.well-known/oauth-authorization-server`): `issuer`, endpoints OAuth canônicos, JWKS, DCR e confirmação de que `scopes_supported` anuncia o escopo esperado da composição.
+  3. Desafio HTTP não autenticado: requisição MCP sem bearer recebe `401 Unauthorized` com cabeçalho `WWW-Authenticate` apontando `resource_metadata` e o `scope` exato da composição.
+  4. Desafio MCP não autenticado: chamada a `connection_diagnostic` sem token recebe `isError: true` com desafio `_meta.mcp/www_authenticate` contendo `resource_metadata`, `scope` exato da composição e `error="invalid_token"`.

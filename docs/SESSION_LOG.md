@@ -651,3 +651,13 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - Não houve OAuth/PKCE, connector novo, discovery, tools/list, filesystem, Git ou aprovação local; portanto a aceitação externa não pode ser classificada como PASS, apenas **BLOQUEADA / PARCIAL — PREFLIGHT**.
 - Cleanup confirmado: listeners 7676/7677 e processos SignalSpace/cloudflared ausentes; fixture descartável movida para a lixeira. Patches protegidos preservados, untracked, não aplicados, não staged e intocados.
 - Retomada exige novo gate para diagnosticar/corrigir a divergência de metadata/URL do runtime Quick. Não executar correção de código automaticamente a partir deste bloqueio.
+
+## 26/09/2026 — preflight HTTPS composition-aware — `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001`
+
+- Causa raiz identificada e resolvida: `internal/mcp/oauth.go` anunciava `signalspace:programming` em Programming v2, mas `internal/mcp/transport_preflight.go::CheckEmbeddedTransport` exigia `signalspace:diagnostic`.
+- Foi introduzido `CheckEmbeddedTransportForScope(ctx, resourceURL, expectedCompositionScope, client)` e `CheckEmbeddedTransport(...)` preservado como wrapper para escopo diagnóstico.
+- Em `cmd/signalspace`, o escopo esperado do preflight é derivado exclusivamente do plano local fechado (`plan.expectedCompositionScope`: `signalspace:programming` para Programming; `signalspace:diagnostic` para Diagnostic/Read).
+- Validações reforçadas: Protected-Resource Metadata (`scopes_supported` contendo o escopo esperado), Authorization Server Metadata (`scopes_supported` anunciando o escopo esperado), desafio HTTP `WWW-Authenticate` sem bearer e desafio MCP `tools/call` de `connection_diagnostic` não autenticado retornando o escopo coerente da composição.
+- Matriz completa de testes unitários e de integração implementada em `internal/mcp/transport_preflight_test.go`, `internal/mcp/oauth_preflight_test.go` e `cmd/signalspace/programming_v2_test.go`.
+- Gates locais passaram: suíte completa serial `go test ./...`, race de `internal/mcp` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, 23 testes Node do painel, 8 testes Node de consentimento, `gofmt` e `git diff --check`.
+- Patches protegidos permanecem untracked, não aplicados e intocados com SHA-256 inalterados.
