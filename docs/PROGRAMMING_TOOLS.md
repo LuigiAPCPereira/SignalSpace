@@ -268,3 +268,11 @@ Esta seção é a reconciliação vigente; os parágrafos anteriores que descrev
 Cada chamada Programming passa por OAuth v2 e depois por `ProgrammingAuthorizer`, que revalida owner, client, sessão, grant ativo, envelope de capabilities, policy e approval. Argumentos são normalizados por schema fechado; fingerprints usam operação com hashes de conteúdo/replacement, e summaries são seguros. `REQUIRE_APPROVAL` retorna `LOCAL_APPROVAL_REQUIRED` com request ID e zero efeito; o retry precisa ser idêntico e `ALLOW_ONCE` é consumido uma única vez. A API de approvals e o MCP compartilham o mesmo `approval.Manager`; permit, bearer e conteúdo privado não chegam à UI.
 
 O construtor legado e as composições `diagnostic`/`read` continuam verificando e anunciando scopes granulares. Sem painel, o caminho Programming falha fechado como `LOCAL_APPROVAL_UNAVAILABLE`. Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617ac15e77d137f07be6cdb7deb69f24a77d101` por fast-forward normal. ChatGPT Web, Quick Tunnel, workspace real, CI e aceite externo permanecem **NÃO VALIDADOS**.
+
+## Standard Profile local — `SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001`
+
+O owner-side oferece duas entradas canônicas: `request-programming <client-id> <absolute-path>` para checkout e `request-worktree <client-id> <source-root> [base-ref]` para managed, além de resume por client/workspace ID. O cliente não escolhe o envelope; as formas legadas com scopes continuam disponíveis somente por compatibilidade.
+
+Depois do grant, o profile aplica políticas locais fechadas. Checkout: read/write/Git review em `ALLOW_SESSION`, delete em `ASK`, Git index/commit ausentes. Managed: read/write/Git review/Git index em `ALLOW_SESSION`, delete/commit em `ASK`. `ALLOW_WORKSPACE` persistente é exclusivo de managed worktree estável e não ultrapassa o grant. Revogação, sessão nova, restart, capability ausente e modo inválido falham fechado.
+
+Estado: **IMPLEMENTADO / TESTES FOCAIS PASSARAM / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**. O catálogo MCP público não foi ampliado nesta missão; ChatGPT Web, túnel e workspace real não foram exercitados.

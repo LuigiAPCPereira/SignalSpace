@@ -83,3 +83,9 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE**. A composição Quick cria o stor
 Quando `connect quick programming` é iniciado com `panel`, `ProgrammingAuthorizer`, `policy.Engine` e `approval.Manager` são compostos na mesma instância privada do Quick. O painel lista e decide approvals por `/api/admin/v1/capability-approvals`; ele não executa a operação e não expõe permit. Sem painel, qualquer ferramenta Programming que precise da ponte falha fechado como `LOCAL_APPROVAL_UNAVAILABLE`.
 
 O teste HTTP local confirmou o ciclo pendente → decisão → retry idêntico → consumo único. A porta 7677 segue loopback-only e nunca é publicada pelo túnel. Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617ac15e77d137f07be6cdb7deb69f24a77d101`; túnel, navegador, ChatGPT Web, workspace real e CI não foram exercitados.
+
+## Standard Profile na UX administrativa — `SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001`
+
+A UX existente de Pending Approvals e Persistent Policies já está integrada ao painel administrativo e foi preservada nesta fatia: OAuth requests, approvals de capability e policies continuam separados, com decisões renderizadas somente a partir de `allowed_decisions` e metadados seguros. A aprovação do Standard Profile acontece no owner-side local após o grant e não adiciona botão, rota pública ou ferramenta MCP.
+
+Estado: **INTEGRAÇÃO REUTILIZADA / VALIDADA POR TESTES DE BACKEND E CONSOLE**. Não houve mudança visual adicional porque a superfície já implementava as separações exigidas. Navegador, Quick Tunnel e aceite ChatGPT Web permanecem não validados.

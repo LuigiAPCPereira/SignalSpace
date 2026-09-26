@@ -635,3 +635,11 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - Evidência: focados de `cmd/signalspace`, `internal/mcp` e `internal/policy`; integração HTTP local real de `tools/list` (20 tools), chamada Programming pendente, listagem/decisão pela API administrativa e retry idêntico one-shot; suíte Go serial completa, race proporcional, vet, build, gofmt e diff-check passaram. Não foram usados Quick Tunnel, ChatGPT Web externo, workspace real, CI, merge, rebase ou deploy.
 - Publicação: `9573ed9` (implementação/testes) e `e617ac1` (documentação) foram enviados por push normal fast-forward; `git ls-remote` confirmou `e617ac15e77d137f07be6cdb7deb69f24a77d101` em `codex/mvp-vertical-programming`.
 - Estado final: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE**. Próxima ação: entregar o relatório `<continuidade_codex>` ao ChatGPT Web e aguardar a próxima missão; ChatGPT Web, Quick Tunnel, workspace real e CI permanecem não validados.
+
+## 26/09/2026 — Standard Profile Programming v2 — `SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001`
+
+- A missão partiu da ref local `4ce9a95` em `codex/mvp-vertical-programming`; os dois patches protegidos permaneceram untracked, não aplicados e intocados.
+- Foi implementado o profile owner-side fechado para checkout e managed: aplicação somente após grant tipado válido, `ALLOW_SESSION` para capabilities seguras do modo, `ASK` para delete/commit e `ALLOW_WORKSPACE` persistente apenas para managed workspace estável. Grant continua sendo o teto.
+- O console ganhou formas canônicas sem scopes fornecidos pelo cliente para request de Programming, criação/resume de managed worktree e aplicação transacional do profile. Formas legadas permanecem compatíveis. O modo desconhecido passou a falhar fechado.
+- A UX administrativa existente já separa OAuth requests, Pending Approvals e Persistent Policies; foi reconciliada na documentação, sem alteração visual ou nova superfície pública nesta missão.
+- Testes focais de policy, grants, checkout, managed e console passaram. Gates completos, commit/publicação remota e aceite ChatGPT Web ainda estavam pendentes no checkpoint; Quick Tunnel, workspace real e CI permanecem não validados.

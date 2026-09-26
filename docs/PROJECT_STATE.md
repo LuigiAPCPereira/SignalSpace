@@ -749,3 +749,13 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** testes focados de OAuth/discovery/authorizer; integração HTTP local MCP → API de approval → decisão → retry idêntico/one-shot; suíte Go serial completa, race proporcional, vet, build, gofmt e diff-check. Commits `9573ed9` e `e617ac1` foram publicados por fast-forward normal; o remoto foi confirmado no SHA final. Quick Tunnel, HTTPS externo, ChatGPT Web, workspace real e CI permanecem **NÃO VALIDADOS/DESCONHECIDOS**.
 
 **Próxima ação vinculada:** entregar o relatório ao ChatGPT Web com `<continuidade_codex>` e aguardar a próxima missão; não iniciar aceite externo sem nova missão/autorização específica.
+
+## Checkpoint vigente — `SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001` — 26/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDAÇÃO FOCAL PASSOU / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**. Base local: branch `codex/mvp-vertical-programming`, HEAD inicial `4ce9a95`; a alteração defensiva de modo desconhecido falha fechado.
+
+**Implementação:** profile owner-side fechado para checkout e managed, commands canônicos de request/resume, aplicação transacional após grant e precedência explícita entre `ALLOW_SESSION`, `ALLOW_WORKSPACE`, `ASK` padrão e deny. A UI administrativa existente de Pending Approvals e Persistent Policies foi mantida como superfície integrada; não houve nova tool, scope, shell, `test.run` ou Git remoto.
+
+**Proteção:** os patches untracked `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` permanecem não aplicados, não staged e intocados; hashes registrados no checkpoint anterior seguem obrigatórios.
+
+**Próxima ação:** executar gates completos, criar commits focados e publicar por fast-forward normal se todos passarem. Depois enviar o relatório com `<continuidade_codex>` ao ChatGPT Web e aguardar a próxima missão. Quick Tunnel, ChatGPT Web, workspace real e CI continuam não validados até prova específica.

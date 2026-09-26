@@ -136,3 +136,9 @@ O gate está **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICADO E CONFIRMADO NO RE
 O bridge público aplica a ordem OAuth verificado → owner/client → sessão/grant → capability do envelope → policy → approval → porta typed. A operação é normalizada antes do fingerprint; conteúdo e replacement entram somente como SHA-256, e summaries não carregam raiz absoluta, bearer, token family ou conteúdo privado. Falha de grant, capability, policy, approval ou contexto não inicia filesystem/Git e não é convertida em sucesso.
 
 O envelope de checkout Programming mantém READ, WRITE, DELETE e Git review; Git index/commit continuam exigindo managed worktree nas próprias portas. `test.run`, shell e Git remoto não aparecem na discovery v2. A integração HTTP local comprovou zero efeito antes da decisão e consumo único do retry aprovado. Quick Tunnel, navegador, ChatGPT Web, workspace real e CI permanecem não validados.
+
+## Standard Profile e teto de grant — 26/09/2026
+
+`SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001` formaliza o profile owner-side sem transformar policy em grant. A aplicação valida owner, client, sessão, modo, identidade do managed workspace e o conjunto exato de capabilities antes de alterar o engine. Checkout autoriza por sessão somente read/write/review; managed acrescenta `git.index`. Delete e commit continuam exigindo decisão posterior (`ASK`), e qualquer item fora do envelope resulta em `DENY` pelo teto do grant.
+
+Regras persistentes são aceitas somente para `ManagedWorkspaceID` estável. Sua precedência pode remover o `ASK` padrão quando o proprietário escolhe explicitamente `ALLOW_WORKSPACE`, mas não ultrapassa deny explícito, não cria capability e não vale para checkout comum. Modos desconhecidos e envelopes adulterados falham fechado. Estado: **IMPLEMENTADO / VALIDADO EM TESTES FOCAIS / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**.
