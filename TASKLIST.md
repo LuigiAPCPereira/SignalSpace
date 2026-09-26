@@ -435,9 +435,9 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 
 ## Tarefa vigente — `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` — 26/09/2026
 
-- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** nesta atualização; o commit e o SHA remoto serão registrados após os gates finais.
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICADA REMOTAMENTE** em `e617ac15e77d137f07be6cdb7deb69f24a77d101`.
 - A composição pública `connect quick programming` usa `signalspace:programming`, refresh token no harness opt-in e `ProgrammingAuthorizer` owner-side antes de qualquer dispatch. `diagnostic`, `read` e o construtor legado preservam os contratos granulares.
 - A discovery v2 é fechada em 20 tools tipadas: diagnóstico, READ/WRITE/filesystem, Git review, `git_status`, stage/unstage e `commit_git_index`. `test.run`, shell, branch, merge/rebase/reset/clean/stash/fetch/pull, Git remoto e lifecycle MCP de worktree permanecem ausentes.
 - OAuth verifica issuer/audience/exp/owner/client/programming; o bridge revalida owner/client/session/grant/envelope/capability e policy. Argumentos têm schema fechado, fingerprint SHA-256 redigido e summary seguro. `REQUIRE_APPROVAL` retorna `LOCAL_APPROVAL_REQUIRED` sem efeito, consome `ALLOW_ONCE` no retry exato e usa o mesmo `approval.Manager` da API administrativa.
-- Evidência: focados de OAuth/discovery/authorizer; integração HTTP local MCP → `/api/admin/v1/capability-approvals` → decisão → retry one-shot; suíte Go serial completa. Race/vet/build/diff-check finais, commit e push ainda são gates pendentes.
-- Limites: nenhum Quick Tunnel, ChatGPT Web externo, workspace real, OAuth externo, CI, deploy, merge, rebase ou alteração dos patches protegidos. Próxima ação: finalizar gates, publicar por fast-forward normal se possível e entregar `<continuidade_codex>` ao ChatGPT Web.
+- Evidência: focados de OAuth/discovery/authorizer; integração HTTP local MCP → `/api/admin/v1/capability-approvals` → decisão → retry one-shot; suíte Go serial completa, race proporcional, vet, build, formato e diff-check passaram. Commits `9573ed9` (código/testes) e `e617ac1` (documentação) foram enviados por fast-forward normal; `git ls-remote` confirmou o SHA final.
+- Limites: nenhum Quick Tunnel, ChatGPT Web externo, workspace real, OAuth externo, CI, deploy, merge, rebase ou alteração dos patches protegidos. Próxima ação vinculada: entregar `<continuidade_codex>` ao ChatGPT Web e aguardar a próxima missão.

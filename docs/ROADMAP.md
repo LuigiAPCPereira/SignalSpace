@@ -110,4 +110,4 @@ Estado: **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `24dfc
 
 Esta etapa foi executada: a composição explícita Programming migra para um único scope OAuth de composição, conserva os contratos granulares de diagnostic/read, e conecta discovery/dispatch ao envelope de grant, Policy Engine e approvals locais. A superfície do bridge é fechada em 20 tools; não inclui shell, `test.run`, branch, Git remoto ou lifecycle de worktree.
 
-Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** até os gates finais, commit e push FF normal. A integração HTTP local da aprovação passou; Quick Tunnel, ChatGPT Web, workspace real e CI continuam fora da evidência. O próximo passo após publicação é o aceite externo separado.
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617ac15e77d137f07be6cdb7deb69f24a77d101` por fast-forward normal. A integração HTTP local da aprovação passou; Quick Tunnel, ChatGPT Web, workspace real e CI continuam fora da evidência. O próximo passo é o aceite externo separado, somente quando uma missão o autorizar.

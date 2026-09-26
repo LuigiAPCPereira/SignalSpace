@@ -82,4 +82,4 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE**. A composição Quick cria o stor
 
 Quando `connect quick programming` é iniciado com `panel`, `ProgrammingAuthorizer`, `policy.Engine` e `approval.Manager` são compostos na mesma instância privada do Quick. O painel lista e decide approvals por `/api/admin/v1/capability-approvals`; ele não executa a operação e não expõe permit. Sem painel, qualquer ferramenta Programming que precise da ponte falha fechado como `LOCAL_APPROVAL_UNAVAILABLE`.
 
-O teste HTTP local confirmou o ciclo pendente → decisão → retry idêntico → consumo único. A porta 7677 segue loopback-only e nunca é publicada pelo túnel. Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**; túnel, navegador, ChatGPT Web, workspace real e CI não foram exercitados.
+O teste HTTP local confirmou o ciclo pendente → decisão → retry idêntico → consumo único. A porta 7677 segue loopback-only e nunca é publicada pelo túnel. Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617ac15e77d137f07be6cdb7deb69f24a77d101`; túnel, navegador, ChatGPT Web, workspace real e CI não foram exercitados.

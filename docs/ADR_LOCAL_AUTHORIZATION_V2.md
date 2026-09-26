@@ -200,4 +200,4 @@ O estado acima é histórico da ADR e fica substituído para a composição expl
 
 O transporte entrega identidade verificada e operação normalizada ao contrato `ProgrammingAuthorizer`; o domínio concreto revalida grant, client, sessão e capability antes de chamar qualquer porta typed. `ALLOW_ONCE` é permit interno consumido no retry exato; `DENY`, ausência, grant revogado, capability ausente e approval indisponível falham fechado. A API administrativa usa o mesmo manager e não expõe permit, bearer, raiz, conteúdo ou fingerprint completo.
 
-Estado nesta missão: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** antes dos gates finais. Aceite externo ChatGPT Web, Quick Tunnel, workspace real, CI, merge e deploy continuam fora da evidência.
+Estado nesta missão: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617ac15e77d137f07be6cdb7deb69f24a77d101` por fast-forward normal. Aceite externo ChatGPT Web, Quick Tunnel, workspace real, CI, merge e deploy continuam fora da evidência.
