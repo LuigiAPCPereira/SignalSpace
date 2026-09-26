@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LuigiAPCPereira/SignalSpace/internal/approval"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
 )
 
@@ -100,5 +101,29 @@ func TestEngineSupportsSessionAndRejectsUnsupportedRules(t *testing.T) {
 	}
 	if err := engine.SetRule(Rule{OwnerID: "owner", Capability: capability.WorkspaceWrite, Effect: Effect("ALLOW_ONCE")}); !errors.Is(err, ErrUnsupportedEffect) {
 		t.Fatalf("ALLOW_ONCE error = %v, want %v", err, ErrUnsupportedEffect)
+	}
+}
+
+func TestEngineCreatesApprovalOnlyForRequireApproval(t *testing.T) {
+	engine := NewEngine()
+	manager := approval.New()
+	defer manager.Close()
+	ctx := testContext()
+	ctx.Fingerprint = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	ctx.GrantedCapabilities = nil
+	decision, snapshot, reused, err := engine.EvaluateAndRequest(ctx, manager, "Write src/main.go")
+	if err != nil || decision != RequireApproval || reused || snapshot.Status != approval.StatusPending {
+		t.Fatalf("approval bridge result = decision=%q snapshot=%+v reused=%t err=%v", decision, snapshot, reused, err)
+	}
+	decision, duplicate, reused, err := engine.EvaluateAndRequest(ctx, manager, "Write src/main.go")
+	if err != nil || decision != RequireApproval || !reused || duplicate.RequestID != snapshot.RequestID {
+		t.Fatalf("approval bridge dedup = decision=%q snapshot=%+v reused=%t err=%v", decision, duplicate, reused, err)
+	}
+	if err := engine.SetRule(Rule{OwnerID: "owner", ClientID: "client", WorkspaceID: "workspace", SessionID: "session", Capability: capability.WorkspaceWrite, Effect: EffectDeny}); err != nil {
+		t.Fatal(err)
+	}
+	decision, empty, reused, err := engine.EvaluateAndRequest(ctx, manager, "Write src/main.go")
+	if err != nil || decision != Deny || reused || empty != (approval.Snapshot{}) {
+		t.Fatalf("deny created approval: decision=%q snapshot=%+v reused=%t err=%v", decision, empty, reused, err)
 	}
 }

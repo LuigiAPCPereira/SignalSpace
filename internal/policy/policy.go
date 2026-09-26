@@ -1,8 +1,10 @@
 // Package policy implementa o núcleo determinístico de decisão local.
 //
 // O engine é deliberadamente independente do transporte MCP e de grants de
-// filesystem. Nesta fatia ele fornece apenas a decisão; approvals, permits,
-// persistência e a tradução para uma resposta pública são gates posteriores.
+// filesystem. Nesta fatia ele fornece a decisão e, somente quando o resultado
+// é REQUIRE_APPROVAL, pode delegar a criação de um pedido local explícito.
+// Permits, persistência e tradução para uma resposta pública continuam fora
+// deste domínio.
 package policy
 
 import (
@@ -11,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LuigiAPCPereira/SignalSpace/internal/approval"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
 )
 
@@ -179,6 +182,34 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 		return RequireApproval
 	}
 	return Deny
+}
+
+// ApprovalRequester é a única ponte interna deste gate. Ela não é utilizada
+// pelo handler MCP público e não executa a operação original.
+type ApprovalRequester interface {
+	Create(approval.RequestInput) (approval.Snapshot, bool, error)
+}
+
+// EvaluateAndRequest preserva a semântica de DENY e ALLOW. Apenas
+// REQUIRE_APPROVAL cria/reusa um pedido, permitindo que um harness local
+// exercite a fila sem expor approvals pelo transporte público.
+func (e *Engine) EvaluateAndRequest(ctx Context, requester ApprovalRequester, safeSummary string) (Decision, approval.Snapshot, bool, error) {
+	decision := e.Evaluate(ctx)
+	if decision != RequireApproval {
+		return decision, approval.Snapshot{}, false, nil
+	}
+	if requester == nil {
+		return decision, approval.Snapshot{}, false, errors.New("approval requester unavailable")
+	}
+	snapshot, reused, err := requester.Create(approval.RequestInput{
+		OwnerID: ctx.OwnerID, ClientID: ctx.ClientID, TokenFamilyID: ctx.TokenFamilyID,
+		WorkspaceID: ctx.WorkspaceID, SessionID: ctx.SessionID, Capability: ctx.Capability,
+		Tool: ctx.Tool, OperationFingerprint: ctx.Fingerprint, SafeSummary: safeSummary,
+	})
+	if err != nil {
+		return decision, approval.Snapshot{}, false, err
+	}
+	return decision, snapshot, reused, nil
 }
 
 func validateRule(rule Rule) error {

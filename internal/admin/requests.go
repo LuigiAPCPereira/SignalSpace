@@ -80,47 +80,90 @@ func requestFailure(w http.ResponseWriter, err error) {
 // HandlerWithRequests mantém as rotas existentes e isola a API de pedidos.
 // O modo Quick ainda precisa conectar este handler ao listener administrativo.
 func (g *Gate) HandlerWithRequests(requests OAuthRequests) http.Handler {
+	return g.HandlerWithRequestsAndCapabilityApprovals(requests, nil)
+}
+
+// HandlerWithRequestsAndCapabilityApprovals mantém a fila OAuth e a fila de
+// approvals de capability em domínios e rotas independentes.
+func (g *Gate) HandlerWithRequestsAndCapabilityApprovals(requests OAuthRequests, approvals CapabilityApprovals) http.Handler {
 	if requests == nil {
-		return g.Handler()
+		if approvals == nil {
+			return g.Handler()
+		}
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc(requestsPath, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		var items []auth.RequestSnapshot
-		err := g.withOwner(cookieValue(r, adminCookie), "", false, func() error {
-			items = requests.ListRequestSnapshots()
-			return nil
-		})
-		if err != nil {
-			requestFailure(w, err)
-			return
-		}
-		adminJSON(w, 200, map[string]any{
-			"requests":           items,
-			"server_time":        time.Now().UTC().Format(time.RFC3339Nano),
-			"next_poll_after_ms": 2000,
-		})
-	})
-	mux.HandleFunc(requestsPath+"/", func(w http.ResponseWriter, r *http.Request) {
-		suffix := strings.TrimPrefix(r.URL.Path, requestsPath+"/")
-		parts := strings.Split(suffix, "/")
-		if len(parts) == 0 || parts[0] == "" || len(parts) > 2 || (len(parts) == 2 && parts[1] != "decision") {
-			http.NotFound(w, r)
-			return
-		}
-		id := parts[0]
-		if len(parts) == 1 {
+	if requests != nil {
+		mux.HandleFunc(requestsPath, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				return
 			}
-			var item auth.RequestSnapshot
+			var items []auth.RequestSnapshot
 			err := g.withOwner(cookieValue(r, adminCookie), "", false, func() error {
+				items = requests.ListRequestSnapshots()
+				return nil
+			})
+			if err != nil {
+				requestFailure(w, err)
+				return
+			}
+			adminJSON(w, 200, map[string]any{
+				"requests":           items,
+				"server_time":        time.Now().UTC().Format(time.RFC3339Nano),
+				"next_poll_after_ms": 2000,
+			})
+		})
+		mux.HandleFunc(requestsPath+"/", func(w http.ResponseWriter, r *http.Request) {
+			suffix := strings.TrimPrefix(r.URL.Path, requestsPath+"/")
+			parts := strings.Split(suffix, "/")
+			if len(parts) == 0 || parts[0] == "" || len(parts) > 2 || (len(parts) == 2 && parts[1] != "decision") {
+				http.NotFound(w, r)
+				return
+			}
+			id := parts[0]
+			if len(parts) == 1 {
+				if r.Method != http.MethodGet {
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					return
+				}
+				var item auth.RequestSnapshot
+				err := g.withOwner(cookieValue(r, adminCookie), "", false, func() error {
+					var requestErr error
+					item, requestErr = requests.GetRequestSnapshot(id)
+					return requestErr
+				})
+				if err != nil {
+					requestFailure(w, err)
+					return
+				}
+				adminJSON(w, 200, item)
+				return
+			}
+			if r.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			cookie := cookieValue(r, adminCookie)
+			if _, err := g.Verify(cookie, "", false); err != nil {
+				requestFailure(w, errSessionRequired)
+				return
+			}
+			csrf := r.Header.Get("X-CSRF-Token")
+			if _, err := g.Verify(cookie, csrf, true); err != nil {
+				requestFailure(w, errInvalidCSRF)
+				return
+			}
+			var input struct {
+				Decision        string `json:"decision"`
+				ExpectedVersion int    `json:"expected_version"`
+			}
+			if !adminBody(w, r, &input) {
+				return
+			}
+			var item auth.RequestSnapshot
+			err := g.withOwner(cookie, csrf, true, func() error {
 				var requestErr error
-				item, requestErr = requests.GetRequestSnapshot(id)
+				item, requestErr = requests.DecideAndSnapshot(id, input.ExpectedVersion, input.Decision)
 				return requestErr
 			})
 			if err != nil {
@@ -128,41 +171,11 @@ func (g *Gate) HandlerWithRequests(requests OAuthRequests) http.Handler {
 				return
 			}
 			adminJSON(w, 200, item)
-			return
-		}
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		cookie := cookieValue(r, adminCookie)
-		if _, err := g.Verify(cookie, "", false); err != nil {
-			requestFailure(w, errSessionRequired)
-			return
-		}
-		csrf := r.Header.Get("X-CSRF-Token")
-		if _, err := g.Verify(cookie, csrf, true); err != nil {
-			requestFailure(w, errInvalidCSRF)
-			return
-		}
-		var input struct {
-			Decision        string `json:"decision"`
-			ExpectedVersion int    `json:"expected_version"`
-		}
-		if !adminBody(w, r, &input) {
-			return
-		}
-		var item auth.RequestSnapshot
-		err := g.withOwner(cookie, csrf, true, func() error {
-			var requestErr error
-			item, requestErr = requests.DecideAndSnapshot(id, input.ExpectedVersion, input.Decision)
-			return requestErr
 		})
-		if err != nil {
-			requestFailure(w, err)
-			return
-		}
-		adminJSON(w, 200, item)
-	})
+	}
+	if approvals != nil {
+		registerCapabilityApprovalRoutes(mux, g, approvals)
+	}
 	// O handler legado cobre apenas sessões, pareamento e bloqueio.
 	mux.Handle("/", g.Handler())
 	return Handler(mux)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
+	"github.com/LuigiAPCPereira/SignalSpace/internal/approval"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/tunnel"
 )
@@ -95,12 +96,15 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	defer ports.Close()
 	var gate *admin.Gate
 	var pairingCode string
+	var capabilityApprovals *approval.Manager
 	if panel {
 		gate, pairingCode, err = admin.NewGate()
 		if err != nil {
 			return fmt.Errorf("initialize local admin authentication: %w", err)
 		}
 		defer gate.Close()
+		capabilityApprovals = approval.New()
+		defer capabilityApprovals.Close()
 	}
 	quick, err := start(ctx)
 	if err != nil {
@@ -134,7 +138,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	serveDone := make(chan error, 2)
 	serverExited := make(chan struct{})
 	if panel {
-		adminServer := adminServerFactory(gate.HandlerWithRequests(authorization))
+		adminServer := adminServerFactory(gate.HandlerWithRequestsAndCapabilityApprovals(authorization, capabilityApprovals))
 		adminExited := make(chan struct{})
 		go func() {
 			serveDone <- fmt.Errorf("administrative HTTP server: %w", adminServer.Serve(ports.Admin))
