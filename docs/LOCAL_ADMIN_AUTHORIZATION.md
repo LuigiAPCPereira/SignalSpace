@@ -4,6 +4,14 @@
 
 **Base examinada:** `feat/m1-local-mcp-diagnostic` em `f7c27d0`, `internal/auth/server.go`, `cmd/signalspace/main.go`, `internal/tunnel/quick.go`, `docs/WORKSPACE_SECURITY.md`, `AGENTS.md`, e revisão da frente de interface em [`docs/FRONTEND_ADMIN_CONTRACT_REVIEW.md`](https://github.com/LuigiAPCPereira/SignalSpace/blob/feat/frontend-oauth-consent/docs/FRONTEND_ADMIN_CONTRACT_REVIEW.md). A revisão do frontend identifica pendências, não descreve APIs existentes. O backend atual aprova pelo stdin; nenhuma rota administrativa, sessão de proprietário, pareamento ou consulta pública de estado descrita aqui foi implementada. Não alterar a branch do frontend para executar este contrato.
 
+## Semântica de envelope do grant — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+O grant é o teto de autorização da composição/sessão. Uma policy `ALLOW_SESSION` ou `ALLOW_WORKSPACE` nunca cria capability nem altera o envelope; capability ausente sempre é `DENY`, inclusive quando existe regra `ASK` ou `ALLOW_*`. Dentro do envelope, ausência de regra é `REQUIRE_APPROVAL`; somente essa decisão pode criar uma solicitação de approval. Workspace stale/inconsistente também falha fechado.
+
+O envelope canônico de Programming é derivado no owner-side: checkout inclui `workspace.read`, `workspace.write`, `workspace.delete` e `git.review`; managed worktree inclui também `git.index` e `git.commit`. Não inclui `test.run`, shell, branch, Git remoto ou Git destrutivo. A aprovação local não transforma OAuth em autorização irrestrita e não promove essas APIs ao MCP público.
+
+O gate adiciona `ConsumeMatching` por contexto/fingerprint exatos e `CanonicalFingerprint` SHA-256 versionado. Antes do consumo, a camada de autorização deve revalidar owner, client, sessão, grant ativo, capability no envelope e precondições da operação. Nenhuma rota administrativa, scope OAuth, schema MCP ou Quick Tunnel foi alterado nesta tarefa.
+
 ## Atualização do gate de capability approvals — 26/09/2026
 
 Capability approval não é pedido OAuth. O backend local agora possui o domínio efêmero `internal/approval` e uma API administrativa separada, disponível somente no listener `127.0.0.1:7677`:

@@ -1,5 +1,11 @@
 # Fronteira de workspace — leitura e filesystem tipado opt-in
 
+## Envelope de grant e policy — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+O grant ativo é o teto da sessão: policy não amplia capability. `DENY` permanece terminal; `ASK` e ausência de regra, quando a capability está no envelope, resultam em `REQUIRE_APPROVAL`; `ALLOW_SESSION`/`ALLOW_WORKSPACE` só liberam capability já concedida. Capability ausente, grant revogado, contexto inválido ou managed worktree stale/inconsistente falham fechado.
+
+Os envelopes Programming são owner-side e tipados. Checkout comum: `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`. Managed worktree: o mesmo conjunto mais `git.index` e `git.commit`. `test.run`, shell, branch, Git remoto e Git destrutivo não entram em nenhum envelope. As APIs de approval/fingerprint e `ConsumeMatching` preparam o futuro bridge, mas não executam operações nem mudam a superfície MCP.
+
 ## Capability approval e permit local — 26/09/2026
 
 `ApprovalRequest` e `OperationPermit` não são grants de workspace. O approval efêmero registra a operação concreta e só autoriza uma revalidação interna; não executa filesystem, Git ou teste, não altera `GrantWithCapabilities` e não revive workspace/session revogado. O consumo exige `GrantActive` e correspondência exata do contexto e fingerprint, com atômica de uso único; replay, expiração, mudança de operação/sessão e restart falham fechado.

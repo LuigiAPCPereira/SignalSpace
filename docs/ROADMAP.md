@@ -1,5 +1,11 @@
 # SignalSpace — roadmap recuperável dos marcos
 
+## Marco vigente — semântica de grant/policy — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+Esta etapa congela a regra de que o grant é o envelope máximo da composição. `Evaluate` nega capability ausente mesmo diante de `ASK`/`ALLOW_*`; dentro do envelope, ausência de regra exige aprovação. Envelopes Programming tipados distinguem checkout de managed worktree e não incluem shell, `test.run`, branch, Git remoto ou Git destrutivo. `ConsumeMatching` e fingerprint canônico deixam a ponte futura pronta sem introduzir schema MCP.
+
+**Estado:** implementado e validado localmente; publicação remota pendente até os gates finais. A próxima etapa recomendada é `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`, ainda não iniciada.
+
 ## Marco vigente — approvals de capability de uso único — 26/09/2026
 
 O slice `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` implementa a fundação efêmera owner-side para `REQUIRE_APPROVAL`: request separado da fila OAuth, `ALLOW_ONCE`/`DENY`, permit interno de consumo único, concorrência, expiração e restart fail-closed. Ele não altera a superfície MCP nem a UI. A sequência permanece: policies/painel (`ALLOW_SESSION`/`ALLOW_WORKSPACE`) → bridge MCP → migração pública para `signalspace:programming`.

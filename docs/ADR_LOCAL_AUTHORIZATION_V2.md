@@ -5,6 +5,14 @@
 **Data da decisão:** 25/09/2026
 **Escopo:** arquitetura, contratos, modelo de domínio, migração e critérios de aceite. O slice `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` implementa somente o núcleo interno descrito nesta ADR; não autoriza migração pública, push, merge ou deploy por consequência.
 
+## Semântica de grant/policy — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+O gate operacionaliza uma invariante desta ADR: o grant ativo é o envelope máximo e a policy só decide dentro dele. `Evaluate` retorna `DENY` para capability ausente, grant inativo, contexto inválido ou workspace instável; dentro do envelope, `DENY` nega, `ASK`/ausência de regra retorna `REQUIRE_APPROVAL`, e `ALLOW_SESSION`/`ALLOW_WORKSPACE` retornam `ALLOW`. `EvaluateAndRequest` cria/reusa approval somente no último caso; nenhuma decisão executa uma operação.
+
+Para Programming, os envelopes owner-side são checkout (`workspace.read`, `workspace.write`, `workspace.delete`, `git.review`) e managed worktree (checkout + `git.index`, `git.commit`). `test.run`, shell, branch, Git remoto e Git destrutivo permanecem fora. `CanonicalFingerprint` e `ConsumeMatching` especificam a preparação da ponte futura sem alterar OAuth, discovery ou schema MCP. A camada chamadora deve validar grant e envelope antes de consumir um permit.
+
+**Estado do gate:** implementado e validado localmente; publicação remota pendente até os gates finais. A migração pública e o bridge MCP continuam não implementados.
+
 ## Implementação do gate de approvals de uso único — 26/09/2026
 
 O gate `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` materializa apenas a parte de uso único da decisão aceita nesta ADR. `ApprovalRequest` e `OperationPermit` vivem em `internal/approval`, separado de `internal/auth`, com estado efêmero por instância, limites explícitos e descarte no restart. `ALLOW_ONCE` cria um permit interno por referência, sem segredo bearer; o consumo exige o contexto completo e `GrantActive`, e a mutação é atômica. `ALLOW_SESSION`, `ALLOW_WORKSPACE`, persistência de policies, UI de approvals e bridge MCP continuam fora do gate.

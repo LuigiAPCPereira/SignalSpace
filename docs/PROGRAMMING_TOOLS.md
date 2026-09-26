@@ -1,8 +1,18 @@
 # SignalSpace — contrato inicial de programação local
 
+## Semântica vigente de grant e policy — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+O grant owner-side é o **envelope máximo** da composição e da sessão; nenhuma policy pode ampliá-lo. `internal/policy.Engine.Evaluate` falha fechado quando não há grant ativo, contexto válido, capability concedida ou workspace estável. Dentro do envelope, uma regra `DENY` nega, `ASK` ou ausência de regra retorna `REQUIRE_APPROVAL`, e `ALLOW_SESSION`/`ALLOW_WORKSPACE` retornam `ALLOW` somente para a capability já concedida. `EvaluateAndRequest` materializa uma solicitação apenas para `REQUIRE_APPROVAL`; `DENY` não cria fila nem efeito externo.
+
+Os envelopes Programming são derivados da composição owner-side, nunca de scopes enviados pelo cliente: checkout comum = `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`; managed worktree = checkout + `git.index`, `git.commit`. `test.run`, shell, branch, Git remoto e Git destrutivo ficam fora. As portas tipadas são `GrantProgrammingCheckout`, `GrantProgrammingManaged` e `ManagedWorktreeManager.ActivateProgramming`; as APIs legadas continuam somente por compatibilidade explícita.
+
+`internal/approval.CanonicalFingerprint` gera SHA-256 versionado da operação estruturada sem armazenar argumentos. `ConsumeMatching` localiza um único permit pelo contexto completo e falha em caso de ausência, ambiguidade, expiração, replay ou contexto divergente; a camada de autorização deve revalidar grant e envelope antes de consumi-lo. Este gate prepara o bridge futuro, mas não altera discovery, OAuth, schemas MCP, Quick Tunnel ou a superfície pública.
+
+**Estado:** implementado e validado localmente; publicação remota pendente até os gates finais desta missão. O aceite externo ChatGPT Web, CI e bridge MCP não são inferidos deste código.
+
 ## Capability approvals de uso único — estado vigente em 26/09/2026
 
-O domínio `internal/approval` prepara a autorização local de uma operação concreta sem ampliar grants permanentes. O fingerprint SHA-256 canônico e o contexto owner/client/token-family/workspace/session/capability/tool são a autoridade; `safe_summary` é apenas apresentação limitada. `ALLOW_ONCE` produz permit interno por referência, e não scope OAuth, bearer, capability nova ou execução automática. `ALLOW_SESSION` e `ALLOW_WORKSPACE` permanecem no próximo gate.
+O domínio `internal/approval` prepara a autorização local de uma operação concreta sem ampliar grants permanentes. O fingerprint SHA-256 canônico e o contexto owner/client/token-family/workspace/session/capability/tool são a autoridade; `safe_summary` é apenas apresentação limitada. `ALLOW_ONCE` produz permit interno por referência, e não scope OAuth, bearer, capability nova ou execução automática. `ALLOW_SESSION` e `ALLOW_WORKSPACE` continuam policies locais já implementadas, subordinadas ao envelope do grant.
 
 Nenhuma tool MCP pública cria ou consome approvals nesta missão. A ponte `internal/policy` só cria/reusa request em `REQUIRE_APPROVAL`; `DENY` não cria fila. A API owner-side é a rota administrativa separada `/api/admin/v1/capability-approvals`; a fila OAuth `/api/admin/v1/requests` não foi reutilizada. Estado após restart é descartado de modo fail-closed.
 

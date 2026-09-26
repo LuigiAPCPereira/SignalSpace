@@ -2,6 +2,15 @@
 
 **Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é a reconciliação publicada abaixo. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
+## Checkpoint vigente — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+- **Estado:** IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE.
+- **Base:** `codex/mvp-vertical-programming`, HEAD/remoto live inicial `8ced9a4055e84cbfd3937dd3675c3ee707c1f61f`. Os patches protegidos permanecem untracked, não aplicados e intocados.
+- **Implementado:** teto de grant em `policy.Evaluate`, default interno `REQUIRE_APPROVAL`, envelopes Programming tipados para checkout/managed worktree, APIs `GrantProgrammingCheckout`, `GrantProgrammingManaged` e `ActivateProgramming`, `approval.ConsumeMatching` e fingerprint SHA-256 canônico versionado.
+- **Validado:** testes focados de policy/workspace/approval passaram após as mudanças, incluindo ausência de capability, regras `ALLOW_*`, envelopes canônicos, managed activation, estabilidade de fingerprint e consumo por contexto.
+- **Não iniciado/não autorizado:** bridge MCP, mudança de OAuth/discovery/schema, Quick Tunnel, ChatGPT Web, workspace real, CI, merge, rebase, deploy e qualquer capability fora dos envelopes.
+- **Próxima ação:** executar gates completos, criar commits focados, publicar por fast-forward normal se o remoto continuar no mesmo HEAD e enviar relatório ao ChatGPT Web. Próximo gate recomendado: `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`.
+
 ## Checkpoint `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` — 26/09/2026
 
 - **Estado:** IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE.

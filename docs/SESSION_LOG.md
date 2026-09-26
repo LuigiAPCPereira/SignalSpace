@@ -2,6 +2,14 @@
 
 Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), Git/CI. Comportamento: [produto](PRODUCT.md), [workspace](WORKSPACE_SECURITY.md), [contrato admin](LOCAL_ADMIN_AUTHORIZATION.md). Autoridade de IDs/estado: [TASKLIST](../TASKLIST.md), checkpoint derivado [PROJECT_STATE](PROJECT_STATE.md). Não inventar eventos.
 
+## 26/09/2026 — semântica de grant/policy — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001`
+
+- Pré-flight: branch `codex/mvp-vertical-programming`; HEAD/remoto live inicial `8ced9a4055e84cbfd3937dd3675c3ee707c1f61f`; patches protegidos confirmados com SHA-256 aprovados, untracked e intactos.
+- Implementação: `policy.Evaluate` agora trata o grant como teto, nega capability ausente mesmo com regra, exige `REQUIRE_APPROVAL` por default dentro do envelope e falha fechado para contexto/grant/workspace inválidos. Envelopes Programming tipados foram adicionados para checkout e managed worktree, com APIs owner-side correspondentes.
+- Approval: `CanonicalFingerprint` produz hash SHA-256 versionado e `ConsumeMatching` consome um único permit por contexto exato sem depender de `permit_id` no cliente; a revalidação de grant/envelope permanece na camada de autorização.
+- Validação intermediária: `go test ./internal/policy ./internal/workspace ./internal/approval -p=1 -parallel=1 -count=1 -timeout=300s`, `gofmt` e `git diff --check` passaram. Gates completos, commits e publicação ainda pendentes.
+- Limites: sem bridge MCP, nova tool/schema/scope OAuth, Quick Tunnel, ChatGPT Web, workspace real, CI, merge, rebase, deploy ou aplicação dos patches protegidos.
+
 ## 26/09/2026 — `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001`
 
 - Pré-flight: branch `codex/mvp-vertical-programming`; HEAD e remoto live inicial `a177f6ca714839d06186fa4df36f62d8e2c0269b`; o tracking ref local estava atrasado, portanto não foi usado como autoridade. Patches protegidos confirmados pelos SHA aprovados, untracked e intactos.

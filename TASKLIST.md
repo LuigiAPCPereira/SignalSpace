@@ -4,6 +4,15 @@
 
 **Reconciliação de ref mais recente em 26/09/2026:** a ref corrente desta frente é `codex/mvp-vertical-programming`; a última implementação publicada nesta fatia é `3b9fefe398b67cf0752f0a8034d22a829b808c38`. O ciclo OAuth v2 e o núcleo interno de capabilities/policy foram publicados por fast-forward normal; não houve merge, rebase ou force-push. O PR #1 continua draft e sua HEAD/branch de origem continua `feat/m1-local-mcp-diagnostic`; ela não é a branch atual e não foi integrada nesta frente.
 
+## Tarefa vigente — `SS-MVP-002-GRANT-POLICY-SEMANTICS-V2-001` — 26/09/2026
+
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. A base/remoto live confirmado no início foi `8ced9a4055e84cbfd3937dd3675c3ee707c1f61f`; a publicação permanece condicionada aos gates finais desta missão.
+- A semântica foi fechada: o grant é o envelope máximo; capability ausente resulta em `DENY` antes de qualquer regra; dentro do envelope, `ASK` ou ausência de regra resulta em `REQUIRE_APPROVAL`; `ALLOW_SESSION` e `ALLOW_WORKSPACE` só podem retornar `ALLOW` dentro do envelope; stale/inconsistente falha fechado.
+- Foram adicionados envelopes tipados canônicos para checkout (`workspace.read`, `workspace.write`, `workspace.delete`, `git.review`) e managed worktree (checkout + `git.index`, `git.commit`), além de `GrantProgrammingCheckout`, `GrantProgrammingManaged` e `ActivateProgramming`. `test.run`, shell, branch, Git remoto e Git destrutivo permanecem fora.
+- `internal/approval` ganhou `ConsumeMatching` por contexto exato e `CanonicalFingerprint` SHA-256 versionado; a camada de autorização continua responsável por revalidar grant/envelope antes do consumo. Não há nova schema MCP nem bridge público nesta tarefa.
+- Cobertura adicionada: teto do envelope e default `REQUIRE_APPROVAL`, APIs de grant/managed worktree, fingerprints estáveis e consumo por contexto sem expor `permit_id`. Patches protegidos permanecem untracked, não aplicados e intocados.
+- Próxima ação: concluir gates completos, criar commits focados, publicar por fast-forward normal e entregar relatório ao ChatGPT Web. Próximo gate funcional recomendado: `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`; ele não será iniciado automaticamente nesta missão.
+
 ## Atualização vigente — `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` — 26/09/2026
 
 - Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** no commit local `30c6570`; base/remoto live inicial `a177f6ca714839d06186fa4df36f62d8e2c0269b`; aceite externo, Quick Tunnel, workspace real, CI, merge e deploy permanecem fora desta missão.
