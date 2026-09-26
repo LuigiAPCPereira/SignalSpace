@@ -2,7 +2,7 @@
 
 **Autoridade de execução:** [contrato local](docs/LOCAL_ADMIN_AUTHORIZATION.md), [MVP](docs/MVP.md), [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1). O PR #1 permanece draft na branch `feat/m1-local-mcp-diagnostic`; a execução corrente ocorre em `codex/mvp-vertical-programming`, sem merge autorizado. Esta lista é autoridade para ID, estado, dependências, aceite e evidência; checkpoint é derivado. Revalidar HEAD/CI ao retomar. Estados: `pendente`, `em andamento`, `bloqueada`, `implementada não validada`, `validada`, `integrada` quando exigida, `cancelada`. **Provas distintas:** CI com cloudflared simulado comprova o harness; o smoke M3 na revisão `bd60fc3` é relato operacional do proprietário em 20/09/2026, não execução independente desta sessão. Sem logs brutos, IDs ou transcrição de chamadas anexados; não extrapolar além dos itens relatados.
 
-**Reconciliação de ref mais recente em 26/09/2026:** a ref corrente desta frente é `codex/mvp-vertical-programming`, com HEAD/remoto observado em `18873819f2dceaa525285df22f1dc6edf9d63ba2`. O ciclo OAuth v2 foi publicado por fast-forward normal nesse commit; não houve merge, rebase ou force-push. O PR #1 continua draft e sua HEAD/branch de origem continua `feat/m1-local-mcp-diagnostic`; ela não é a branch atual e não foi integrada nesta frente.
+**Reconciliação de ref mais recente em 26/09/2026:** a ref corrente desta frente é `codex/mvp-vertical-programming`; a última implementação publicada nesta fatia é `8739f05f7d4388bdbd9d1a2cbd93722c50c4e998`. O ciclo OAuth v2 e o núcleo interno de capabilities/policy foram publicados por fast-forward normal; não houve merge, rebase ou force-push. O PR #1 continua draft e sua HEAD/branch de origem continua `feat/m1-local-mcp-diagnostic`; ela não é a branch atual e não foi integrada nesta frente.
 
 ## Atualização vigente — `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` — 26/09/2026
 
@@ -13,10 +13,10 @@
 
 ## Atualização vigente — `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` — 26/09/2026
 
-- Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. O núcleo interno adapta os seis scopes OAuth legados para capabilities tipadas, refatora `workspace.Grants` para armazená-las e adiciona Policy Engine fail-closed com `ALLOW`, `DENY` e `REQUIRE_APPROVAL`.
+- Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `8739f05f7d4388bdbd9d1a2cbd93722c50c4e998`. O núcleo interno adapta os seis scopes OAuth legados para capabilities tipadas, refatora `workspace.Grants` para armazená-las e adiciona Policy Engine fail-closed com `ALLOW`, `DENY` e `REQUIRE_APPROVAL`.
 - Aceite: `internal/capability` mantém catálogo fechado e adaptadores explícitos; `internal/workspace` preserva assinaturas e snapshots públicos legados sem armazenar scopes como autoridade; `internal/policy` cobre regras owner/client/token-family/workspace/session/tool/fingerprint, precedência específica, negação em empate e expiração.
 - Limites: Policy Engine não está conectado ao MCP, não expõe `REQUIRE_APPROVAL`, não persiste políticas e não cria approvals, permits, painel, nova tool, novo scope OAuth ou migração pública. `workspace.delete`, `git.branch`, Git remoto, `git.destructive` e `shell.exec` permanecem somente no catálogo interno fechado, sem autorização runtime.
-- Evidência: testes focais de capability, policy e workspace passam; gates completos e publicação fast-forward desta fatia ainda são pendentes. Patches protegidos permanecem untracked, não aplicados e intocados.
+- Evidência: suíte Go completa serial, race proporcional de capability/policy/workspace/auth, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram; push fast-forward foi confirmado no remoto. Patches protegidos permanecem untracked, não aplicados e intocados.
 
 ## Atualização vigente — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 

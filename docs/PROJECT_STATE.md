@@ -693,12 +693,14 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 ## Checkpoint `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` — 26/09/2026
 
-**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. `SS-MVP-002` permanece **PARCIAL/em andamento**; a superfície pública MCP/OAuth continua granular e CI permanece **DESCONHECIDA**.
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `8739f05f7d4388bdbd9d1a2cbd93722c50c4e998`. `SS-MVP-002` permanece **PARCIAL/em andamento**; a superfície pública MCP/OAuth continua granular e CI permanece **DESCONHECIDA**.
+
+**Ref e publicação:** branch `codex/mvp-vertical-programming`; o commit focado foi criado sobre o remoto `18873819f2dceaa525285df22f1dc6edf9d63ba2` e o fast-forward para `8739f05f7d4388bdbd9d1a2cbd93722c50c4e998` foi confirmado por `git ls-remote`.
 
 **Implementação:** `internal/capability` define o catálogo fechado de capabilities internas, adapta explicitamente os seis scopes OAuth legados e não atribui scopes a capabilities futuras. `internal/workspace/grants.go` armazena capabilities tipadas e checa capabilities nas operações; `GrantWithScopes`, `AllowsClientScope` e `GrantSnapshot.Scopes` preservam a compatibilidade de borda. `internal/policy` fornece engine em memória com contexto completo, regras `DENY`/`ASK`/`ALLOW_SESSION`/`ALLOW_WORKSPACE`, precedência por especificidade, negação em empate, expiração e retorno `ALLOW`/`DENY`/`REQUIRE_APPROVAL`.
 
-**Validação:** testes focais de `internal/capability`, `internal/policy` e `internal/workspace` passaram, incluindo mapeamento sem aceitar scope desconhecido, armazenamento sem raw scope, snapshot legado, decisões fail-closed, `ASK`, allow workspace/session, precedência, deny em empate e expiração. Ainda faltam suíte completa, race proporcional, vet, build, commit e publicação desta fatia.
+**Validação:** suíte Go completa serial, race proporcional de `internal/capability`, `internal/policy`, `internal/workspace` e `internal/auth`, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram. Os testes cobrem mapeamento sem aceitar scope desconhecido, armazenamento sem raw scope, snapshot legado, decisões fail-closed, `ASK`, allow workspace/session, precedência, deny em empate, expiração e engine de valor zero.
 
 **Limites:** o Policy Engine não está conectado ao MCP e não expõe `REQUIRE_APPROVAL`; não há approvals, permits, persistência, painel, nova tool/scope, shell, Git remoto, branch, workspace real, CI, HTTPS, túnel, navegador, merge ou deploy. Os dois patches protegidos permanecem untracked, não aplicados e intocados com SHA-256 preservados.
 
-**Próxima ação vinculada:** executar gates completos, criar commit focado, verificar fast-forward e publicar apenas em `codex/mvp-vertical-programming`; então enviar o relatório ao ChatGPT Web e aguardar nova missão.
+**Próxima ação vinculada:** enviar o relatório ao ChatGPT Web com `<continuidade_codex>` e aguardar nova missão; não ampliar a superfície pública por conta própria.

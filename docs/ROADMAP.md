@@ -88,4 +88,4 @@ O estado documental original era **ACEITA / NÃO IMPLEMENTADA**. A tarefa seguin
 
 O slice implementa `internal/capability` como catálogo fechado e adaptador explícito dos scopes legados, refatora `workspace.Grants` para armazenar capabilities tipadas e adiciona `internal/policy` com decisões `ALLOW`, `DENY` e `REQUIRE_APPROVAL`. O Policy Engine é em memória, fail-closed e não é chamado pelo transporte MCP nesta etapa; não há nova tool, scope público, grant automático, approval, permit, persistência, painel, shell ou Git remoto.
 
-O estado é **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. O fechamento exige gates completos, commit focado e verificação fast-forward; o aceite externo ChatGPT Web, CI, HTTPS, túnel e workspace real permanecem desconhecidos.
+O estado é **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `8739f05f7d4388bdbd9d1a2cbd93722c50c4e998`. A suíte Go, race proporcional, vet, build, formato e diff-check passaram; o aceite externo ChatGPT Web, CI, HTTPS, túnel e workspace real permanecem desconhecidos.
