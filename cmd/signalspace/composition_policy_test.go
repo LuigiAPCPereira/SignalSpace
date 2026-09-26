@@ -150,4 +150,8 @@ func TestQuickAdminPanelDoesNotChangeCompositionMode(t *testing.T) {
 	if !ok || mode != compositionDiagnostic || !panel {
 		t.Fatalf("panel altered the diagnostic composition: mode=%d panel=%t ok=%t", mode, panel, ok)
 	}
+	mode, panel, ok = quickModeArgs([]string{"connect", "quick", "programming", "panel"})
+	if !ok || mode != compositionProgramming || !panel {
+		t.Fatalf("panel altered the programming composition: mode=%d panel=%t ok=%t", mode, panel, ok)
+	}
 }

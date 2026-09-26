@@ -226,7 +226,7 @@ func TestEmbeddedTransportCompositionMatrix(t *testing.T) {
 	}
 
 	// Unsupported composition scope: FAIL
-	for _, invalidScope := range []string{"", "unsupported", "signalspace:workspace.read"} {
+	for _, invalidScope := range []string{"", "unsupported", "signalspace:workspace.read", "signalspace:programming-fake", "signalspace:diagnostic ", " signalspace:programming"} {
 		if _, err := CheckEmbeddedTransportForScope(context.Background(), diagResource, invalidScope, diagClient); err == nil {
 			t.Fatalf("unsupported scope %q was accepted", invalidScope)
 		}

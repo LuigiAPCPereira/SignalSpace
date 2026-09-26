@@ -27,6 +27,22 @@ func TestPublicProgrammingV2UsesOneOAuthScopeAndFailsClosedWithoutPanel(t *testi
 		_ = authorization.Close()
 	})
 
+	protected := readRequest(t, handler, http.MethodGet, "/.well-known/oauth-protected-resource", "", "", "", nil)
+	if protected.Code != http.StatusOK {
+		t.Fatalf("Programming protected resource metadata failed: %d %s", protected.Code, protected.Body.String())
+	}
+	var protectedMeta struct {
+		Resource             string   `json:"resource"`
+		AuthorizationServers []string `json:"authorization_servers"`
+		ScopesSupported      []string `json:"scopes_supported"`
+	}
+	if err := json.Unmarshal(protected.Body.Bytes(), &protectedMeta); err != nil {
+		t.Fatalf("parse protected resource metadata: %v", err)
+	}
+	if protectedMeta.Resource != readTestResource || len(protectedMeta.ScopesSupported) != 1 || protectedMeta.ScopesSupported[0] != compositionProgrammingScope {
+		t.Fatalf("unexpected protected resource metadata: %+v", protectedMeta)
+	}
+
 	metadata := readRequest(t, handler, http.MethodGet, "/.well-known/oauth-authorization-server", "", "", "", nil)
 	if metadata.Code != http.StatusOK || strings.Contains(metadata.Body.String(), "workspace.read") || !strings.Contains(metadata.Body.String(), compositionProgrammingScope) || !strings.Contains(metadata.Body.String(), "refresh_token") {
 		t.Fatalf("Programming OAuth metadata is not v2: %d %s", metadata.Code, metadata.Body.String())
@@ -53,6 +69,27 @@ func TestPublicProgrammingV2UsesOneOAuthScopeAndFailsClosedWithoutPanel(t *testi
 	listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 	if listing.Code != http.StatusOK || strings.Contains(listing.Body.String(), "workspace.read") || strings.Contains(listing.Body.String(), "git.review") || !strings.Contains(listing.Body.String(), `"scopes":["signalspace:programming"]`) {
 		t.Fatalf("Programming tools/list leaked granular scopes: %d %s", listing.Code, listing.Body.String())
+	}
+	var toolsPayload struct {
+		Result struct {
+			Tools []struct {
+				Name            string `json:"name"`
+				SecuritySchemes []struct {
+					Scopes []string `json:"scopes"`
+				} `json:"securitySchemes"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(listing.Body.Bytes(), &toolsPayload); err != nil {
+		t.Fatalf("parse tools/list: %v", err)
+	}
+	if len(toolsPayload.Result.Tools) != 20 {
+		t.Fatalf("expected exactly 20 programming tools, got %d", len(toolsPayload.Result.Tools))
+	}
+	for _, tool := range toolsPayload.Result.Tools {
+		if len(tool.SecuritySchemes) != 1 || len(tool.SecuritySchemes[0].Scopes) != 1 || tool.SecuritySchemes[0].Scopes[0] != compositionProgrammingScope {
+			t.Fatalf("tool %q does not have programming-only security scheme: %+v", tool.Name, tool.SecuritySchemes)
+		}
 	}
 	call := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"session_id":"` + strings.Repeat("a", 32) + `","path":"file.txt"}}}`
 	response := readRequest(t, handler, http.MethodPost, "/mcp", call, "application/json", token, nil)
@@ -91,6 +128,31 @@ func TestProgrammingPreflightPassesAndRejectsDiagnostic(t *testing.T) {
 	// Preflight expecting diagnostic scope on Programming server fails.
 	if _, err := mcp.CheckEmbeddedTransport(context.Background(), resource, server.Client()); err == nil {
 		t.Fatal("Programming preflight should fail when expecting diagnostic scope")
+	}
+
+	// Inverse: on Diagnostic server, expected diagnostic passes and expected programming fails.
+	diagPlan, err := planComposition(compositionDiagnostic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagH, diagAuth, diagConsole, err := embeddedHandlerForPlanWithAuthorizer(resource, filepath.Join(t.TempDir(), "diag_identity"), diagPlan, func() mcp.ProgrammingAuthorizer { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if diagConsole != nil {
+			_ = diagConsole.Close()
+		}
+		_ = diagAuth.Close()
+	})
+	handler = diagH
+
+	diagReport, err := mcp.CheckEmbeddedTransportForScope(context.Background(), resource, diagPlan.expectedCompositionScope, server.Client())
+	if err != nil || diagReport.ResourceURL != resource {
+		t.Fatalf("Diagnostic preflight failed with expected scope: %v", err)
+	}
+	if _, err := mcp.CheckEmbeddedTransportForScope(context.Background(), resource, compositionProgrammingScope, server.Client()); err == nil {
+		t.Fatal("Diagnostic server should fail preflight when expecting programming scope")
 	}
 }
 
