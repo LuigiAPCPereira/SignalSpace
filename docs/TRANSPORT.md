@@ -49,6 +49,8 @@ O [Túnel MCP Seguro da OpenAI](https://developers.openai.com/pt-BR/api/docs/gui
 
 ## Relação com autorização local v2
 
-O desenho aceito em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md) trata OAuth como autenticação da composição, não como concessão de filesystem, Git ou shell. O auth harness opt-in implementa `signalspace:programming` e o ciclo refresh v2; a composição pública e suas tools continuam no contrato granular até uma migração própria. O transporte deve carregar a identidade e o recurso corretos; a decisão local continua pertencendo ao SignalSpace.
+O desenho aceito em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md) trata OAuth como autenticação da composição, não como concessão de filesystem, Git ou shell. O auth harness opt-in e a composição pública `connect quick programming` implementam `signalspace:programming` e o ciclo refresh v2; `diagnostic`/`read` e o construtor legado continuam no contrato granular. O transporte carrega a identidade e o recurso corretos; a decisão local continua pertencendo ao SignalSpace.
+
+**Reconciliação da ponte v2 (26/09/2026):** a discovery Programming anuncia somente o scope da composição e exatamente as tools aprovadas. Cada `tools/call` exige OAuth Programming e autorização local antes do dispatch; `LOCAL_APPROVAL_REQUIRED` é resultado pendente sem efeito e o retry exato consome o permit uma vez. A prova feita foi HTTP local sem Quick Tunnel; aceite ChatGPT Web/HTTPS externo permanece desconhecido.
 
 Quick Tunnel continua temporário e apropriado somente a dev/smoke. A experiência persistente exigirá uma origem estável, a escolher em tarefa própria; esta reconciliação não escolhe Named Tunnel, domínio, provedor ou relay e não altera o endpoint atual.

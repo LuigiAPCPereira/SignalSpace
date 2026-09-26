@@ -193,3 +193,11 @@ Implementar somente mediante novas tarefas/gates: integração do Policy Engine 
 ## Estado da decisão
 
 **ACEITA / CICLO OAUTH V2 E NÚCLEO INTERNO DE CAPABILITIES/POLICY IMPLEMENTADOS NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA.** O runtime público permanece granular; `REQUIRE_APPROVAL`, approvals, permits, tools novas e shell não são expostos.
+
+## Reconciliação da migração Programming — `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` — 26/09/2026
+
+O estado acima é histórico da ADR e fica substituído para a composição explícita `connect quick programming`: a migração pública v2 foi implementada nesta missão. OAuth autentica a composição com o único scope `signalspace:programming`; a autorização efetiva continua owner-side, limitada pelo grant e pela policy local. O bridge não altera `diagnostic`/`read` nem transforma OAuth em acesso irrestrito.
+
+O transporte entrega identidade verificada e operação normalizada ao contrato `ProgrammingAuthorizer`; o domínio concreto revalida grant, client, sessão e capability antes de chamar qualquer porta typed. `ALLOW_ONCE` é permit interno consumido no retry exato; `DENY`, ausência, grant revogado, capability ausente e approval indisponível falham fechado. A API administrativa usa o mesmo manager e não expõe permit, bearer, raiz, conteúdo ou fingerprint completo.
+
+Estado nesta missão: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** antes dos gates finais. Aceite externo ChatGPT Web, Quick Tunnel, workspace real, CI, merge e deploy continuam fora da evidência.

@@ -105,3 +105,9 @@ O estado é **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `3
 Esta etapa implementa o primeiro slice operacional da arquitetura v2 sem migrar o bridge MCP: approvals carregam decisões permitidas, `ALLOW_SESSION` fica em memória e `ALLOW_WORKSPACE` grava somente identidade owner/client/managed-workspace/capability em store privado versionado. O painel local separa solicitações OAuth, approvals de programação e policies persistentes, com revoke protegido por sessão, CSRF e same-origin.
 
 Estado: **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `24dfc6e1b8176adc268fd079519f38acd8ea329a`. A etapa seguinte recomendada é `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`, que não foi iniciada nesta missão.
+
+## `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` — ponte Programming v2 — 26/09/2026
+
+Esta etapa foi executada: a composição explícita Programming migra para um único scope OAuth de composição, conserva os contratos granulares de diagnostic/read, e conecta discovery/dispatch ao envelope de grant, Policy Engine e approvals locais. A superfície do bridge é fechada em 20 tools; não inclui shell, `test.run`, branch, Git remoto ou lifecycle de worktree.
+
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** até os gates finais, commit e push FF normal. A integração HTTP local da aprovação passou; Quick Tunnel, ChatGPT Web, workspace real e CI continuam fora da evidência. O próximo passo após publicação é o aceite externo separado.

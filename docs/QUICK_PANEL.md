@@ -77,3 +77,9 @@ Esta seção não implementa fila, notification, persistência ou nova rota. O p
 `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001` adiciona ao painel existente uma seção separada para approvals de programação e outra para policies de managed workspace. O backend é a autoridade: a UI renderiza `allowed_decisions`, não inventa `ALLOW_WORKSPACE`, usa texto seguro e, após perda de resposta, consulta o estado antes de permitir nova decisão. O painel não faz polling agressivo, não executa a operação aprovada e não publica a porta administrativa.
 
 Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE**. A composição Quick cria o store dentro do estado privado descartável da instância; persistência entre reinícios exige um state directory durável em missão própria. MCP público, túnel, navegador e ChatGPT Web permanecem fora desta validação.
+
+## Estado da ponte Programming v2 — 26/09/2026
+
+Quando `connect quick programming` é iniciado com `panel`, `ProgrammingAuthorizer`, `policy.Engine` e `approval.Manager` são compostos na mesma instância privada do Quick. O painel lista e decide approvals por `/api/admin/v1/capability-approvals`; ele não executa a operação e não expõe permit. Sem painel, qualquer ferramenta Programming que precise da ponte falha fechado como `LOCAL_APPROVAL_UNAVAILABLE`.
+
+O teste HTTP local confirmou o ciclo pendente → decisão → retry idêntico → consumo único. A porta 7677 segue loopback-only e nunca é publicada pelo túnel. Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**; túnel, navegador, ChatGPT Web, workspace real e CI não foram exercitados.

@@ -432,3 +432,12 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 - Limites: `ALLOW_SESSION` é memória da instância; `ALLOW_WORKSPACE` exige managed worktree estável; policy não substitui grant ativo, não executa operação e não altera MCP público. Common checkout não é elegível. Quick usa diretório privado descartável da instância atual.
 - Evidência: testes de decisão concorrente, persistência/reload, corrupção/unknown fields, revoke/evaluate concorrente, HTTP CSRF/Host/Origin e 23 testes Node do painel. `go test ./...` passou; CI, navegador/ChatGPT Web, HTTPS, túnel e workspace real continuam desconhecidos.
 - Próxima ação: enviar o relatório ao ChatGPT Web e aguardar a próxima missão. Não iniciar `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` automaticamente.
+
+## Tarefa vigente — `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` — 26/09/2026
+
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** nesta atualização; o commit e o SHA remoto serão registrados após os gates finais.
+- A composição pública `connect quick programming` usa `signalspace:programming`, refresh token no harness opt-in e `ProgrammingAuthorizer` owner-side antes de qualquer dispatch. `diagnostic`, `read` e o construtor legado preservam os contratos granulares.
+- A discovery v2 é fechada em 20 tools tipadas: diagnóstico, READ/WRITE/filesystem, Git review, `git_status`, stage/unstage e `commit_git_index`. `test.run`, shell, branch, merge/rebase/reset/clean/stash/fetch/pull, Git remoto e lifecycle MCP de worktree permanecem ausentes.
+- OAuth verifica issuer/audience/exp/owner/client/programming; o bridge revalida owner/client/session/grant/envelope/capability e policy. Argumentos têm schema fechado, fingerprint SHA-256 redigido e summary seguro. `REQUIRE_APPROVAL` retorna `LOCAL_APPROVAL_REQUIRED` sem efeito, consome `ALLOW_ONCE` no retry exato e usa o mesmo `approval.Manager` da API administrativa.
+- Evidência: focados de OAuth/discovery/authorizer; integração HTTP local MCP → `/api/admin/v1/capability-approvals` → decisão → retry one-shot; suíte Go serial completa. Race/vet/build/diff-check finais, commit e push ainda são gates pendentes.
+- Limites: nenhum Quick Tunnel, ChatGPT Web externo, workspace real, OAuth externo, CI, deploy, merge, rebase ou alteração dos patches protegidos. Próxima ação: finalizar gates, publicar por fast-forward normal se possível e entregar `<continuidade_codex>` ao ChatGPT Web.

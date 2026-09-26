@@ -260,3 +260,11 @@ O slice implementa o contrato local sem alterar discovery ou o catálogo MCP. A 
 O painel administrativo separa `/api/admin/v1/requests`, `/api/admin/v1/capability-approvals` e `/api/admin/v1/capability-policies`. As rotas de policy exigem sessão, CSRF e Host/Origin local; a UI respeita `allowed_decisions`, reconcilia perda de resposta e não trata erro como fila vazia. A policy mantém a exigência de grant ativo: autorização local não é grant OAuth nem escopo.
 
 Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `24dfc6e1b8176adc268fd079519f38acd8ea329a`. Não houve MCP bridge, nova tool/scope, Quick Tunnel, OAuth externo, navegador real, workspace real, CI, merge ou deploy.
+
+## Ponte pública Programming v2 — `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` — 26/09/2026
+
+Esta seção é a reconciliação vigente; os parágrafos anteriores que descrevem a migração pública como futura são históricos dos gates anteriores. `connect quick programming` usa somente `signalspace:programming` no OAuth e anuncia refresh token no harness opt-in. A composição publica exatamente as 20 ferramentas tipadas aprovadas: diagnóstico, leitura/inspeção, escrita/patch/delete/copy/move e Git review/status/index/commit. Não publica `run_workspace_tests`, shell, branch, merge/rebase/reset/clean/stash/fetch/pull, Git remoto ou lifecycle MCP de worktree.
+
+Cada chamada Programming passa por OAuth v2 e depois por `ProgrammingAuthorizer`, que revalida owner, client, sessão, grant ativo, envelope de capabilities, policy e approval. Argumentos são normalizados por schema fechado; fingerprints usam operação com hashes de conteúdo/replacement, e summaries são seguros. `REQUIRE_APPROVAL` retorna `LOCAL_APPROVAL_REQUIRED` com request ID e zero efeito; o retry precisa ser idêntico e `ALLOW_ONCE` é consumido uma única vez. A API de approvals e o MCP compartilham o mesmo `approval.Manager`; permit, bearer e conteúdo privado não chegam à UI.
+
+O construtor legado e as composições `diagnostic`/`read` continuam verificando e anunciando scopes granulares. Sem painel, o caminho Programming falha fechado como `LOCAL_APPROVAL_UNAVAILABLE`. Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** até os gates finais e push normal fast-forward. ChatGPT Web, Quick Tunnel, workspace real, CI e aceite externo permanecem **NÃO VALIDADOS**.

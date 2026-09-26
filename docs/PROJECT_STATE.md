@@ -737,3 +737,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Publicação:** commits focados `8eb3fb0` (implementação/testes) e `24dfc6e` (documentação) foram publicados por push normal fast-forward; `git ls-remote` confirmou o SHA acima. Não houve merge, rebase ou force-push.
 
 **Próxima ação:** enviar relatório com `<continuidade_codex>` ao ChatGPT Web. A missão seguinte recomendada (`SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`) permanece apenas recomendação e não foi iniciada.
+
+## Checkpoint vigente — `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` — 26/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** até concluir os gates finais. `SS-MVP-002` permanece parcial quanto ao aceite operacional externo.
+
+**Ref:** branch `codex/mvp-vertical-programming`, base local/remota inicial `e741d48c1b13e9de01380247889b00b55437e575`. Os patches protegidos continuam untracked, não aplicados e intocados: `signalspace-oauth-read-scope.patch` SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b`; `signalspace-workspace-client-binding.patch` SHA-256 `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+
+**Implementação:** OAuth Programming v2 para a composição Quick, discovery exata de 20 tools, contrato `ProgrammingAuthorizer`, normalização/fingerprint redigido, bridge de grant/policy/approval, respostas locais seguras e preservação do caminho legado granular. `git.index`/`git.commit` continuam limitados às portas managed-worktree; shell, test.run e Git remoto não foram adicionados.
+
+**Validação:** testes focados de OAuth/discovery/authorizer; integração HTTP local MCP → API de approval → decisão → retry idêntico/one-shot; suíte Go serial completa. Race, vet, build, diff-check, commit e publicação ainda são próximos gates. Quick Tunnel, HTTPS externo, ChatGPT Web, workspace real e CI permanecem **NÃO VALIDADOS/DESCONHECIDOS**.
+
+**Próxima ação vinculada:** finalizar gates e reconciliar este checkpoint com os SHAs de commit/push; depois entregar o relatório ao ChatGPT Web com `<continuidade_codex>` e aguardar a próxima missão.

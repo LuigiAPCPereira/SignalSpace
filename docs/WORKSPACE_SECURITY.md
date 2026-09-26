@@ -130,3 +130,9 @@ O gate está **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICADO E CONFIRMADO NO RE
 ## Policy de workspace — `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001`
 
 `ALLOW_WORKSPACE` não usa caminho como identidade. O callback owner-side aceita somente `ManagedWorkspaceID` revalidado pelo `ManagedWorktreeManager` como worktree estável; checkout comum, workspace ausente, stale ou inconsistente falham fechado. O store persistente registra apenas owner, client, workspace, capability, efeito e timestamps, com formato versionado, JSON estrito, lock, escrita atômica e permissões privadas. `ALLOW_SESSION` não atravessa restart; revoke de policy não depende de escrita. A policy continua subordinada a grant ativo e não executa ferramenta.
+
+## Ponte Programming v2 — fronteira adicional de segurança — 26/09/2026
+
+O bridge público aplica a ordem OAuth verificado → owner/client → sessão/grant → capability do envelope → policy → approval → porta typed. A operação é normalizada antes do fingerprint; conteúdo e replacement entram somente como SHA-256, e summaries não carregam raiz absoluta, bearer, token family ou conteúdo privado. Falha de grant, capability, policy, approval ou contexto não inicia filesystem/Git e não é convertida em sucesso.
+
+O envelope de checkout Programming mantém READ, WRITE, DELETE e Git review; Git index/commit continuam exigindo managed worktree nas próprias portas. `test.run`, shell e Git remoto não aparecem na discovery v2. A integração HTTP local comprovou zero efeito antes da decisão e consumo único do retry aprovado. Quick Tunnel, navegador, ChatGPT Web, workspace real e CI permanecem não validados.
