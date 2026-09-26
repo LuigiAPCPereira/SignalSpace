@@ -148,12 +148,12 @@ func NewLocalHandler(token string, port int) (http.Handler, error) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		serveMCP(w, r, "local_diagnostic", nil, nil, nil, nil, nil, nil, nil)
+		serveMCP(w, r, "local_diagnostic", nil, nil, nil, nil, nil, nil, nil, nil, VerifiedIdentity{})
 	}), nil
 }
 
 // serveMCP processa o protocolo somente após a fronteira de autenticação.
-func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, gitCommitAccess *gitCommitToolAccess, testAccess *testToolAccess) {
+func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, gitCommitAccess *gitCommitToolAccess, testAccess *testToolAccess, programmingAuthorizer ProgrammingAuthorizer, programmingIdentity VerifiedIdentity) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -202,7 +202,7 @@ func serveMCP(w http.ResponseWriter, r *http.Request, mode string, onMCPEvent fu
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess)
+	handle(w, r, msg, id, mode, onMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess, programmingAuthorizer, programmingIdentity)
 }
 
 func isOversized(err error) bool {
@@ -210,7 +210,9 @@ func isOversized(err error) bool {
 	return errors.As(err, &maxErr)
 }
 
-func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, gitCommitAccess *gitCommitToolAccess, testAccess *testToolAccess) {
+func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, gitCommitAccess *gitCommitToolAccess, testAccess *testToolAccess, programmingAuthorizer ProgrammingAuthorizer, programmingIdentity VerifiedIdentity) {
+	programmingDiscovery := mode == "oauth_programming" || mode == "oauth_programming_legacy"
+	programmingV2 := mode == "oauth_programming"
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -221,8 +223,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			return
 		}
 		instructions := "Diagnostic only; no development tools are available."
-		programmingDiscovery := mode == "oauth_programming"
-		if programmingDiscovery {
+		if programmingV2 {
+			instructions = "Programming tools use one OAuth Programming connection plus local SignalSpace authorization; local approval may be required. Git index and commit require a managed SignalSpace worktree; no shell, remote Git or test.run."
+		} else if programmingDiscovery {
 			instructions = "Programming tools are discoverable; each category requires a separate OAuth scope and active local grant. Git index and commit require a managed SignalSpace worktree; no shell, remote Git or test.run."
 		} else if readAccess != nil && readAccess.discoverable {
 			instructions = "File reading requires a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
@@ -273,8 +276,12 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
 			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false},
 		}
-		if mode == "oauth_diagnostic" || mode == "oauth_programming" {
-			tool["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{diagnosticScope}}}
+		if mode == "oauth_diagnostic" || programmingDiscovery {
+			scope := diagnosticScope
+			if programmingV2 {
+				scope = programmingScope
+			}
+			tool["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{scope}}}
 		}
 		tools := []any{tool}
 		if readAccess != nil && readAccess.discoverable {
@@ -336,6 +343,18 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		if testAccess != nil && testAccess.discoverable {
 			tools = append(tools, testRunToolDefinition())
 		}
+		if programmingV2 {
+			for _, item := range tools {
+				definition, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				definition["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{programmingScope}}}
+				if name, ok := definition["name"].(string); ok && name != toolName {
+					definition["description"] = programmingToolDescription(name)
+				}
+			}
+		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"tools": tools,
 		}})
@@ -350,6 +369,22 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 		if !validObject(msg.Params) || json.Unmarshal(msg.Params, &params) != nil || !validObject(params.Arguments) {
 			fail(w, http.StatusOK, id, -32602, "Invalid params")
 			return
+		}
+		if programmingV2 && params.Name != toolName {
+			op, err := normalizeProgrammingOperation(params.Name, params.Arguments)
+			if err != nil {
+				fail(w, http.StatusOK, id, -32602, "Invalid params")
+				return
+			}
+			if programmingAuthorizer == nil {
+				writeProgrammingAuthorizationError(w, id, programmingAuthorizationError("LOCAL_APPROVAL_UNAVAILABLE", ProgrammingAuthorizationInput{Tool: params.Name, Capability: op.Capability, SessionID: op.SessionID, Fingerprint: op.Fingerprint, Operation: op.Operation, SafeSummary: op.Summary}, ""))
+				return
+			}
+			input := ProgrammingAuthorizationInput{Identity: programmingIdentity, Tool: params.Name, Capability: op.Capability, SessionID: op.SessionID, Fingerprint: op.Fingerprint, Operation: op.Operation, SafeSummary: op.Summary}
+			if err := programmingAuthorizer.Authorize(r.Context(), input); err != nil {
+				writeProgrammingAuthorizationError(w, id, err)
+				return
+			}
 		}
 		if params.Name == readToolName && readAccess != nil {
 			readAccess.call(w, r.Context(), id, params.Arguments)

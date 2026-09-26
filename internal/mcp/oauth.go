@@ -35,8 +35,10 @@ type OAuthConfig struct {
 	Issuer       string
 	OwnerSubject string
 	// discoverProgrammingTools separa a superfície configurada da autorização
-	// do bearer corrente. Só NewOAuthProgrammingHandler pode ativá-lo.
+	// do bearer corrente. Só os construtores explícitos de programação podem
+	// ativá-lo.
 	discoverProgrammingTools bool
+	programmingOAuthV2       bool
 	// WorkspaceReader é opcional e nunca é configurado por parâmetros HTTP.
 	// Uma instância sem este componente permanece exclusivamente diagnóstico.
 	WorkspaceReader WorkspaceTextReader
@@ -69,6 +71,10 @@ type OAuthConfig struct {
 	// OnMCPEvent recebe apenas eventos de ferramentas autenticadas e nomes fixos.
 	// diagnosticID é um identificador de correlação, nunca um token OAuth.
 	OnMCPEvent func(method, diagnosticID string)
+	// ProgrammingAuthorization é resolvido por chamada para permitir que a
+	// composição Quick seja montada antes de o painel local existir. Ausência
+	// fecha a superfície Programming com LOCAL_APPROVAL_UNAVAILABLE.
+	ProgrammingAuthorization func() ProgrammingAuthorizer
 }
 
 // ProgrammingPorts são as portas locais necessárias para a composição pública
@@ -101,6 +107,17 @@ type ProgrammingPorts struct {
 // fornecer as portas vinculadas à mesma concessão; não existe ativação
 // equivalente por parâmetro HTTP, metadata OAuth ou configuração genérica.
 func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
+	return newOAuthProgrammingHandler(config, ports, verifier, false)
+}
+
+// NewOAuthProgrammingV2Handler publica a composição Programming com um único
+// escopo OAuth de composição e ciclo refresh. O construtor legado acima fica
+// disponível apenas para harnesses de compatibilidade controlados.
+func NewOAuthProgrammingV2Handler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier) (http.Handler, error) {
+	return newOAuthProgrammingHandler(config, ports, verifier, true)
+}
+
+func newOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, verifier TokenVerifier, v2 bool) (http.Handler, error) {
 	if ports.WorkspaceReader == nil || ports.WorkspaceLister == nil || ports.WorkspaceStatter == nil || ports.WorkspaceFinder == nil || ports.WorkspaceSearcher == nil || ports.WorkspaceWriter == nil || ports.WorkspaceDirectoryCreator == nil || ports.WorkspaceTextCreator == nil || ports.WorkspaceTextUpdater == nil || ports.WorkspaceCopier == nil || ports.WorkspaceMover == nil || ports.WorkspaceFileDeleter == nil || ports.WorkspaceDirectoryDeleter == nil || ports.WorkspacePatchApplier == nil || ports.GitReviewer == nil || ports.GitStatusReader == nil || ports.GitIndexer == nil || ports.GitCommitter == nil {
 		return nil, errors.New("programming composition requires all typed filesystem, read, write, Git review, Git index and Git commit ports")
 	}
@@ -126,6 +143,7 @@ func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, veri
 	config.gitIndexer = ports.GitIndexer
 	config.gitCommitter = ports.GitCommitter
 	config.discoverProgrammingTools = true
+	config.programmingOAuthV2 = v2
 	return NewOAuthHandler(config, verifier)
 }
 
@@ -164,26 +182,32 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 	}
 	origin := "https://" + resource.Host
+	compositionScope := diagnosticScope
+	if config.discoverProgrammingTools && config.programmingOAuthV2 {
+		compositionScope = programmingScope
+	}
 	metadataURL := origin + metadataPath
-	challenge := fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, diagnosticScope)
-	scopes := []string{diagnosticScope}
-	if config.WorkspaceReader != nil {
-		scopes = append(scopes, workspaceReadScope)
-	}
-	if config.workspaceWriter != nil {
-		scopes = append(scopes, workspaceWriteScope)
-	}
-	if config.gitReviewer != nil || config.gitStatusReader != nil {
-		scopes = append(scopes, gitReviewScope)
-	}
-	if config.gitIndexer != nil {
-		scopes = append(scopes, gitIndexScope)
-	}
-	if config.gitCommitter != nil {
-		scopes = append(scopes, gitCommitScope)
-	}
-	if config.testRunner != nil {
-		scopes = append(scopes, testRunScope)
+	challenge := fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, compositionScope)
+	scopes := []string{compositionScope}
+	if !(config.discoverProgrammingTools && config.programmingOAuthV2) {
+		if config.WorkspaceReader != nil {
+			scopes = append(scopes, workspaceReadScope)
+		}
+		if config.workspaceWriter != nil {
+			scopes = append(scopes, workspaceWriteScope)
+		}
+		if config.gitReviewer != nil || config.gitStatusReader != nil {
+			scopes = append(scopes, gitReviewScope)
+		}
+		if config.gitIndexer != nil {
+			scopes = append(scopes, gitIndexScope)
+		}
+		if config.gitCommitter != nil {
+			scopes = append(scopes, gitCommitScope)
+		}
+		if config.testRunner != nil {
+			scopes = append(scopes, testRunScope)
+		}
 	}
 	metadata := map[string]any{
 		"resource":              config.ResourceURL,
@@ -219,9 +243,14 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			}
 			return
 		}
-		if err := verifier.Verify(r.Context(), strings.TrimPrefix(bearer, "Bearer "), config.Issuer, config.ResourceURL, diagnosticScope, config.OwnerSubject); err != nil {
+		verificationScope := compositionScope
+		if err := verifier.Verify(r.Context(), strings.TrimPrefix(bearer, "Bearer "), config.Issuer, config.ResourceURL, verificationScope, config.OwnerSubject); err != nil {
 			if errors.Is(err, ErrInsufficientScope) {
-				withError := challenge + `, error="insufficient_scope", error_description="Diagnostic scope is required"`
+				description := "Diagnostic scope is required"
+				if config.discoverProgrammingTools && config.programmingOAuthV2 {
+					description = "Programming scope is required"
+				}
+				withError := challenge + `, error="insufficient_scope", error_description="` + description + `"`
 				if !toolAuthChallenge(w, r, withError) {
 					unauthorized(w, http.StatusForbidden, withError)
 				}
@@ -233,9 +262,22 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 			}
 			return
 		}
+		accessToken := strings.TrimPrefix(bearer, "Bearer ")
+		var programmingIdentity VerifiedIdentity
+		if config.discoverProgrammingTools && config.programmingOAuthV2 {
+			if identityVerifier == nil {
+				unauthorized(w, http.StatusUnauthorized, challenge)
+				return
+			}
+			var identityErr error
+			programmingIdentity, identityErr = identityVerifier.VerifyIdentity(r.Context(), accessToken, config.Issuer, config.ResourceURL, programmingScope, config.OwnerSubject)
+			if identityErr != nil || programmingIdentity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(programmingIdentity.ClientID) {
+				unauthorized(w, http.StatusUnauthorized, challenge+`, error="invalid_token", error_description="Invalid access token"`)
+				return
+			}
+		}
 		var readAccess *readToolAccess
 		if config.WorkspaceReader != nil {
-			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			readAccess = &readToolAccess{
 				reader:   config.WorkspaceReader,
 				lister:   config.WorkspaceLister,
@@ -243,7 +285,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				finder:   config.workspaceFinder,
 				searcher: config.workspaceSearcher,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
-					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceReadScope, config.OwnerSubject)
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, capabilityVerificationScope(verificationScope, workspaceReadScope, config.programmingOAuthV2), config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
 						if err == nil {
 							err = errInvalidToken
@@ -252,7 +294,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: requiredScopeChallenge(metadataURL, workspaceReadScope),
+				challenge: capabilityChallenge(metadataURL, capabilityVerificationScope(verificationScope, workspaceReadScope, config.programmingOAuthV2), workspaceReadScope, config.programmingOAuthV2),
 			}
 			readAccess.discoverable = config.discoverProgrammingTools
 			if !readAccess.discoverable {
@@ -263,7 +305,6 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 		var writeAccess *writeToolAccess
 		if config.workspaceWriter != nil {
-			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			writeAccess = &writeToolAccess{
 				writer:           config.workspaceWriter,
 				directoryCreator: config.workspaceDirectoryCreator,
@@ -275,7 +316,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 				directoryDeleter: config.workspaceDirectoryDeleter,
 				patchApplier:     config.workspacePatchApplier,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
-					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, workspaceWriteScope, config.OwnerSubject)
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, capabilityVerificationScope(verificationScope, workspaceWriteScope, config.programmingOAuthV2), config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
 						if err == nil {
 							err = errInvalidToken
@@ -284,7 +325,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: requiredScopeChallenge(metadataURL, workspaceWriteScope),
+				challenge: capabilityChallenge(metadataURL, capabilityVerificationScope(verificationScope, workspaceWriteScope, config.programmingOAuthV2), workspaceWriteScope, config.programmingOAuthV2),
 			}
 			writeAccess.discoverable = config.discoverProgrammingTools
 			if !writeAccess.discoverable {
@@ -295,12 +336,11 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 		var gitAccess *gitToolAccess
 		if config.gitReviewer != nil || config.gitStatusReader != nil {
-			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			gitAccess = &gitToolAccess{
 				reviewer:     config.gitReviewer,
 				statusReader: config.gitStatusReader,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
-					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitReviewScope, config.OwnerSubject)
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, capabilityVerificationScope(verificationScope, gitReviewScope, config.programmingOAuthV2), config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
 						if err == nil {
 							err = errInvalidToken
@@ -309,7 +349,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: requiredScopeChallenge(metadataURL, gitReviewScope),
+				challenge: capabilityChallenge(metadataURL, capabilityVerificationScope(verificationScope, gitReviewScope, config.programmingOAuthV2), gitReviewScope, config.programmingOAuthV2),
 			}
 			gitAccess.discoverable = config.discoverProgrammingTools
 			if !gitAccess.discoverable {
@@ -320,11 +360,10 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 		var gitIndexAccess *gitIndexToolAccess
 		if config.gitIndexer != nil {
-			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			gitIndexAccess = &gitIndexToolAccess{
 				mutator: config.gitIndexer,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
-					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitIndexScope, config.OwnerSubject)
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, capabilityVerificationScope(verificationScope, gitIndexScope, config.programmingOAuthV2), config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
 						if err == nil {
 							err = errInvalidToken
@@ -333,7 +372,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: requiredScopeChallenge(metadataURL, gitIndexScope),
+				challenge: capabilityChallenge(metadataURL, capabilityVerificationScope(verificationScope, gitIndexScope, config.programmingOAuthV2), gitIndexScope, config.programmingOAuthV2),
 			}
 			gitIndexAccess.discoverable = config.discoverProgrammingTools
 			if !gitIndexAccess.discoverable {
@@ -344,11 +383,10 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 		var gitCommitAccess *gitCommitToolAccess
 		if config.gitCommitter != nil {
-			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			gitCommitAccess = &gitCommitToolAccess{
 				committer: config.gitCommitter,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
-					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, gitCommitScope, config.OwnerSubject)
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, capabilityVerificationScope(verificationScope, gitCommitScope, config.programmingOAuthV2), config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
 						if err == nil {
 							err = errInvalidToken
@@ -357,7 +395,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: requiredScopeChallenge(metadataURL, gitCommitScope),
+				challenge: capabilityChallenge(metadataURL, capabilityVerificationScope(verificationScope, gitCommitScope, config.programmingOAuthV2), gitCommitScope, config.programmingOAuthV2),
 			}
 			gitCommitAccess.discoverable = config.discoverProgrammingTools
 			if !gitCommitAccess.discoverable {
@@ -368,11 +406,10 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		}
 		var testAccess *testToolAccess
 		if config.testRunner != nil {
-			accessToken := strings.TrimPrefix(bearer, "Bearer ")
 			testAccess = &testToolAccess{
 				runner: config.testRunner,
 				verify: func(ctx context.Context) (VerifiedIdentity, error) {
-					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, testRunScope, config.OwnerSubject)
+					identity, err := identityVerifier.VerifyIdentity(ctx, accessToken, config.Issuer, config.ResourceURL, capabilityVerificationScope(verificationScope, testRunScope, config.programmingOAuthV2), config.OwnerSubject)
 					if err != nil || identity.OwnerSubject != config.OwnerSubject || !embeddedClientID.MatchString(identity.ClientID) {
 						if err == nil {
 							err = errInvalidToken
@@ -381,7 +418,7 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: requiredScopeChallenge(metadataURL, testRunScope),
+				challenge: capabilityChallenge(metadataURL, capabilityVerificationScope(verificationScope, testRunScope, config.programmingOAuthV2), testRunScope, config.programmingOAuthV2),
 			}
 			testAccess.discoverable = config.discoverProgrammingTools
 			if !testAccess.discoverable {
@@ -393,8 +430,15 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 		mode := "oauth_diagnostic"
 		if config.discoverProgrammingTools {
 			mode = "oauth_programming"
+			if !config.programmingOAuthV2 {
+				mode = "oauth_programming_legacy"
+			}
 		}
-		serveMCP(w, r, mode, config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess)
+		var programmingAuthorizer ProgrammingAuthorizer
+		if config.ProgrammingAuthorization != nil {
+			programmingAuthorizer = config.ProgrammingAuthorization()
+		}
+		serveMCP(w, r, mode, config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess, programmingAuthorizer, programmingIdentity)
 	}), nil
 }
 
@@ -432,6 +476,20 @@ func toolAuthChallenge(w http.ResponseWriter, r *http.Request, challenge string)
 
 func requiredScopeChallenge(metadataURL, capabilityScope string) string {
 	return fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s %s"`, metadataURL, diagnosticScope, capabilityScope)
+}
+
+func capabilityVerificationScope(compositionScope, capabilityScope string, programming bool) string {
+	if programming {
+		return compositionScope
+	}
+	return capabilityScope
+}
+
+func capabilityChallenge(metadataURL, verificationScope, legacyScope string, programming bool) string {
+	if programming {
+		return programmingScopeChallenge(metadataURL)
+	}
+	return requiredScopeChallenge(metadataURL, legacyScope)
 }
 
 func oauthSecuritySchemes(capabilityScope string) []any {

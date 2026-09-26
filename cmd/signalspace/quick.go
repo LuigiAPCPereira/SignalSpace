@@ -100,6 +100,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	var pairingCode string
 	var capabilityApprovals *approval.Manager
 	var capabilityPolicies *policy.Engine
+	var programmingBridge mcp.ProgrammingAuthorizer
 	if panel {
 		gate, pairingCode, err = admin.NewGate()
 		if err != nil {
@@ -120,7 +121,9 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	}
 	defer os.RemoveAll(stateDir)
 	resource := quick.URL + "/mcp"
-	handler, authorization, console, err := embeddedHandlerForPlan(resource, stateDir, plan)
+	handler, authorization, console, err := embeddedHandlerForPlanWithAuthorizer(resource, stateDir, plan, func() mcp.ProgrammingAuthorizer {
+		return programmingBridge
+	})
 	if err != nil {
 		return err
 	}
@@ -150,6 +153,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 			return fmt.Errorf("initialize capability approvals: %w", storeErr)
 		}
 		defer capabilityApprovals.Close()
+		programmingBridge = &programmingAuthorizer{owner: authorization.OwnerSubject(), grants: console.grants, policies: capabilityPolicies, approvals: capabilityApprovals}
 	}
 
 	server := diagnosticServer(handler)

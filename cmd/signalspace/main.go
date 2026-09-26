@@ -110,10 +110,18 @@ func embeddedHandlerWithWorkspace(resource, stateDir string, mode compositionMod
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return embeddedHandlerForPlan(resource, stateDir, plan)
+	return embeddedHandlerForPlanWithAuthorizerMode(resource, stateDir, plan, nil, false)
 }
 
 func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (http.Handler, *auth.Server, *workspaceConsole, error) {
+	return embeddedHandlerForPlanWithAuthorizerMode(resource, stateDir, plan, nil, false)
+}
+
+func embeddedHandlerForPlanWithAuthorizer(resource, stateDir string, plan compositionPlan, programmingAuthorization func() mcp.ProgrammingAuthorizer) (http.Handler, *auth.Server, *workspaceConsole, error) {
+	return embeddedHandlerForPlanWithAuthorizerMode(resource, stateDir, plan, programmingAuthorization, true)
+}
+
+func embeddedHandlerForPlanWithAuthorizerMode(resource, stateDir string, plan compositionPlan, programmingAuthorization func() mcp.ProgrammingAuthorizer, programmingV2 bool) (http.Handler, *auth.Server, *workspaceConsole, error) {
 	closedPlan, err := validateCompositionPlan(plan)
 	if err != nil {
 		return nil, nil, nil, err
@@ -122,42 +130,50 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 	issuer := strings.TrimSuffix(resource, "/mcp")
 	var grants *workspace.Grants
 	var console *workspaceConsole
-	authConfig := auth.Config{ResourceURL: resource, Issuer: issuer, Scope: plan.oauthScope, StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
+	oauthBaseScope := compositionDiagnosticScope
+	if programmingV2 && plan.mode == compositionProgramming {
+		oauthBaseScope = compositionProgrammingScope
+	}
+	authConfig := auth.Config{ResourceURL: resource, Issuer: issuer, Scope: oauthBaseScope, StateDir: stateDir, OnRequest: func(info auth.RequestInfo) {
 		log.Printf("Authorization requested: %s; client: %s; client_id: %s; redirect: %s; scope: %s; type approve %s or deny %s", info.ID, info.Client, info.ClientID, info.Redirect, info.Scope, info.ID, info.ID)
 	}, OnRegistrationFailure: func(reason string) {
 		// Categoria fixa: não registrar corpos nem credenciais OAuth.
 		log.Printf("OAuth client registration rejected: %s (client metadata omitted)", reason)
 	}}
-	if plan.workspaceReadScope != "" {
+	if (!programmingV2 || plan.mode != compositionProgramming) && plan.workspaceReadScope != "" {
 		authConfig.ReadScope = plan.workspaceReadScope
 		authConfig.CanIssueRead = func(clientID string) bool {
 			// Falhar fechado se a composição não terminou ou a concessão foi revogada.
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeRead)
 		}
 	}
-	if plan.workspaceWriteScope != "" {
+	if (!programmingV2 || plan.mode != compositionProgramming) && plan.workspaceWriteScope != "" {
 		authConfig.WriteScope = plan.workspaceWriteScope
 		authConfig.CanIssueWrite = func(clientID string) bool {
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeWrite)
 		}
 	}
-	if plan.gitReviewScope != "" {
+	if (!programmingV2 || plan.mode != compositionProgramming) && plan.gitReviewScope != "" {
 		authConfig.GitScope = plan.gitReviewScope
 		authConfig.CanIssueGit = func(clientID string) bool {
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeGit)
 		}
 	}
-	if plan.gitIndexScope != "" {
+	if (!programmingV2 || plan.mode != compositionProgramming) && plan.gitIndexScope != "" {
 		authConfig.GitIndexScope = plan.gitIndexScope
 		authConfig.CanIssueGitIndex = func(clientID string) bool {
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeGitIndex)
 		}
 	}
-	if plan.gitCommitScope != "" {
+	if (!programmingV2 || plan.mode != compositionProgramming) && plan.gitCommitScope != "" {
 		authConfig.GitCommitScope = plan.gitCommitScope
 		authConfig.CanIssueGitCommit = func(clientID string) bool {
 			return grants != nil && grants.AllowsClientScope(clientID, workspace.ScopeGitCommit)
 		}
+	}
+	if programmingV2 && plan.mode == compositionProgramming {
+		authConfig.CompositionScope = compositionProgrammingScope
+		authConfig.EnableRefreshTokens = true
 	}
 	authorization, err := auth.New(authConfig)
 	if err != nil {
@@ -203,7 +219,7 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 	if err != nil {
 		return closeFailure(err)
 	}
-	mcpConfig := mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject(), OnMCPEvent: func(method, diagnosticID string) {
+	mcpConfig := mcp.OAuthConfig{ResourceURL: resource, Issuer: issuer, OwnerSubject: authorization.OwnerSubject(), ProgrammingAuthorization: programmingAuthorization, OnMCPEvent: func(method, diagnosticID string) {
 		// Registrar somente método conhecido e ID aleatório; sem token ou argumentos.
 		if method == "tools/list" {
 			log.Print("Authenticated MCP tool discovery served: tools/list")
@@ -218,7 +234,11 @@ func embeddedHandlerForPlan(resource, stateDir string, plan compositionPlan) (ht
 	}
 	var protected http.Handler
 	if plan.consoleMode == workspaceConsoleProgramming {
-		protected, err = mcp.NewOAuthProgrammingHandler(mcpConfig, mcp.ProgrammingPorts{
+		programmingHandler := mcp.NewOAuthProgrammingHandler
+		if programmingV2 {
+			programmingHandler = mcp.NewOAuthProgrammingV2Handler
+		}
+		protected, err = programmingHandler(mcpConfig, mcp.ProgrammingPorts{
 			WorkspaceReader:           mcpConfig.WorkspaceReader,
 			WorkspaceLister:           mcpConfig.WorkspaceLister,
 			WorkspaceStatter:          grants,

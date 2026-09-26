@@ -69,7 +69,7 @@ var (
 {{if .Git}}<p><strong>Permissão adicional:</strong> inspecionar status e diff Git do workspace. O diff pode conter conteúdo sensível. Esta permissão não autoriza commit ou push.</p>{{end}}
 {{if .GitIndex}}<p><strong>Permissão adicional:</strong> fazer staging/unstaging explícito de paths literais no índice Git da managed worktree aprovada. Esta permissão não cria commit, branch ou push.</p>{{end}}
 {{if .GitCommit}}<p><strong>Permissão adicional:</strong> criar commits locais somente do que já está staged na managed worktree aprovada, usando a identidade local do proprietário. Esta permissão não roda hooks, signing, branch, shell ou push.</p>{{end}}
-{{if and (not .Read) (not .Write) (not .Test) (not .Git) (not .GitIndex) (not .GitCommit)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
+{{if .Programming}}<p>Permissão solicitada: conexão Programming do SignalSpace; as capacidades locais continuam sujeitas à autorização do proprietário.</p>{{else if and (not .Read) (not .Write) (not .Test) (not .Git) (not .GitIndex) (not .GitCommit)}}<p>Permissão solicitada: somente diagnóstico de conexão, sem acesso a arquivos.</p>{{end}}
 <p>Escopos solicitados: <code>{{.Scope}}</code></p>
 <p>Destino do retorno: <code>{{.Redirect}}</code></p>
 <p id="authorization-status" role="status" aria-live="polite">Confirme na janela do terminal em que o SignalSpace está em execução.</p>
@@ -407,7 +407,7 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	}
 	i := s.config.Issuer
 	scopes := []string{s.config.Scope}
-	if s.config.CompositionScope != "" {
+	if s.config.CompositionScope != "" && s.config.CompositionScope != s.config.Scope {
 		scopes = append(scopes, s.config.CompositionScope)
 	}
 	if s.config.ReadScope != "" {
@@ -729,7 +729,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	_ = consentPage.Execute(w, struct {
 		ID, Client, ClientID, Redirect, CSRF, Scope string
 		Read, Write, Test, Git, GitIndex, GitCommit bool
-	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git, requested.GitIndex, requested.GitCommit})
+		Programming                                 bool
+	}{pendingID, c.Name, id, redirect, csrf, requestedScope, requested.Read, requested.Write, requested.Test, requested.Git, requested.GitIndex, requested.GitCommit, requestedScope == programmingScope})
 }
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {

@@ -344,7 +344,7 @@ func validateRule(rule Rule) error {
 }
 
 func validContext(ctx Context) bool {
-	if ctx.OwnerID == "" || ctx.ClientID == "" || ctx.TokenFamilyID == "" ||
+	if ctx.OwnerID == "" || ctx.ClientID == "" ||
 		ctx.WorkspaceID == "" || ctx.SessionID == "" || !capability.IsKnown(ctx.Capability) ||
 		ctx.Tool == "" || ctx.Fingerprint == "" {
 		return false

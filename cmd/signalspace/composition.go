@@ -44,6 +44,7 @@ type compositionPlan struct {
 }
 
 const compositionDiagnosticScope = "signalspace:diagnostic"
+const compositionProgrammingScope = "signalspace:programming"
 
 func planComposition(mode compositionMode) (compositionPlan, error) {
 	switch mode {
