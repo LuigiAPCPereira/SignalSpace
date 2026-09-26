@@ -79,3 +79,54 @@ func TestLegacyWriteMapsDeleteButTypedWriteDoesNot(t *testing.T) {
 		t.Fatalf("legacy write did not preserve delete behavior: %v", err)
 	}
 }
+
+func TestProgrammingGrantEnvelopesAreCanonicalByWorkspaceMode(t *testing.T) {
+	root := t.TempDir()
+	checkout, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer checkout.Close()
+	if _, err := checkout.GrantProgrammingCheckout(root, testClientA); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := checkout.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCheckout := ProgrammingCheckoutCapabilities()
+	if len(snapshot.Capabilities) != len(wantCheckout) {
+		t.Fatalf("checkout envelope = %v, want %v", snapshot.Capabilities, wantCheckout)
+	}
+	for index, value := range wantCheckout {
+		if snapshot.Capabilities[index] != value {
+			t.Fatalf("checkout envelope[%d] = %q, want %q", index, snapshot.Capabilities[index], value)
+		}
+	}
+
+	managed, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer managed.Close()
+	metadata := WorkspaceMetadata{Mode: WorkspaceModeWorktree, ManagedWorkspaceID: "managed-workspace"}
+	if _, err := managed.GrantProgrammingManaged(root, testClientA, metadata); err != nil {
+		t.Fatal(err)
+	}
+	managedSnapshot, err := managed.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantManaged := ProgrammingManagedCapabilities()
+	if len(managedSnapshot.Capabilities) != len(wantManaged) {
+		t.Fatalf("managed envelope = %v, want %v", managedSnapshot.Capabilities, wantManaged)
+	}
+	for index, value := range wantManaged {
+		if managedSnapshot.Capabilities[index] != value {
+			t.Fatalf("managed envelope[%d] = %q, want %q", index, managedSnapshot.Capabilities[index], value)
+		}
+	}
+	if managedSnapshot.Capabilities[len(managedSnapshot.Capabilities)-1] == capability.TestRun || managed.AllowsClientCapability(testClientA, capability.TestRun) {
+		t.Fatal("Programming envelope leaked test.run")
+	}
+}

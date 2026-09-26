@@ -45,6 +45,7 @@ var (
 	ErrPermitExpired      = errors.New("operation permit expired")
 	ErrPermitConsumed     = errors.New("operation permit already consumed")
 	ErrPermitContext      = errors.New("operation permit context mismatch")
+	ErrPermitAmbiguous    = errors.New("multiple operation permits match context")
 	ErrPermitRevoked      = errors.New("operation permit grant revoked")
 	ErrInvalidInput       = errors.New("invalid approval request")
 	ErrInvalidConfig      = errors.New("invalid approval configuration")
@@ -392,11 +393,45 @@ func (m *Manager) Consume(id string, context ConsumeContext) (Permit, error) {
 	if m.closed {
 		return Permit{}, ErrClosed
 	}
+	return m.consumeLocked(id, context, m.now())
+}
+
+// ConsumeMatching consome o único permit não consumido que corresponde ao
+// contexto completo. O cliente futuro não precisa receber um permit_id; a
+// camada de autorização já deve ter revalidado o grant/envelope antes de
+// chamar esta porta. Contexto ambíguo falha fechado.
+func (m *Manager) ConsumeMatching(context ConsumeContext) (Permit, error) {
+	if err := validateConsumeContext(context); err != nil {
+		return Permit{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return Permit{}, ErrClosed
+	}
+	now := m.now()
+	m.expireLocked(now)
+	matchingID := ""
+	for id, permit := range m.permits {
+		if !sameContext(permit, context) {
+			continue
+		}
+		if matchingID != "" {
+			return Permit{}, ErrPermitAmbiguous
+		}
+		matchingID = id
+	}
+	if matchingID == "" {
+		return Permit{}, ErrPermitNotFound
+	}
+	return m.consumeLocked(matchingID, context, now)
+}
+
+func (m *Manager) consumeLocked(id string, context ConsumeContext, now time.Time) (Permit, error) {
 	permit, ok := m.permits[id]
 	if !ok {
 		return Permit{}, ErrPermitNotFound
 	}
-	now := m.now()
 	if !now.Before(permit.ExpiresAt) {
 		delete(m.permits, id)
 		return Permit{}, ErrPermitExpired

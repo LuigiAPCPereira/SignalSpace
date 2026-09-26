@@ -19,6 +19,36 @@ const (
 	ScopeTest      = "signalspace:test.run"
 )
 
+var (
+	programmingCheckoutEnvelope = []capability.Capability{
+		capability.WorkspaceRead,
+		capability.WorkspaceWrite,
+		capability.WorkspaceDelete,
+		capability.GitReview,
+	}
+	programmingManagedEnvelope = []capability.Capability{
+		capability.WorkspaceRead,
+		capability.WorkspaceWrite,
+		capability.WorkspaceDelete,
+		capability.GitReview,
+		capability.GitIndex,
+		capability.GitCommit,
+	}
+)
+
+// ProgrammingCheckoutCapabilities retorna uma cópia do envelope máximo da
+// composição Programming em checkout comum. O envelope é interno e não é
+// derivado de scopes fornecidos pelo cliente.
+func ProgrammingCheckoutCapabilities() []capability.Capability {
+	return append([]capability.Capability(nil), programmingCheckoutEnvelope...)
+}
+
+// ProgrammingManagedCapabilities retorna uma cópia do envelope máximo da
+// composição Programming em managed worktree.
+func ProgrammingManagedCapabilities() []capability.Capability {
+	return append([]capability.Capability(nil), programmingManagedEnvelope...)
+}
+
 // GrantSnapshot contém somente os metadados locais necessários para informar
 // o estado de uma concessão. Ele não expõe Session, descritor ou raiz.
 type GrantSnapshot struct {
@@ -99,6 +129,13 @@ func (g *Grants) GrantWithCapabilities(root, clientID string, capabilities ...ca
 	return g.grantWithCapabilities(root, clientID, WorkspaceMetadata{Mode: WorkspaceModeCheckout}, capabilities...)
 }
 
+// GrantProgrammingCheckout cria o envelope canônico de Programming para um
+// checkout comum. O chamador owner-side ainda precisa fornecer a raiz e o
+// client_id já elegível; nenhuma entrada MCP escolhe ou amplia o envelope.
+func (g *Grants) GrantProgrammingCheckout(root, clientID string) (string, error) {
+	return g.GrantWithCapabilities(root, clientID, ProgrammingCheckoutCapabilities()...)
+}
+
 // GrantManagedWithScopes registra uma sessão cuja raiz foi criada pelo
 // manager local de worktrees. O método continua sujeito à mesma cardinalidade
 // de Grants: conceder uma nova sessão revoga a sessão corrente.
@@ -121,6 +158,13 @@ func (g *Grants) GrantManagedWithCapabilities(root, clientID string, metadata Wo
 		return "", ErrNotAuthorized
 	}
 	return g.grantWithCapabilities(root, clientID, metadata, capabilities...)
+}
+
+// GrantProgrammingManaged cria o envelope canônico de Programming para uma
+// managed worktree. Git index/commit continuam sujeitos às invariantes de
+// managed worktree nas portas de operação.
+func (g *Grants) GrantProgrammingManaged(root, clientID string, metadata WorkspaceMetadata) (string, error) {
+	return g.GrantManagedWithCapabilities(root, clientID, metadata, ProgrammingManagedCapabilities()...)
 }
 
 func (g *Grants) grantWithCapabilities(root, clientID string, metadata WorkspaceMetadata, capabilities ...capability.Capability) (string, error) {

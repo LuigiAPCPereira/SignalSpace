@@ -156,6 +156,30 @@ func TestManagerDecisionAndPermitLifecycle(t *testing.T) {
 	}
 }
 
+func TestManagerConsumesMatchingPermitWithoutClientPermitID(t *testing.T) {
+	manager := newApprovalTestManager(t, approvalTestConfig())
+	request, _, err := manager.Create(approvalTestInput(approvalFingerprint('f')))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := manager.Decide(request.RequestID, 1, DecisionAllowOnce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	context := ConsumeContext{
+		OwnerID: "owner", ClientID: "client", TokenFamilyID: "family", WorkspaceID: "workspace",
+		SessionID: "session", Capability: capability.WorkspaceWrite, Tool: "write_text_file",
+		OperationFingerprint: request.OperationFingerprint, GrantActive: true,
+	}
+	consumed, err := manager.ConsumeMatching(context)
+	if err != nil || consumed.PermitID != result.Permit.PermitID || consumed.ConsumedAt == nil {
+		t.Fatalf("matching consume = %+v err=%v", consumed, err)
+	}
+	if _, err := manager.ConsumeMatching(context); !errors.Is(err, ErrPermitConsumed) {
+		t.Fatalf("matching replay error = %v", err)
+	}
+}
+
 func TestManagerRejectsPermitContextExpiryAndRestart(t *testing.T) {
 	manager := newApprovalTestManager(t, approvalTestConfig())
 	request, _, err := manager.Create(approvalTestInput(approvalFingerprint('a')))

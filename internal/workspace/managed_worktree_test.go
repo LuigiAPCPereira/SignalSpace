@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
 )
 
 const managedTestClient = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
@@ -94,6 +96,51 @@ func TestManagedWorktreeCreateActivateRevokeResumeAndRemove(t *testing.T) {
 	}
 	if _, err := os.Stat(managedRoot); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("managed root remains: %v", err)
+	}
+}
+
+func TestActivateProgrammingUsesManagedCapabilityEnvelope(t *testing.T) {
+	source := managedGitTestRepo(t)
+	state := filepath.Join(t.TempDir(), "state")
+	manager, err := NewManagedWorktreeManager(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := manager.SetGitIdentity("owner@example.invalid", "Owner Local"); err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := manager.Create(source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer grants.Close()
+	sessionID, _, err := manager.ActivateProgramming(descriptor.WorkspaceID, managedTestClient, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := grants.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ProgrammingManagedCapabilities()
+	if len(snapshot.Capabilities) != len(want) {
+		t.Fatalf("managed Programming capabilities = %v, want %v", snapshot.Capabilities, want)
+	}
+	for index, value := range want {
+		if snapshot.Capabilities[index] != value {
+			t.Fatalf("managed Programming capability[%d] = %q, want %q", index, snapshot.Capabilities[index], value)
+		}
+	}
+	if grants.AllowsClientCapability(managedTestClient, capability.TestRun) {
+		t.Fatal("managed Programming envelope leaked test.run")
+	}
+	if err := grants.Revoke(sessionID); err != nil {
+		t.Fatal(err)
 	}
 }
 

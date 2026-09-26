@@ -160,15 +160,18 @@ func (e *Engine) RemoveRule(rule Rule) error {
 	return nil
 }
 
-// Evaluate retorna sempre uma decisão tipada. Contexto inválido, grant
-// inativo, capability desconhecida, ausência de regra e regra expirada
-// resultam em DENY. Um contexto válido com capability ainda não concedida
-// retorna REQUIRE_APPROVAL, sem criar fila ou efeito externo.
+// Evaluate retorna sempre uma decisão tipada. O grant ativo é o envelope
+// máximo: capability ausente dele resulta em DENY antes de qualquer regra.
+// Dentro do envelope, ausência de regra significa ASK implícito e resulta em
+// REQUIRE_APPROVAL, sem criar fila ou efeito externo.
 func (e *Engine) Evaluate(ctx Context) Decision {
-	if e == nil || !validContext(ctx) {
+	if e == nil || e.now == nil || !validContext(ctx) {
 		return Deny
 	}
 	if !ctx.GrantActive {
+		return Deny
+	}
+	if !hasGrantedCapability(ctx) {
 		return Deny
 	}
 	now := time.Now()
@@ -187,7 +190,7 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 			continue
 		}
 		if rule.Effect == EffectAllowWorkspace && e.workspaceStable != nil && !e.workspaceStable(rule.WorkspaceID) {
-			continue
+			return Deny
 		}
 		specificity := specificity(rule)
 		if specificity > bestSpecificity ||
@@ -204,18 +207,12 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 		case EffectAsk:
 			return RequireApproval
 		case EffectAllowSession, EffectAllowWorkspace:
-			if !hasGrantedCapability(ctx) {
-				return RequireApproval
-			}
 			return Allow
 		default:
 			return Deny
 		}
 	}
-	if !hasGrantedCapability(ctx) {
-		return RequireApproval
-	}
-	return Deny
+	return RequireApproval
 }
 
 // ApplyApproval traduz uma decisão administrativa em uma política local. O

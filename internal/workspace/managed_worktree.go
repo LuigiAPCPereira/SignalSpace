@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
 )
 
 const managedMetadataVersion = 1
@@ -209,6 +211,26 @@ func (m *ManagedWorktreeManager) Create(sourceRoot, baseRef string) (ManagedWork
 }
 
 func (m *ManagedWorktreeManager) Activate(workspaceID, clientID string, grants *Grants, scopes ...string) (string, ManagedWorkspaceDescriptor, error) {
+	canonical, err := NormalizeManagedCapabilities(scopes...)
+	if err != nil {
+		return "", ManagedWorkspaceDescriptor{}, err
+	}
+	capabilities, ok := capabilitiesForLegacyScopes(canonical...)
+	if !ok {
+		return "", ManagedWorkspaceDescriptor{}, ErrInvalidCapabilities
+	}
+	return m.activateWithCapabilities(workspaceID, clientID, grants, capabilities...)
+}
+
+// ActivateProgramming deriva o envelope Programming do modo managed
+// worktree, sem exigir que o proprietário escolha scopes individualmente.
+// O método é owner-side e mantém o caminho de compatibilidade Activate
+// separado para o console legado.
+func (m *ManagedWorktreeManager) ActivateProgramming(workspaceID, clientID string, grants *Grants) (string, ManagedWorkspaceDescriptor, error) {
+	return m.activateWithCapabilities(workspaceID, clientID, grants, ProgrammingManagedCapabilities()...)
+}
+
+func (m *ManagedWorktreeManager) activateWithCapabilities(workspaceID, clientID string, grants *Grants, capabilities ...capability.Capability) (string, ManagedWorkspaceDescriptor, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -230,22 +252,27 @@ func (m *ManagedWorktreeManager) Activate(workspaceID, clientID string, grants *
 	if m.activeID != "" && m.activeID != workspaceID {
 		return "", ManagedWorkspaceDescriptor{}, ErrManagedWorkspaceBusy
 	}
-	canonical, err := NormalizeManagedCapabilities(scopes...)
-	if err != nil {
-		return "", ManagedWorkspaceDescriptor{}, err
-	}
-	if containsManagedScope(canonical, ScopeGitCommit) {
+	if containsCapability(capabilities, capability.GitCommit) {
 		if _, err := m.gitIdentityLocked(); err != nil {
 			return "", ManagedWorkspaceDescriptor{}, errors.Join(ErrGitIdentityMissing, err)
 		}
 	}
 	metadata := WorkspaceMetadata{Mode: WorkspaceModeWorktree, ManagedWorkspaceID: record.WorkspaceID, BaseRef: record.BaseRef, BaseSHA: record.BaseSHA, DirtySource: record.DirtySource}
-	sessionID, err := grants.GrantManagedWithScopes(record.ManagedRoot, clientID, metadata, canonical...)
+	sessionID, err := grants.GrantManagedWithCapabilities(record.ManagedRoot, clientID, metadata, capabilities...)
 	if err != nil {
 		return "", ManagedWorkspaceDescriptor{}, err
 	}
 	m.activeID = workspaceID
 	return sessionID, m.descriptorLocked(record), nil
+}
+
+func containsCapability(items []capability.Capability, target capability.Capability) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *ManagedWorktreeManager) Deactivate(workspaceID string) error {

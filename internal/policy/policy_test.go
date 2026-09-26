@@ -24,8 +24,8 @@ func TestEngineFailsClosedAndMapsAsk(t *testing.T) {
 	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
 	engine := NewEngineWithClock(func() time.Time { return now })
 	ctx := testContext()
-	if got := engine.Evaluate(ctx); got != Deny {
-		t.Fatalf("no rule decision = %q, want %q", got, Deny)
+	if got := engine.Evaluate(ctx); got != RequireApproval {
+		t.Fatalf("no rule decision = %q, want %q", got, RequireApproval)
 	}
 	if got := engine.Evaluate(Context{}); got != Deny {
 		t.Fatalf("invalid context decision = %q, want %q", got, Deny)
@@ -45,12 +45,18 @@ func TestZeroValueEngineFailsClosedWithoutPanicking(t *testing.T) {
 	}
 }
 
-func TestEngineRequiresApprovalForMissingCapabilityAndDeniesRevokedGrant(t *testing.T) {
+func TestEngineDeniesMissingCapabilityAndRevokedGrant(t *testing.T) {
 	engine := NewEngine()
 	ctx := testContext()
 	ctx.GrantedCapabilities = nil
-	if got := engine.Evaluate(ctx); got != RequireApproval {
-		t.Fatalf("missing capability decision = %q, want %q", got, RequireApproval)
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("missing capability decision = %q, want %q", got, Deny)
+	}
+	if err := engine.SetRule(Rule{OwnerID: "owner", Capability: capability.WorkspaceWrite, Effect: EffectAsk}); err != nil {
+		t.Fatal(err)
+	}
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("missing capability with ASK decision = %q, want %q", got, Deny)
 	}
 	ctx.GrantActive = false
 	if got := engine.Evaluate(ctx); got != Deny {
@@ -112,7 +118,6 @@ func TestEngineCreatesApprovalOnlyForRequireApproval(t *testing.T) {
 	defer manager.Close()
 	ctx := testContext()
 	ctx.Fingerprint = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ctx.GrantedCapabilities = nil
 	decision, snapshot, reused, err := engine.EvaluateAndRequest(ctx, manager, "Write src/main.go")
 	if err != nil || decision != RequireApproval || reused || snapshot.Status != approval.StatusPending {
 		t.Fatalf("approval bridge result = decision=%q snapshot=%+v reused=%t err=%v", decision, snapshot, reused, err)
@@ -127,6 +132,29 @@ func TestEngineCreatesApprovalOnlyForRequireApproval(t *testing.T) {
 	decision, empty, reused, err := engine.EvaluateAndRequest(ctx, manager, "Write src/main.go")
 	if err != nil || decision != Deny || reused || empty.RequestID != "" {
 		t.Fatalf("deny created approval: decision=%q snapshot=%+v reused=%t err=%v", decision, empty, reused, err)
+	}
+}
+
+func TestEngineGrantEnvelopeIsHardCeilingForAllowRules(t *testing.T) {
+	engine := NewEngine()
+	ctx := testContext()
+	ctx.GrantedCapabilities = nil
+	for _, effect := range []Effect{EffectAsk, EffectAllowSession, EffectAllowWorkspace} {
+		rule := Rule{OwnerID: "owner", WorkspaceID: "workspace", Capability: capability.WorkspaceWrite, Effect: effect}
+		if effect == EffectAllowSession {
+			rule.SessionID = "session"
+		}
+		if err := engine.SetRule(rule); err != nil {
+			t.Fatal(err)
+		}
+		if got := engine.Evaluate(ctx); got != Deny {
+			t.Fatalf("effect %s escaped grant envelope: %q", effect, got)
+		}
+	}
+	engine = NewEngine()
+	ctx.GrantedCapabilities = []capability.Capability{capability.WorkspaceWrite}
+	if got := engine.Evaluate(ctx); got != RequireApproval {
+		t.Fatalf("capability in envelope without rule = %q, want %q", got, RequireApproval)
 	}
 }
 
@@ -167,7 +195,7 @@ func TestEngineAppliesSessionAndWorkspaceApprovalsWithRevalidation(t *testing.T)
 	if err := engine.RevokePolicy(items[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if got := engine.Evaluate(ctx); got != Deny {
+	if got := engine.Evaluate(ctx); got != RequireApproval {
 		t.Fatalf("revoked workspace decision = %q", got)
 	}
 }
@@ -200,7 +228,7 @@ func TestEnginePolicyRevokeAndEvaluateAreSafeConcurrently(t *testing.T) {
 	}()
 	go func() { defer group.Done(); _ = engine.RevokePolicy(items[0].ID) }()
 	group.Wait()
-	if got := engine.Evaluate(ctx); got != Deny {
+	if got := engine.Evaluate(ctx); got != RequireApproval {
 		t.Fatalf("post-revoke decision = %q", got)
 	}
 }
