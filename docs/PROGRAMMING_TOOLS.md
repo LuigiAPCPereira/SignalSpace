@@ -223,7 +223,7 @@ O fluxo usa somente `git write-tree`, `git commit-tree` por stdin e uma transaç
 
 ## Arquitetura alvo v2 — autorização local por composição
 
-`SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` aceita a direção descrita em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). A superfície atualmente implementada/publicada continua sendo a matriz tipada registrada nesta documentação, com escopos e grants independentes; não há mudança de runtime nesta reconciliação.
+`SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` aceita a direção descrita em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). A superfície pública atualmente implementada/publicada continua sendo a matriz tipada registrada nesta documentação, com escopos e grants independentes. O auth harness opt-in agora implementa o ciclo OAuth v2 e a composição `signalspace:programming`, sem alterar discovery, autorização ou catálogo das tools públicas.
 
 No alvo, OAuth solicita a composição (`signalspace:diagnostic`, `signalspace:read` ou `signalspace:programming`) e o SignalSpace decide internamente `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`, `git.index`, `git.commit`, `test.run` e `shell.exec`. A policy deve considerar owner/client/workspace/session/tool/context e responder `ALLOW`, `DENY` ou `REQUIRE_APPROVAL`. Shell, Git remoto, branches e ações destrutivas permanecem capabilities e gates separados.
 

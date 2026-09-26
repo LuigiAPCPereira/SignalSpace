@@ -18,18 +18,21 @@ import (
 )
 
 const (
-	stateVersion  = 1
-	maxStateBytes = 2 << 20
-	stateFileName = "identity.json"
+	stateVersionLegacy = 1
+	stateVersionV2     = 2
+	maxStateBytes      = 2 << 20
+	stateFileName      = "identity.json"
 )
 
 type storedIdentity struct {
-	Version     int               `json:"version"`
-	Issuer      string            `json:"issuer"`
-	ResourceURL string            `json:"resource_url"`
-	KeyID       string            `json:"key_id"`
-	PrivateKey  string            `json:"private_key"`
-	Clients     map[string]client `json:"clients"`
+	Version       int                           `json:"version"`
+	Issuer        string                        `json:"issuer"`
+	ResourceURL   string                        `json:"resource_url"`
+	KeyID         string                        `json:"key_id"`
+	PrivateKey    string                        `json:"private_key"`
+	Clients       map[string]client             `json:"clients"`
+	TokenFamilies map[string]storedTokenFamily  `json:"token_families,omitempty"`
+	RefreshTokens map[string]storedRefreshToken `json:"refresh_tokens,omitempty"`
 }
 
 type identityStore struct {
@@ -40,16 +43,16 @@ type identityStore struct {
 
 // openIdentity vincula a chave e os clientes à URL do recurso configurado.
 // Não recupera códigos ou aprovações: esses estados expiram com o processo.
-func openIdentity(dir string, config Config) (*identityStore, *rsa.PrivateKey, string, map[string]client, error) {
+func openIdentity(dir string, config Config) (*identityStore, *rsa.PrivateKey, string, map[string]client, map[string]tokenFamily, map[string]refreshToken, error) {
 	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir || dir == string(filepath.Separator) {
-		return nil, nil, "", nil, errors.New("OAuth state directory must be a canonical absolute path")
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth state directory must be a canonical absolute path")
 	}
 	if err := ensurePrivateDirectory(dir); err != nil {
-		return nil, nil, "", nil, err
+		return nil, nil, "", nil, nil, nil, err
 	}
 	store := &identityStore{dir: dir, path: filepath.Join(dir, stateFileName)}
 	if err := store.lockDirectory(); err != nil {
-		return nil, nil, "", nil, err
+		return nil, nil, "", nil, nil, nil, err
 	}
 	ok := false
 	defer func() {
@@ -61,53 +64,71 @@ func openIdentity(dir string, config Config) (*identityStore, *rsa.PrivateKey, s
 	if errors.Is(err, os.ErrNotExist) {
 		key, keyErr := rsa.GenerateKey(rand.Reader, 2048)
 		if keyErr != nil {
-			return nil, nil, "", nil, keyErr
+			return nil, nil, "", nil, nil, nil, keyErr
 		}
 		kid, keyErr := randomID(16)
 		if keyErr != nil {
-			return nil, nil, "", nil, keyErr
+			return nil, nil, "", nil, nil, nil, keyErr
 		}
 		clients := make(map[string]client)
 		if err := store.saveInitial(config, key, kid, clients); err != nil {
-			return nil, nil, "", nil, err
+			return nil, nil, "", nil, nil, nil, err
 		}
 		ok = true
-		return store, key, kid, clients, nil
+		return store, key, kid, clients, make(map[string]tokenFamily), make(map[string]refreshToken), nil
 	}
 	if err != nil {
-		return nil, nil, "", nil, err
+		return nil, nil, "", nil, nil, nil, err
 	}
 	var state storedIdentity
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&state) != nil || decoder.Decode(new(any)) != io.EOF {
-		return nil, nil, "", nil, errors.New("OAuth identity file is malformed")
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth identity file is malformed")
 	}
-	if state.Version != stateVersion || state.Issuer != config.Issuer || state.ResourceURL != config.ResourceURL {
-		return nil, nil, "", nil, errors.New("OAuth identity version or public URL changed; explicit migration is required")
+	if state.Version != stateVersionLegacy && state.Version != stateVersionV2 {
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth identity version is unsupported; explicit migration is required")
+	}
+	if state.Issuer != config.Issuer || state.ResourceURL != config.ResourceURL {
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth identity version or public URL changed; explicit migration is required")
+	}
+	if config.EnableRefreshTokens && state.Version == stateVersionLegacy && !config.MigrateState {
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth identity v1 requires explicit migration before refresh-token lifecycle v2")
+	}
+	if !config.EnableRefreshTokens && state.Version == stateVersionV2 {
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth identity v2 requires refresh-token lifecycle configuration")
 	}
 	if !requestID.MatchString(state.KeyID) || len(state.Clients) > maxClients || state.Clients == nil {
-		return nil, nil, "", nil, errors.New("OAuth identity contains invalid key or client metadata")
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth identity contains invalid key or client metadata")
 	}
 	for id, c := range state.Clients {
 		if !validStoredClient(id, c) {
-			return nil, nil, "", nil, errors.New("OAuth identity contains invalid client metadata")
+			return nil, nil, "", nil, nil, nil, errors.New("OAuth identity contains invalid client metadata")
 		}
+	}
+	families, refresh, err := decodeTokenState(state, config)
+	if err != nil {
+		return nil, nil, "", nil, nil, nil, err
 	}
 	der, err := base64.StdEncoding.DecodeString(state.PrivateKey)
 	if err != nil || len(der) > 8192 {
-		return nil, nil, "", nil, errors.New("OAuth private key is malformed")
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth private key is malformed")
 	}
 	parsed, err := x509.ParsePKCS8PrivateKey(der)
 	if err != nil {
-		return nil, nil, "", nil, errors.New("OAuth private key is malformed")
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth private key is malformed")
 	}
 	key, ok := parsed.(*rsa.PrivateKey)
 	if !ok || key.N.BitLen() != 2048 || key.Validate() != nil {
-		return nil, nil, "", nil, errors.New("OAuth private key is invalid")
+		return nil, nil, "", nil, nil, nil, errors.New("OAuth private key is invalid")
+	}
+	if config.EnableRefreshTokens && state.Version == stateVersionLegacy {
+		if err := store.save(config, key, state.KeyID, state.Clients, families, refresh); err != nil {
+			return nil, nil, "", nil, nil, nil, fmt.Errorf("migrate OAuth identity to v2: %w", err)
+		}
 	}
 	ok = true
-	return store, key, state.KeyID, state.Clients, nil
+	return store, key, state.KeyID, state.Clients, families, refresh, nil
 }
 
 func validStoredClient(id string, c client) bool {
@@ -123,6 +144,16 @@ func validStoredClient(id string, c client) bool {
 		if len(redirect) > 2048 || !allowedRedirect(redirect) {
 			return false
 		}
+	}
+	if len(c.GrantTypes) > 2 {
+		return false
+	}
+	seen := make(map[string]bool, len(c.GrantTypes))
+	for _, grantType := range c.GrantTypes {
+		if grantType != "authorization_code" && grantType != "refresh_token" || seen[grantType] {
+			return false
+		}
+		seen[grantType] = true
 	}
 	return true
 }
@@ -221,16 +252,24 @@ func sameIdentityFile(before, after os.FileInfo) bool {
 	return aOK && bOK && a.Dev == b.Dev && a.Ino == b.Ino
 }
 
-func (s *identityStore) encode(config Config, key *rsa.PrivateKey, kid string, clients map[string]client) ([]byte, error) {
+func (s *identityStore) encode(config Config, key *rsa.PrivateKey, kid string, clients map[string]client, families map[string]tokenFamily, refresh map[string]refreshToken) ([]byte, error) {
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(storedIdentity{Version: stateVersion, Issuer: config.Issuer, ResourceURL: config.ResourceURL, KeyID: kid, PrivateKey: base64.StdEncoding.EncodeToString(der), Clients: clients})
+	version := stateVersionLegacy
+	if config.EnableRefreshTokens {
+		version = stateVersionV2
+	}
+	storedFamilies, storedRefresh, err := encodeTokenState(families, refresh)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(storedIdentity{Version: version, Issuer: config.Issuer, ResourceURL: config.ResourceURL, KeyID: kid, PrivateKey: base64.StdEncoding.EncodeToString(der), Clients: clients, TokenFamilies: storedFamilies, RefreshTokens: storedRefresh})
 }
 
 func (s *identityStore) saveInitial(config Config, key *rsa.PrivateKey, kid string, clients map[string]client) error {
-	data, err := s.encode(config, key, kid, clients)
+	data, err := s.encode(config, key, kid, clients, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -249,11 +288,11 @@ func (s *identityStore) saveInitial(config Config, key *rsa.PrivateKey, kid stri
 }
 
 // save substitui o arquivo por rename atômico, antes de autorizar o cliente em memória.
-func (s *identityStore) save(config Config, key *rsa.PrivateKey, kid string, clients map[string]client) error {
+func (s *identityStore) save(config Config, key *rsa.PrivateKey, kid string, clients map[string]client, families map[string]tokenFamily, refresh map[string]refreshToken) error {
 	if _, err := s.read(); err != nil {
 		return fmt.Errorf("OAuth identity is not safe to update: %w", err)
 	}
-	data, err := s.encode(config, key, kid, clients)
+	data, err := s.encode(config, key, kid, clients, families, refresh)
 	if err != nil {
 		return err
 	}

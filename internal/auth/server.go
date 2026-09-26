@@ -25,6 +25,7 @@ import (
 
 const (
 	diagnosticScope      = "signalspace:diagnostic"
+	programmingScope     = "signalspace:programming"
 	workspaceReadScope   = "signalspace:workspace.read"
 	workspaceWriteScope  = "signalspace:workspace.write"
 	gitReviewScope       = "signalspace:git.review"
@@ -39,6 +40,8 @@ const (
 	pendingTTL           = 5 * time.Minute
 	codeTTL              = time.Minute
 	tokenTTL             = 15 * time.Minute
+	v2AccessTokenTTL     = 60 * time.Minute
+	defaultRefreshTTL    = 30 * 24 * time.Hour
 	ownerSubject         = "local-owner"
 	quotaWindow          = time.Minute
 	consentScriptPath    = "/authorize/consent.js"
@@ -92,6 +95,19 @@ type Config struct {
 	ResourceURL string
 	Issuer      string
 	Scope       string
+	// CompositionScope habilita uma composição OAuth adicional no auth harness.
+	// O entrypoint público legado não o preenche até o gate de migração das tools.
+	CompositionScope string
+	// EnableRefreshTokens ativa o formato de estado v2 e o grant refresh_token.
+	// É opt-in para que o runtime público atual continue no contrato legado.
+	EnableRefreshTokens bool
+	// MigrateState autoriza explicitamente a conversão de um identity.json v1
+	// para o formato v2 sem descartar a identidade ou os clientes registrados.
+	MigrateState bool
+	// AccessTokenTTL e RefreshTokenTTL são configuráveis para testes e operação.
+	// Os defaults v2 são 60 minutos e 30 dias, respectivamente.
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
 	// ReadScope é opcional e só pode ser oferecido junto de um verificador de
 	// concessões locais. A configuração padrão permanece somente diagnóstico.
 	ReadScope    string
@@ -130,8 +146,9 @@ type ClientInfo struct {
 	Name string
 }
 type client struct {
-	Name      string
-	Redirects []string
+	Name       string
+	Redirects  []string
+	GrantTypes []string
 }
 type pending struct {
 	ClientID, Redirect, Challenge, State, Resource, Scope string
@@ -166,6 +183,8 @@ type Server struct {
 	terminal map[string]terminalRecord
 	codes    map[string]grant
 	quotas   map[string]requestQuota
+	families map[string]tokenFamily
+	refresh  map[string]refreshToken
 }
 
 func New(config Config) (*Server, error) {
@@ -175,6 +194,15 @@ func New(config Config) (*Server, error) {
 	}
 	if config.Issuer != "https://"+resource.Host || config.Scope == "" {
 		return nil, errors.New("embedded issuer must equal resource HTTPS origin and scope must be set")
+	}
+	if config.CompositionScope != "" && config.CompositionScope != programmingScope {
+		return nil, errors.New("unsupported OAuth composition scope")
+	}
+	if config.EnableRefreshTokens && config.CompositionScope != programmingScope {
+		return nil, errors.New("OAuth refresh-token lifecycle requires the programming composition scope")
+	}
+	if config.AccessTokenTTL < 0 || config.RefreshTokenTTL < 0 {
+		return nil, errors.New("OAuth token TTLs cannot be negative")
 	}
 	if (config.ReadScope != "" && (config.Scope != diagnosticScope || config.ReadScope != workspaceReadScope || config.CanIssueRead == nil || config.OnRequest == nil)) || (config.ReadScope == "" && config.CanIssueRead != nil) {
 		return nil, errors.New("workspace read scope requires an explicit local grant validator")
@@ -194,11 +222,18 @@ func New(config Config) (*Server, error) {
 	if (config.TestScope != "" && (config.Scope != diagnosticScope || config.TestScope != testRunScope || config.CanIssueTest == nil || config.OnRequest == nil)) || (config.TestScope == "" && config.CanIssueTest != nil) {
 		return nil, errors.New("test execution scope requires an explicit local grant validator")
 	}
-	store, key, kid, clients, err := openIdentity(config.StateDir, config)
+	store, key, kid, clients, families, refresh, err := openIdentity(config.StateDir, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, issued: make(map[string]bool), pending: make(map[string]pending), terminal: make(map[string]terminalRecord), codes: make(map[string]grant), quotas: make(map[string]requestQuota)}, nil
+	issued := make(map[string]bool)
+	now := time.Now()
+	for _, family := range families {
+		if family.RevokedAt == nil && now.Before(family.ExpiresAt) {
+			issued[family.ClientID] = true
+		}
+	}
+	return &Server{config: config, key: key, keyID: kid, store: store, clients: clients, issued: issued, pending: make(map[string]pending), terminal: make(map[string]terminalRecord), codes: make(map[string]grant), quotas: make(map[string]requestQuota), families: families, refresh: refresh}, nil
 }
 
 // Close libera a trava do estado; não preserva códigos e aprovações temporárias.
@@ -252,7 +287,7 @@ func (s *Server) rejectRegistration(w http.ResponseWriter, kind, reason string) 
 
 // supportedRegistrationGrants negocia refresh_token para fora: não emitir nem
 // anunciar uma concessão que o servidor de tokens ainda não implementa.
-func supportedRegistrationGrants(grants []string) bool {
+func (s *Server) supportedRegistrationGrants(grants []string) bool {
 	if len(grants) == 0 {
 		return true
 	}
@@ -372,6 +407,9 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	}
 	i := s.config.Issuer
 	scopes := []string{s.config.Scope}
+	if s.config.CompositionScope != "" {
+		scopes = append(scopes, s.config.CompositionScope)
+	}
 	if s.config.ReadScope != "" {
 		scopes = append(scopes, s.config.ReadScope)
 	}
@@ -390,7 +428,11 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 	if s.config.TestScope != "" {
 		scopes = append(scopes, s.config.TestScope)
 	}
-	jsonReply(w, 200, map[string]any{"issuer": i, "authorization_endpoint": i + "/authorize", "token_endpoint": i + "/token", "registration_endpoint": i + "/register", "jwks_uri": i + "/oauth/jwks", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": scopes, "authorization_response_iss_parameter_supported": true})
+	grantTypes := []string{"authorization_code"}
+	if s.config.EnableRefreshTokens {
+		grantTypes = append(grantTypes, "refresh_token")
+	}
+	jsonReply(w, 200, map[string]any{"issuer": i, "authorization_endpoint": i + "/authorize", "token_endpoint": i + "/token", "registration_endpoint": i + "/register", "jwks_uri": i + "/oauth/jwks", "response_types_supported": []string{"code"}, "grant_types_supported": grantTypes, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": scopes, "authorization_response_iss_parameter_supported": true})
 }
 
 type capabilities struct {
@@ -409,6 +451,9 @@ type capabilities struct {
 // fechado e a string precisa ser a serialização canônica sem whitespace extra.
 func (s *Server) requestedCapabilities(scope string) (capabilities, bool) {
 	parts := strings.Fields(scope)
+	if len(parts) == 1 && strings.Join(parts, " ") == scope && parts[0] == s.config.CompositionScope && s.config.CompositionScope != "" {
+		return capabilities{}, true
+	}
 	if len(parts) == 0 || strings.Join(parts, " ") != scope || parts[0] != s.config.Scope {
 		return capabilities{}, false
 	}
@@ -556,7 +601,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		s.rejectRegistration(w, "invalid_client_metadata", "unsupported_token_auth_method")
 		return
 	}
-	if !supportedRegistrationGrants(req.GrantTypes) {
+	if !s.supportedRegistrationGrants(req.GrantTypes) {
 		s.rejectRegistration(w, "invalid_client_metadata", "unsupported_grant_types")
 		return
 	}
@@ -586,15 +631,22 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	for key, existing := range s.clients {
 		clients[key] = existing
 	}
-	clients[id] = client{Name: req.Name, Redirects: append([]string(nil), req.Redirects...)}
-	if err := s.store.save(s.config, s.key, s.keyID, clients); err != nil {
+	grantTypes := append([]string(nil), req.GrantTypes...)
+	if len(grantTypes) == 0 {
+		grantTypes = []string{"authorization_code"}
+	}
+	if !s.config.EnableRefreshTokens {
+		grantTypes = []string{"authorization_code"}
+	}
+	clients[id] = client{Name: req.Name, Redirects: append([]string(nil), req.Redirects...), GrantTypes: grantTypes}
+	if err := s.store.save(s.config, s.key, s.keyID, clients, s.families, s.refresh); err != nil {
 		s.mu.Unlock()
 		bad(w, 503, "temporarily_unavailable")
 		return
 	}
 	s.clients = clients
 	s.mu.Unlock()
-	jsonReply(w, 201, map[string]any{"client_id": id, "client_id_issued_at": time.Now().Unix(), "client_name": req.Name, "redirect_uris": req.Redirects, "grant_types": []string{"authorization_code"}, "response_types": []string{"code"}, "token_endpoint_auth_method": "none"})
+	jsonReply(w, 201, map[string]any{"client_id": id, "client_id_issued_at": time.Now().Unix(), "client_name": req.Name, "redirect_uris": req.Redirects, "grant_types": grantTypes, "response_types": []string{"code"}, "token_endpoint_auth_method": "none"})
 }
 
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
@@ -752,6 +804,67 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirect.String(), http.StatusSeeOther)
 }
 func hashSession(value string) []byte { h := sha256.Sum256([]byte(value)); return h[:] }
+
+func (s *Server) issueAccessToken(scope, clientID string, now time.Time) (string, int, error) {
+	ttl := s.accessTokenTTL()
+	if ttl <= 0 {
+		return "", 0, errors.New("OAuth access-token TTL must be positive")
+	}
+	jti, err := randomID(16)
+	if err != nil {
+		return "", 0, err
+	}
+	header, err := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": s.keyID})
+	if err != nil {
+		return "", 0, err
+	}
+	// Vincular o token ao cliente registrado que recebeu a autorização.
+	// O identificador não é uma atestação de que o aplicativo é o ChatGPT.
+	payload, err := json.Marshal(map[string]any{"iss": s.config.Issuer, "sub": ownerSubject, "aud": s.config.ResourceURL, "exp": now.Add(ttl).Unix(), "iat": now.Unix(), "nbf": now.Unix(), "scope": scope, "client_id": clientID, "jti": jti})
+	if err != nil {
+		return "", 0, err
+	}
+	signed := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
+	digest := sha256.Sum256([]byte(signed))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, s.key, crypto.SHA256, digest[:])
+	if err != nil {
+		return "", 0, err
+	}
+	return signed + "." + base64.RawURLEncoding.EncodeToString(signature), int(ttl.Seconds()), nil
+}
+
+func (s *Server) newTokenFamilyLocked(clientID, resource, scope string, now time.Time) (string, string, error) {
+	if !s.config.EnableRefreshTokens || !s.supportsRefresh(clientID) || !s.validateTokenFamilyScope(scope) {
+		return "", "", errors.New("OAuth refresh-token lifecycle is unavailable for this client or scope")
+	}
+	familyID, err := randomID(24)
+	if err != nil {
+		return "", "", err
+	}
+	secret, err := randomID(32)
+	if err != nil {
+		return "", "", err
+	}
+	family := tokenFamily{ID: familyID, ClientID: clientID, Resource: resource, Scope: scope, ExpiresAt: now.Add(s.refreshTokenTTL())}
+	hash := hashRefreshToken(secret)
+	s.families[familyID] = family
+	s.refresh[hash] = refreshToken{FamilyID: familyID, ExpiresAt: family.ExpiresAt}
+	if err := s.persistTokensLocked(); err != nil {
+		delete(s.refresh, hash)
+		delete(s.families, familyID)
+		return "", "", err
+	}
+	return secret, familyID, nil
+}
+
+func tokenReply(w http.ResponseWriter, accessToken string, expiresIn int, scope, refreshToken string) {
+	body := map[string]any{"access_token": accessToken, "token_type": "Bearer", "expires_in": expiresIn, "scope": scope}
+	if refreshToken != "" {
+		body["refresh_token"] = refreshToken
+	}
+	jsonReply(w, http.StatusOK, body)
+}
+
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(405)
@@ -771,14 +884,29 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := r.PostForm
-	for _, key := range []string{"grant_type", "resource", "code", "code_verifier", "client_id", "redirect_uri"} {
+	if len(f["grant_type"]) != 1 || len(f["resource"]) != 1 || len(f["client_id"]) != 1 {
+		bad(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	switch f.Get("grant_type") {
+	case "authorization_code":
+		s.tokenAuthorizationCode(w, f)
+	case "refresh_token":
+		s.tokenRefresh(w, f)
+	default:
+		bad(w, http.StatusBadRequest, "unsupported_grant_type")
+	}
+}
+
+func (s *Server) tokenAuthorizationCode(w http.ResponseWriter, f url.Values) {
+	for _, key := range []string{"code", "code_verifier", "client_id", "redirect_uri"} {
 		if len(f[key]) != 1 {
-			bad(w, 400, "invalid_request")
+			bad(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
 	}
-	if f.Get("grant_type") != "authorization_code" || !pkceVerifier.MatchString(f.Get("code_verifier")) {
-		bad(w, 400, "invalid_grant")
+	if !pkceVerifier.MatchString(f.Get("code_verifier")) {
+		bad(w, http.StatusBadRequest, "invalid_grant")
 		return
 	}
 	code := f.Get("code")
@@ -790,40 +918,111 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 	if !ok || g.ClientID != f.Get("client_id") || g.Redirect != f.Get("redirect_uri") || g.Resource != f.Get("resource") {
-		bad(w, 400, "invalid_grant")
+		bad(w, http.StatusBadRequest, "invalid_grant")
 		return
 	}
 	digest := sha256.Sum256([]byte(f.Get("code_verifier")))
 	challenge := base64.RawURLEncoding.EncodeToString(digest[:])
 	if subtle.ConstantTimeCompare([]byte(challenge), []byte(g.Challenge)) != 1 {
-		bad(w, 400, "invalid_grant")
+		bad(w, http.StatusBadRequest, "invalid_grant")
 		return
 	}
 	requested, supported := s.requestedCapabilities(g.Scope)
 	if !supported || (requested.Read && !s.readAllowed(g.ClientID)) || (requested.Write && !s.writeAllowed(g.ClientID)) || (requested.Git && !s.gitAllowed(g.ClientID)) || (requested.GitIndex && !s.gitIndexAllowed(g.ClientID)) || (requested.GitCommit && !s.gitCommitAllowed(g.ClientID)) || (requested.Test && !s.testAllowed(g.ClientID)) {
-		bad(w, 400, "invalid_grant")
+		bad(w, http.StatusBadRequest, "invalid_grant")
 		return
 	}
 	now := time.Now()
-	jti, err := randomID(16)
+	accessToken, expiresIn, err := s.issueAccessToken(g.Scope, g.ClientID, now)
 	if err != nil {
-		bad(w, 503, "server_error")
+		bad(w, http.StatusServiceUnavailable, "server_error")
 		return
 	}
-	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": s.keyID})
-	// Vincular o token ao cliente registrado que recebeu o código OAuth.
-	// O identificador não é uma atestação de que o aplicativo é o ChatGPT.
-	payload, _ := json.Marshal(map[string]any{"iss": s.config.Issuer, "sub": ownerSubject, "aud": s.config.ResourceURL, "exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "nbf": now.Unix(), "scope": g.Scope, "client_id": g.ClientID, "jti": jti})
-	signed := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
-	h := sha256.Sum256([]byte(signed))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, s.key, crypto.SHA256, h[:])
-	if err != nil {
-		bad(w, 503, "server_error")
-		return
-	}
-	jwt := signed + "." + base64.RawURLEncoding.EncodeToString(sig)
+	refreshToken := ""
 	s.mu.Lock()
-	s.issued[g.ClientID] = true
+	if s.config.EnableRefreshTokens && s.supportsRefresh(g.ClientID) {
+		refreshToken, _, err = s.newTokenFamilyLocked(g.ClientID, g.Resource, g.Scope, now)
+	}
+	if err == nil {
+		s.issued[g.ClientID] = true
+	}
 	s.mu.Unlock()
-	jsonReply(w, 200, map[string]any{"access_token": jwt, "token_type": "Bearer", "expires_in": int(tokenTTL.Seconds()), "scope": g.Scope})
+	if err != nil {
+		bad(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+		return
+	}
+	tokenReply(w, accessToken, expiresIn, g.Scope, refreshToken)
+}
+
+func (s *Server) tokenRefresh(w http.ResponseWriter, f url.Values) {
+	if !s.config.EnableRefreshTokens || len(f["refresh_token"]) != 1 {
+		bad(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
+	if len(f["scope"]) > 1 {
+		bad(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	secret := f.Get("refresh_token")
+	if !refreshHashPattern.MatchString(hashRefreshToken(secret)) {
+		bad(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tokenHash := hashRefreshToken(secret)
+	record, ok := s.refresh[tokenHash]
+	if !ok {
+		bad(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
+	family, ok := s.families[record.FamilyID]
+	if !ok || family.ClientID != f.Get("client_id") || family.Resource != f.Get("resource") || family.RevokedAt != nil || !now.Before(family.ExpiresAt) || !now.Before(record.ExpiresAt) {
+		bad(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
+	if record.Rotated {
+		if err := s.revokeFamilyLocked(record.FamilyID, now); err != nil {
+			bad(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+			return
+		}
+		bad(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
+	requestedScope := family.Scope
+	if len(f["scope"]) == 1 {
+		requestedScope = f.Get("scope")
+	}
+	if requestedScope != family.Scope || !s.validateTokenFamilyScope(requestedScope) || !s.supportsRefresh(family.ClientID) {
+		bad(w, http.StatusBadRequest, "invalid_scope")
+		return
+	}
+	newSecret, err := randomID(32)
+	if err != nil {
+		bad(w, http.StatusServiceUnavailable, "server_error")
+		return
+	}
+	newHash := hashRefreshToken(newSecret)
+	if _, exists := s.refresh[newHash]; exists {
+		bad(w, http.StatusServiceUnavailable, "server_error")
+		return
+	}
+	accessToken, expiresIn, err := s.issueAccessToken(family.Scope, family.ClientID, now)
+	if err != nil {
+		bad(w, http.StatusServiceUnavailable, "server_error")
+		return
+	}
+	record.Rotated = true
+	s.refresh[tokenHash] = record
+	s.refresh[newHash] = refreshToken{FamilyID: family.ID, ExpiresAt: family.ExpiresAt}
+	if err := s.persistTokensLocked(); err != nil {
+		delete(s.refresh, newHash)
+		record.Rotated = false
+		s.refresh[tokenHash] = record
+		bad(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+		return
+	}
+	s.issued[family.ClientID] = true
+	tokenReply(w, accessToken, expiresIn, family.Scope, newSecret)
 }

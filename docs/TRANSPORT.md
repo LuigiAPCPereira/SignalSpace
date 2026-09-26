@@ -43,12 +43,12 @@ A documentação da Cloudflare descreve `cloudflared tunnel login`, criação do
 
 ## O que falta para marcar a conexão real como validada
 
-Com o transporte e a conta do usuário disponíveis, verificar no ChatGPT Web: descoberta MCP, DCR do cliente correto, consentimento na página HTTPS, aprovação **no terminal local**, retorno `iss`/`state`, troca com PKCE e token `aud` correto e, finalmente, chamada à ferramenta `connection_diagnostic` autenticada. Registrar apenas o resultado, sem tokens ou códigos. Revogação, refresh, proteção contra abuso público e uma experiência de instalação confiável continuam pendentes. Nenhum teste local, incluindo `doctor transport`, substitui essa evidência.
+Com o transporte e a conta do usuário disponíveis, verificar no ChatGPT Web: descoberta MCP, DCR do cliente correto, consentimento na página HTTPS, aprovação **no terminal local**, retorno `iss`/`state`, troca com PKCE e token `aud` correto e, finalmente, chamada à ferramenta `connection_diagnostic` autenticada. Registrar apenas o resultado, sem tokens ou códigos. O auth harness v2 agora cobre refresh/rotação/revogação de token family localmente; isso não substitui o aceite externo nem prova proteção contra abuso público ou uma experiência de instalação confiável.
 
 O [Túnel MCP Seguro da OpenAI](https://developers.openai.com/pt-BR/api/docs/guides/secure-mcp-tunnels) é outra possibilidade: pode manter o MCP privado, mas o servidor de autorização OAuth precisa ser acessível pelo navegador, pois o túnel não o publica automaticamente. É necessária configuração separada na Plataforma e autorização do workspace.
 
 ## Relação com autorização local v2
 
-O desenho aceito em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md) trata OAuth como autenticação da composição, não como concessão de filesystem, Git ou shell. O transporte deve carregar a identidade e o recurso corretos; a decisão local continua pertencendo ao SignalSpace. O alvo de composição inclui `signalspace:diagnostic`, `signalspace:read` e `signalspace:programming`, mas nenhum desses nomes foi adicionado ao runtime por esta ADR.
+O desenho aceito em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md) trata OAuth como autenticação da composição, não como concessão de filesystem, Git ou shell. O auth harness opt-in implementa `signalspace:programming` e o ciclo refresh v2; a composição pública e suas tools continuam no contrato granular até uma migração própria. O transporte deve carregar a identidade e o recurso corretos; a decisão local continua pertencendo ao SignalSpace.
 
 Quick Tunnel continua temporário e apropriado somente a dev/smoke. A experiência persistente exigirá uma origem estável, a escolher em tarefa própria; esta reconciliação não escolhe Named Tunnel, domínio, provedor ou relay e não altera o endpoint atual.

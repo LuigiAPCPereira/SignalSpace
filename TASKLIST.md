@@ -4,6 +4,13 @@
 
 **Reconciliação de ref mais recente em 25/09/2026:** a ref corrente desta frente é `codex/mvp-vertical-programming`, com base local/remota observada em `de8ff7e3d253f4dedbfbba1135bdf53e682cd335` antes desta missão. A correção está no commit `c2dcdbd` e sua documentação foi publicada por fast-forward normal; `git ls-remote` confirmou o remoto após cada push. O histórico anterior de Git commit permanece preservado; não houve merge, rebase ou force-push. O PR #1 continua draft e sua HEAD/branch de origem continua `feat/m1-local-mcp-diagnostic`; ela não é a branch atual e não foi integrada nesta frente.
 
+## Atualização vigente — `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` — 26/09/2026
+
+- Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. A tarefa implementa o ciclo OAuth v2 somente no auth harness opt-in; a composição pública Programming e as tools granulares não foram migradas.
+- Escopo entregue: composição `signalspace:programming`, metadata/DCR `authorization_code + refresh_token`, access TTL configurável (default 60 min), refresh TTL configurável (default 30 dias), refresh opaque armazenado somente por SHA-256, token family persistente vinculada a client/resource/scope, rotação, reuse detection, revogação persistente e migração v1 explícita.
+- Regressões: PKCE, one-shot code, redirect/resource binding, issuer/audience/client/JTI, expansão de escopo, mismatch de client/resource, restart, revogação após restart e concorrência de refresh; o runtime legado não anuncia refresh nem `signalspace:programming`.
+- Fora do escopo: Policy Engine, grants/capabilities locais novos, migração pública, painel, shell, `test.run`, lifecycle MCP de worktree, Git remoto, workspace real, CI, merge e deploy. Os patches protegidos permanecem untracked, não aplicados e intocados.
+
 ## Atualização vigente — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
 - Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `14821b4`. `SS-MVP-002` permanece **PARCIAL/em andamento** porque o aceite operacional externo ainda não foi executado no HEAD corrigido; CI permanece **DESCONHECIDA**.

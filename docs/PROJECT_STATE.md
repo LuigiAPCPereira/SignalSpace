@@ -678,3 +678,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação e limites:** `git diff --check`, links internos, busca de contradições e verificação de ausência de alterações em `.go`, `.js`, `.ts` e workflows são gates do fechamento desta missão. Os dois patches protegidos permanecem fora do Git, não aplicados e intocados, com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`. Não há aceite externo novo, CI, navegador, workspace real, túnel ou permissão nova.
 
 **Próxima ação:** somente uma tarefa posterior pode implementar token family, Policy Engine, approvals/painel, migração Programming, origem estável ou shell independente. Enviar este relatório ao ChatGPT Web e aguardar a próxima missão.
+
+## Checkpoint `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` — 26/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. O ciclo OAuth v2 está disponível somente no auth harness opt-in; `SS-MVP-002` permanece **PARCIAL/em andamento**, porque a migração da superfície pública e o aceite externo continuam pendentes. CI permanece **DESCONHECIDA**.
+
+**Implementação:** `internal/auth` agora suporta a composição `signalspace:programming`, DCR/metadata com `authorization_code + refresh_token`, access TTL configurável (default 60 minutos), refresh TTL configurável (default 30 dias), segredo opaco retornado uma vez e persistido somente por hash SHA-256, token family vinculada a client/resource/scope, rotação, detecção de reuse, revogação persistente e migração v1 explícita. O access JWT preserva issuer, audience, owner subject, client ID e JTI.
+
+**Validação:** `go test ./internal/auth` e `go test -race ./internal/auth` passaram, cobrindo PKCE, código de uso único, binding redirect/resource/client, escopo sem expansão, restart, revogação após restart, concorrência de refresh e preservação do runtime legado sem anúncio v2.
+
+**Limites:** não houve Policy Engine, grant/capability local novo, migração das tools públicas, painel, shell, `test.run`, lifecycle MCP de worktree, workspace real, CI, HTTPS, túnel, navegador, merge ou deploy. Os patches protegidos continuam untracked, não aplicados e intocados com os SHA-256 registrados anteriormente.
+
+**Próxima ação vinculada:** executar gates completos, criar commit focado, verificar fast-forward e publicar somente na branch `codex/mvp-vertical-programming`; depois enviar o relatório ao ChatGPT Web e aguardar a próxima missão.

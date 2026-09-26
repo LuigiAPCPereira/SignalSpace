@@ -1,7 +1,7 @@
 # ADR — autorização local v2 para a composição Programming
 
 **ID:** `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001`
-**Estado:** **ACEITA / NÃO IMPLEMENTADA**
+**Estado:** **ACEITA / CICLO OAUTH V2 IMPLEMENTADO NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA**
 **Data da decisão:** 25/09/2026
 **Escopo:** arquitetura, contratos, modelo de domínio, migração e critérios de aceite. Esta ADR não autoriza alteração funcional, nova capability, push, merge ou deploy.
 
@@ -12,7 +12,7 @@ O SignalSpace conecta o ChatGPT Web a ferramentas locais por MCP/OAuth e precisa
 1. o cliente está autenticado para usar uma composição do SignalSpace?
 2. o proprietário autorizou esta operação local, neste workspace, nesta sessão e sob esta política?
 
-A composição `programming` atualmente demonstra a superfície tipada por escopos granulares (`workspace.read`, `workspace.write`, `git.review`, `git.index` e `git.commit`) e por concessões locais. Essa fatia permanece válida como contrato histórico implementado. O desenho desta ADR é o alvo arquitetural seguinte; não é uma afirmação de que o runtime já o implementa.
+A composição `programming` pública continua demonstrando a superfície tipada por escopos granulares (`workspace.read`, `workspace.write`, `git.review`, `git.index` e `git.commit`) e por concessões locais. Como passo intermediário, o auth harness agora implementa opt-in o ciclo OAuth v2 (composição `signalspace:programming`, refresh token e token family), sem migrar as tools públicas para esse escopo. A implementação do ciclo não equivale à implementação do Policy Engine ou à promoção pública da composição.
 
 ## Problema
 
@@ -46,7 +46,7 @@ O desenho propõe os escopos de composição abaixo. Eles são contrato futuro, 
 | --- | --- | --- | --- |
 | `signalspace:diagnostic` | Conectividade e diagnóstico | Não acessa workspace | Existente |
 | `signalspace:read` | Cliente autenticado para a composição de leitura | Ainda exige workspace/session/grant local | Alvo futuro |
-| `signalspace:programming` | Cliente autenticado para a composição Programming | Não significa acesso irrestrito; toda tool passa pela política local | Alvo futuro |
+| `signalspace:programming` | Cliente autenticado para a composição Programming | Não significa acesso irrestrito; toda tool passa pela política local | Implementada no auth harness opt-in; tools públicas ainda granulares |
 
 O desenho não elimina grants locais nem promove shell, `test.run`, Git remoto ou operações destrutivas.
 
@@ -153,8 +153,8 @@ O desenho futuro considera access token de 60 minutos e refresh token de 30 dias
 
 ## Migração e compatibilidade
 
-1. **A — documental:** esta ADR e reconciliação dos contratos, sem código.
-2. **B — ciclo OAuth:** token families, rotação, revogação e vínculo resource/client.
+1. **A — documental:** esta ADR e reconciliação dos contratos, sem código. **Concluída.**
+2. **B — ciclo OAuth:** token families, rotação, revogação e vínculo resource/client. **Implementada no auth harness opt-in por `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001`; a migração pública permanece pendente.**
 3. **C — capabilities internas:** normalização independente sem mudar ainda a superfície pública.
 4. **D — Policy Engine:** `ALLOW`/`DENY`/`REQUIRE_APPROVAL`, grants e permits.
 5. **E — approvals/painel:** persistência, deduplicação, expiração e auditoria segura.
@@ -174,8 +174,8 @@ Como os clientes de aceite são descartáveis, a compatibilidade preferida é um
 
 ## Itens futuros
 
-Implementar somente mediante novas tarefas/gates: token family, Policy Engine, armazenamento seguro, painel de approvals, migração da composição Programming, stable origin, auditoria redigida, aceites externos e shell independente. Não são entregues por esta ADR.
+Implementar somente mediante novas tarefas/gates: Policy Engine, armazenamento/painel de approvals, migração pública da composição Programming, stable origin, auditoria redigida, aceites externos e shell independente. O ciclo OAuth v2 do auth harness foi entregue separadamente e não concede capabilities locais.
 
 ## Estado da decisão
 
-**ACEITA / NÃO IMPLEMENTADA.** A arquitetura é a direção aprovada para o próximo desenho do SignalSpace. O runtime corrente, as capabilities publicadas e os escopos OAuth existentes permanecem inalterados até uma missão de implementação explicitamente vinculada.
+**ACEITA / CICLO OAUTH V2 IMPLEMENTADO NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA.** O ciclo mantém o runtime público granular e não cria Policy Engine, capability local, tool nova ou shell.
