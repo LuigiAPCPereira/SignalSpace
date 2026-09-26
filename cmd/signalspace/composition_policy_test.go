@@ -100,6 +100,14 @@ func TestEmbeddedHandlerRejectsUnsupportedCompositionBeforeOAuthState(t *testing
 	if handler, authorization, console, err := embeddedHandlerForPlan(readTestResource, stateDir, plan); err == nil || handler != nil || authorization != nil || console != nil {
 		t.Fatalf("plan exposing the administrative port as MCP was accepted: handler=%v auth=%v console=%v err=%v", handler, authorization, console, err)
 	}
+	plan, err = planComposition(compositionProgramming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.expectedCompositionScope = "signalspace:arbitrary"
+	if handler, authorization, console, err := embeddedHandlerForPlan(readTestResource, stateDir, plan); err == nil || handler != nil || authorization != nil || console != nil {
+		t.Fatalf("tampered composition scope plan was accepted: handler=%v auth=%v console=%v err=%v", handler, authorization, console, err)
+	}
 	if _, statErr := os.Stat(stateDir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("invalid plans touched OAuth state path: %v", statErr)
 	}

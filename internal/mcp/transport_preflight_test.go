@@ -65,6 +65,23 @@ func testPublicEmbeddedMode(t *testing.T, scope string) (string, *http.Client, *
 				})
 				return
 			}
+		case "auth_server_extra_scope":
+			if r.URL.Path == "/.well-known/oauth-authorization-server" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"issuer":                                origin,
+					"authorization_endpoint":                origin + "/authorize",
+					"token_endpoint":                        origin + "/token",
+					"registration_endpoint":                 origin + "/register",
+					"jwks_uri":                              origin + "/oauth/jwks",
+					"response_types_supported":              []string{"code"},
+					"grant_types_supported":                 []string{"authorization_code"},
+					"code_challenge_methods_supported":      []string{"S256"},
+					"token_endpoint_auth_methods_supported": []string{"none"},
+					"scopes_supported":                      []string{scope, "unrelated:scope"},
+				})
+				return
+			}
 		case "redirect":
 			if r.URL.Path == metadataPath {
 				http.Redirect(w, r, "https://other.example/", http.StatusFound)
@@ -81,6 +98,16 @@ func testPublicEmbeddedMode(t *testing.T, scope string) (string, *http.Client, *
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+		case "swapped_http_challenge_scope":
+			if r.URL.Path == "/mcp" && r.Header.Get("Authorization") == "" {
+				swapped := ScopeDiagnostic
+				if scope == ScopeDiagnostic {
+					swapped = ScopeProgramming
+				}
+				w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+origin+metadataPath+`", scope="`+swapped+`"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 		case "no_tool_challenge":
 			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 				if r.ContentLength > 56 {
@@ -94,6 +121,19 @@ func testPublicEmbeddedMode(t *testing.T, scope string) (string, *http.Client, *
 				if r.ContentLength > 56 {
 					w.Header().Set("Content-Type", "application/json")
 					challenge := fmt.Sprintf(`Bearer resource_metadata="%s%s", scope="unrelated:scope", error="invalid_token", error_description="Authentication required to use this tool"`, origin, metadataPath)
+					_, _ = w.Write([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"result":{"isError":true,"_meta":{"mcp/www_authenticate":[%q]}}}`, challenge)))
+					return
+				}
+			}
+		case "swapped_tool_challenge_scope":
+			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+				if r.ContentLength > 56 {
+					swapped := ScopeDiagnostic
+					if scope == ScopeDiagnostic {
+						swapped = ScopeProgramming
+					}
+					w.Header().Set("Content-Type", "application/json")
+					challenge := fmt.Sprintf(`Bearer resource_metadata="%s%s", scope="%s", error="invalid_token", error_description="Authentication required to use this tool"`, origin, metadataPath, swapped)
 					_, _ = w.Write([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"result":{"isError":true,"_meta":{"mcp/www_authenticate":[%q]}}}`, challenge)))
 					return
 				}
@@ -205,7 +245,7 @@ func TestEmbeddedTransportCompositionMatrix(t *testing.T) {
 	}
 
 	for _, m := range modes {
-		// Extra unrelated scope: PASS
+		// Extra unrelated scope on protected resource: PASS
 		t.Run(m.name+"_extra_scope", func(t *testing.T) {
 			*m.fault = "extra_scope"
 			defer func() { *m.fault = "" }()
@@ -215,13 +255,25 @@ func TestEmbeddedTransportCompositionMatrix(t *testing.T) {
 			}
 		})
 
+		// Extra unrelated scope on authorization server metadata: PASS
+		t.Run(m.name+"_auth_server_extra_scope", func(t *testing.T) {
+			*m.fault = "auth_server_extra_scope"
+			defer func() { *m.fault = "" }()
+			report, err := CheckEmbeddedTransportForScope(context.Background(), m.resource, m.scope, m.client)
+			if err != nil || report.ResourceURL != m.resource {
+				t.Fatalf("auth server extra scope rejected: %v", err)
+			}
+		})
+
 		for _, failureFault := range []string{
 			"wrong_resource",
 			"issuer_mismatch",
 			"missing_scope",
 			"auth_server_missing_scope",
 			"wrong_http_challenge_scope",
+			"swapped_http_challenge_scope",
 			"wrong_tool_challenge_scope",
+			"swapped_tool_challenge_scope",
 		} {
 			t.Run(m.name+"_"+failureFault, func(t *testing.T) {
 				*m.fault = failureFault
@@ -238,6 +290,12 @@ func TestEmbeddedTransportRejectsInvalidURL(t *testing.T) {
 	for _, resource := range []string{"", "http://example.com/mcp", "https://example.com/mcp?x=1", "https://example.com/other"} {
 		if _, err := CheckEmbeddedTransport(context.Background(), resource, nil); err == nil {
 			t.Fatalf("invalid public resource accepted: %q", resource)
+		}
+		if _, err := CheckEmbeddedTransportForScope(context.Background(), resource, ScopeDiagnostic, nil); err == nil {
+			t.Fatalf("invalid public resource accepted for diagnostic scope: %q", resource)
+		}
+		if _, err := CheckEmbeddedTransportForScope(context.Background(), resource, ScopeProgramming, nil); err == nil {
+			t.Fatalf("invalid public resource accepted for programming scope: %q", resource)
 		}
 	}
 }
