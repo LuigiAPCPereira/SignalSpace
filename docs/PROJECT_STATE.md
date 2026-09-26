@@ -4,9 +4,9 @@
 
 ## Checkpoint vigente — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
-**Estado:** `IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE` em `14821b4`. A causa raiz foi corrigida em `c2dcdbd`: `tools/list` da composição `programming` não depende mais do scope específico do bearer; a execução continua fechada por `verify()` e pelo grant local. `SS-MVP-002` permanece **PARCIAL/em andamento** e o aceite externo permanece pendente.
+**Estado:** `IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE` por fast-forward normal. A causa raiz foi corrigida em `c2dcdbd`: `tools/list` da composição `programming` não depende mais do scope específico do bearer; a execução continua fechada por `verify()` e pelo grant local. `SS-MVP-002` permanece **PARCIAL/em andamento** e o aceite externo permanece pendente.
 
-**Ref:** branch `codex/mvp-vertical-programming`; base local/remota reconciliada em `de8ff7e3d253f4dedbfbba1135bdf53e682cd335` antes da edição; código em `c2dcdbd` e remoto live final em `14821b4`. Não houve merge, rebase ou force-push.
+**Ref:** branch `codex/mvp-vertical-programming`; base local/remota reconciliada em `de8ff7e3d253f4dedbfbba1135bdf53e682cd335` antes da edição; código em `c2dcdbd` e remoto live verificado diretamente após os pushes. Não houve merge, rebase ou force-push.
 
 **Contrato validado:** bearer diagnostic-only descobre a superfície Programming completa, com os descriptors cumulativos `diagnostic + capability`; READ, WRITE, Git review, Git index e Git commit retornam challenge MCP `insufficient_scope` sem executar backend quando falta o scope. `diagnostic` e `read` preservam seus limites e `test.run` continua ausente do entrypoint.
 
