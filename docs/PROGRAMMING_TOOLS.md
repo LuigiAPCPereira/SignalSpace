@@ -220,3 +220,11 @@ O fluxo usa somente `git write-tree`, `git commit-tree` por stdin e uma transaç
 **Validação local:** `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s`, `go test -race ./internal/workspace ./internal/auth ./internal/mcp ./cmd/signalspace -p=1 -parallel=1 -count=1 -timeout=300s`, `go vet ./...`, `go build ./...`, `gofmt -l cmd internal` e `git diff --check` passaram. Os testes cobrem identidade privada, restart/resume, sessão antiga, diretório fora da managed worktree, staged-only com unstaged preservado, CAS stale-head, índice vazio, hooks não executados, ref privada inválida e independência OAuth/MCP.
 
 **Estado:** `SS-MVP-002` permanece **PARCIAL quanto ao aceite operacional externo**; `SS-MVP-002-GIT-COMMIT-GATE-001` está **APROVADO / IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `0420c9a`. `SS-MVP-002-GIT-COMMIT-PUBLISH-001` foi concluído com desvio procedural de pré-checagem, sem impacto material no conteúdo publicado. CI, HTTPS, túnel, navegador, grant ChatGPT Web, workspace real, merge e deploy permanecem **DESCONHECIDOS/NÃO VALIDADOS**. Os patches protegidos continuam fora do Git, não aplicados e com os SHA-256 aprovados.
+
+## Arquitetura alvo v2 — autorização local por composição
+
+`SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` aceita a direção descrita em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). A superfície atualmente implementada/publicada continua sendo a matriz tipada registrada nesta documentação, com escopos e grants independentes; não há mudança de runtime nesta reconciliação.
+
+No alvo, OAuth solicita a composição (`signalspace:diagnostic`, `signalspace:read` ou `signalspace:programming`) e o SignalSpace decide internamente `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`, `git.index`, `git.commit`, `test.run` e `shell.exec`. A policy deve considerar owner/client/workspace/session/tool/context e responder `ALLOW`, `DENY` ou `REQUIRE_APPROVAL`. Shell, Git remoto, branches e ações destrutivas permanecem capabilities e gates separados.
+
+O aceite desta ADR não adiciona tool, scope, grant, UI ou lifecycle MCP. A implementação futura deve migrar a composição de modo controlado, preservar anotações/resultados estruturados e comprovar novamente discovery, OAuth, aprovação local, revogação, precondições e cleanup em fixture descartável.

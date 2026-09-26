@@ -664,3 +664,17 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Validação:** passaram testes focais e race serial de `internal/workspace`, `internal/programming` e `internal/mcp`, incluindo fluxo status → stage → distinção staged/unstaged → unstage, preservação do working tree, scope independente e negação fora de worktree. Ainda faltam os gates completos e a checagem de limpeza no fechamento desta missão; não inferir CI, navegador, HTTPS, túnel, grant ChatGPT Web, workspace real, merge ou deploy.
 
 **Preservação:** os patches `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` continuam não rastreados, não aplicados e intocados, com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86f3e1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`. Próxima ação vinculada: gates completos, commit documental, relatório ao ChatGPT Web e espera da próxima missão; não publicar remotamente nesta fatia.
+
+## Checkpoint `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` — 25/09/2026
+
+**Estado:** **DECISÃO ACEITA / DOCUMENTAÇÃO RECONCILIADA / NÃO IMPLEMENTADA**. `SS-MVP-002` permanece **PARCIAL/em andamento**; `SS-BE-007` permanece **PARCIAL**; CI permanece **DESCONHECIDA**. O checkpoint está vinculado ao ID existente na `TASKLIST.md`.
+
+**Ref e base:** branch `codex/mvp-vertical-programming`, HEAD e remoto revalidados antes da edição em `a62eba66130f0d55581ef97b8c7d9a32afe01c4a`. O trabalho foi autorizado somente para ADR, contratos conceituais, modelo, migração, critérios e reconciliação documental. Não houve código, workflow, capability, escopo runtime, grant, push, merge, rebase ou deploy.
+
+**Decisão:** OAuth autentica uma composição (`signalspace:diagnostic`, `signalspace:read` ou `signalspace:programming` no alvo); a autoridade local decide capabilities internas por owner/client/workspace/session/tool/context. O Policy Engine retorna `ALLOW`, `DENY` ou `REQUIRE_APPROVAL`; permits são concretos e de uso único. Aprovação não executa a chamada anterior. Shell é independente, não é sandbox por root/worktree e exige gate próprio.
+
+**Fontes reconciliadas:** [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md), `AGENTS.md`, `TASKLIST.md`, `docs/PRODUCT.md`, `docs/MVP.md`, `docs/LOCAL_ADMIN_AUTHORIZATION.md`, `docs/WORKSPACE_SECURITY.md`, `docs/PROGRAMMING_TOOLS.md`, `docs/QUICK_PANEL.md`, `docs/TRANSPORT.md`, `docs/ROADMAP.md` e este checkpoint. `DOCUMENTATION_AND_CONTINUITY.md` não foi alterado porque não havia necessidade protocolar.
+
+**Validação e limites:** `git diff --check`, links internos, busca de contradições e verificação de ausência de alterações em `.go`, `.js`, `.ts` e workflows são gates do fechamento desta missão. Os dois patches protegidos permanecem fora do Git, não aplicados e intocados, com SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`. Não há aceite externo novo, CI, navegador, workspace real, túnel ou permissão nova.
+
+**Próxima ação:** somente uma tarefa posterior pode implementar token family, Policy Engine, approvals/painel, migração Programming, origem estável ou shell independente. Enviar este relatório ao ChatGPT Web e aguardar a próxima missão.

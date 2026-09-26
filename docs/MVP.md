@@ -49,3 +49,9 @@ Antes de declarar um marco concluído: inspecionar branch/HEAD e diff; rodar tes
 ## Primeiro trabalho de código
 
 Selecionar stack com base no requisito de MCP HTTP autenticado e no ambiente-alvo, implementar a fatia **1** com teste local de não autorização e um smoke real no ChatGPT Web. Não construir ferramentas de terminal antes de autenticação funcionar.
+
+## Reconciliação arquitetural v2 — 25/09/2026
+
+O MVP inicial acima permanece como especificação histórica de aceitação ponta a ponta. Para a evolução da composição Programming, a tarefa `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` aceita a separação entre autenticação OAuth da composição e autorização local por capability. O alvo não transforma OAuth em acesso ao computador: workspace, sessão, política, aprovação e precondições continuam obrigatórios, e shell/teste/Git remoto exigem gates próprios.
+
+O próximo trabalho de implementação, se autorizado por tarefa própria, deve seguir [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). A ADR, esta reconciliação e o checkpoint são documentação; não constituem implementação, aceite de navegador, CI ou permissão nova.

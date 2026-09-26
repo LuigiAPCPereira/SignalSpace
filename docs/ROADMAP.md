@@ -77,3 +77,9 @@ O próximo slice técnico recomendado é o item 1. Ele deve preservar `replace_t
 O item 1 foi executado nesta retomada em dois commits locais: implementação/testes e documentação/checkpoint/direção de worktrees. O motor comum adiciona `stat_path`, `find_paths`, `search_text`, `create_directory`, `create_text_file` e `write_text_file`, com resultados estruturados, limites explícitos, validação de caminho/no-symlink, create-only e precondição/hash para escrita integral. A matriz de escopos permanece separada: READ em `signalspace:workspace.read` e WRITE em `signalspace:workspace.write`.
 
 O segundo commit também registra que worktrees são direção futura, não capacidade exercitada. Nenhuma worktree foi criada; não houve alteração das branches protegidas, integração do frontend, Git mutável, shell, `test.run`, copy/move/delete/apply_patch, CI, túnel, OAuth externo, workspace real, merge ou deploy. Os dois commits foram rebaseados sobre o remoto live sem merge, sem force-push e sem push.
+
+## `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` — decisão arquitetural — 25/09/2026
+
+Esta tarefa aceita a direção **OAuth por composição + Autorização Local de Capabilities** e a registra em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). O alvo separa autenticação OAuth, grants de workspace, Policy Engine, approvals locais e `OperationPermit`; propõe as composições `diagnostic`, `read` e `programming`, sem confundir `programming` com acesso irrestrito.
+
+O estado é **ACEITA / NÃO IMPLEMENTADA**. A tarefa reconciliou produto, MVP, autorização local, segurança, Programming, painel e transporte. Não adicionou código, tool, scope runtime, grant, shell, `test.run`, Git remoto, UI funcional, túnel, CI, merge, deploy ou push. A próxima fase, se autorizada, é o ciclo OAuth/token family e o Policy Engine; shell permanece gate próprio e posterior.

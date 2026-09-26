@@ -70,3 +70,9 @@ O primeiro marco é uma chamada real do ChatGPT Web que lê, edita e executa em 
 - DevSpace: demonstra conexão de ChatGPT a ambiente local por MCP + túnel, sem compartilhar código com este projeto.
 - Graphify: candidato opcional futuro para compreensão estrutural de repositórios.
 - Engineering DNA do CODE: observar realidade, preservar desconhecidos, ownership claro e menor solução suficiente.
+
+## Direção arquitetural aceita — autorização local v2
+
+`SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` aceita como alvo a separação entre **OAuth por composição** e **Autorização Local de Capabilities**. OAuth autentica a conexão; não concede workspace, capability ou shell. A política local deve considerar proprietário, cliente, workspace, sessão, capability, tool e precondições, retornando `ALLOW`, `DENY` ou `REQUIRE_APPROVAL`. Aprovação local de operação sensível não executa automaticamente a chamada original; o cliente deve repetir e o backend revalidar tudo.
+
+O desenho futuro propõe `signalspace:diagnostic`, `signalspace:read` e `signalspace:programming` como escopos de composição. `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`, `git.index`, `git.commit`, `test.run` e `shell.exec` continuam dimensões internas independentes. O contrato detalhado está em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md) e está **ACEITO / NÃO IMPLEMENTADO**; a composição e os escopos atualmente publicados não mudam por este registro.

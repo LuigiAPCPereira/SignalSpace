@@ -65,3 +65,9 @@ Abortar e manter o aceite como `BLOQUEADO` diante de: 7677 publicada externament
 ### Resultado e evidência esperados
 
 O relatório operacional deve separar `IMPLEMENTADO`, `VALIDADO`, `NÃO VALIDADO` e `DESCONHECIDO`, registrar status/códigos/contagens sem segredos e manter `SS-BE-007` **PARCIAL**, `SS-MVP-002` **PARCIAL**, `SS-MVP-002-PROMOTION-GATE-001` **PENDENTE** e CI **DESCONHECIDA** até que a evidência externa autorizada exista. O roteiro sozinho não é aceite operacional.
+
+## Papel futuro do painel na autorização local v2
+
+Como direção aceita em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md), o painel local é a autoridade owner-side para Connections, Workspaces, Pending approvals e Audit quando a policy retornar `REQUIRE_APPROVAL`. As opções conceituais são `Allow once`, `Allow session`, `Allow workspace` e `Deny`; a escolha não executa a chamada original. OAuth válido, permissões do host ChatGPT e notificações não substituem essa autoridade.
+
+Esta seção não implementa fila, notification, persistência ou nova rota. O painel v1, o terminal e os limites de `127.0.0.1:7677` continuam regidos pelo contrato vigente até uma tarefa de implementação posterior.

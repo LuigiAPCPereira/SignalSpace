@@ -20,6 +20,12 @@ Não existe evidência de grant programming, sessão externa, managed worktree, 
 
 `connect quick` continua oferecendo somente `connection_diagnostic`, e `connect quick read` continua oferecendo `read_file` e `list_directory` após confirmação local `PUBLICAR LEITURA`. A composição explicitamente opt-in `connect quick programming` possui seis tools READ/WRITE da base, quatro WRITE estruturais, `apply_patch`, `git_status`, `review_git_changes`, `stage_git_paths`, `unstage_git_paths` e `commit_git_index`, sempre com escopos independentes, managed worktree e concessão terminal-local. Isso não amplia os modos `diagnostic`/`read` e não habilita shell, `test.run`, branch ou Git remoto. A listagem e cada porta exigem composição explícita; não são habilitadas apenas por existir uma implementação no domínio. A URL Quick Tunnel é pública e temporária: use somente pastas descartáveis sem segredos. O modo OAuth integrado persistente e o modo bearer local não habilitam arquivos sem composição autorizada.
 
+## Arquitetura alvo de autorização local v2
+
+O contrato de segurança futuro é registrado em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md): OAuth por composição autentica, enquanto Policy Engine, grants locais e `OperationPermit` autorizam a operação concreta. `ALLOW`, `DENY` e `REQUIRE_APPROVAL` são estados distintos; `REQUIRE_APPROVAL` não toca bytes, índice, HEAD ou processo. O proprietário decide no painel local quando necessário e o cliente repete a chamada depois da decisão.
+
+As roots e managed worktrees continuam limites de filesystem/Git, não sandbox de processos. `shell.exec` será capability independente, não herdará `workspace.write`/`test.run` e não será tratado como confinado sem sandbox real. Quick Tunnel permanece dev/smoke; uma origem estável será decisão posterior. Esta seção é **direção aceita / não implementada** e não altera a matriz de tools, escopos ou grants correntes.
+
 ## Raiz e conteúdo
 
 - `OpenApprovedRoot(root)` recebe somente caminho absoluto canônico aprovado pelo operador local. Recusa `/` e o diretório home como raízes amplas, caminhos relativos, traversal e symlinks. Não há raiz padrão nem autorização por parâmetro HTTP.

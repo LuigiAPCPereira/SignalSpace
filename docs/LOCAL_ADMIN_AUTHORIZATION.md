@@ -167,4 +167,10 @@ Falha de rede antes/depois do commit da decisão e resposta HTTP perdida são **
 
 ## 9. Responsabilidades e entrega
 
+## 10. Relação com a arquitetura de autorização local v2
+
+Este contrato descreve a fronteira administrativa v1 e permanece a referência do comportamento histórico/atual até uma migração implementada. A ADR [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md), vinculada a `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001`, aceita como alvo uma separação mais explícita: OAuth autentica a composição (`diagnostic`, `read` ou `programming`) e o painel/local owner decide capabilities, policies e permits.
+
+Essa decisão não altera as rotas v1, não cria painel funcional adicional, não muda o mecanismo de terminal vigente e não concede escrita, Git ou shell. Em particular, a concessão de workspace continua distinta de OAuth; uma futura aprovação `REQUIRE_APPROVAL` deve produzir zero efeito e exigir repetição da tool com revalidação. A implementação de token family, Policy Engine, approvals persistentes e migração é posterior e requer tarefas próprias.
+
 **Backend:** listeners, roteadores, credencial/pareamento, sessões/cookies/CSRF, validação de Host/Origin, esquema e respostas HTTP, quotas, relógio e retenção, estado OAuth atômico, isolamento do túnel, autorização de leitura e testes de segurança. **Frontend (outra branch/sessão):** HTML, CSS, JavaScript, acessibilidade, polling e experiência; não decide autorização nem armazena credenciais em Web Storage. Não modificar `feat/frontend-oauth-consent` e não integrar protótipos nesta entrega. Fase seguinte: implementar e verificar backend contra este documento, revisar contrato com frontend, adaptar protótipos e executar integração separada. Nenhum merge, deploy, painel de chamadas MCP, concessão de workspace via OAuth ou ampliação de capacidades está autorizado por este documento.
