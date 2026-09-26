@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
 )
 
 const approvalTestClient = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -142,4 +144,51 @@ func TestCapabilityApprovalCloseDiscardsPendingRequests(t *testing.T) {
 	if _, err := approval.Request(t.TempDir(), approvalTestClient, ScopeRead); !errors.Is(err, ErrCapabilityApprovalUnavailable) {
 		t.Fatalf("closed approval accepted new request: %v", err)
 	}
+}
+
+func TestCapabilityApprovalProgrammingUsesCanonicalCheckoutEnvelope(t *testing.T) {
+	grants, err := NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer grants.Close()
+	approval, err := NewCapabilityApproval(grants, func(clientID string) bool { return clientID == approvalTestClient })
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := approval.RequestProgramming(t.TempDir(), approvalTestClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !request.Standard || len(request.Scopes) != 3 || request.Scopes[0] != ScopeRead || request.Scopes[1] != ScopeWrite || request.Scopes[2] != ScopeGit {
+		t.Fatalf("unexpected canonical programming request: %+v", request)
+	}
+	confirmed, sessionID, err := approval.Confirm(request.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !confirmed.Standard || sessionID == "" {
+		t.Fatalf("canonical programming confirmation = %+v session=%q", confirmed, sessionID)
+	}
+	snapshot, err := grants.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, wanted := range []string{ScopeRead, ScopeWrite, ScopeGit} {
+		if !containsScope(snapshot.Scopes, wanted) {
+			t.Fatalf("canonical programming omitted %s: %+v", wanted, snapshot)
+		}
+	}
+	if !containsCapability(snapshot.Capabilities, capability.WorkspaceDelete) {
+		t.Fatal("canonical typed checkout envelope omitted independent delete capability")
+	}
+}
+
+func containsScope(scopes []string, wanted string) bool {
+	for _, scope := range scopes {
+		if scope == wanted {
+			return true
+		}
+	}
+	return false
 }

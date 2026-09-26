@@ -39,7 +39,33 @@ var (
 	ErrInvalidPolicyRule           = errors.New("invalid policy rule")
 	ErrUnsupportedEffect           = errors.New("unsupported policy effect")
 	ErrManagedWorkspaceUnavailable = errors.New("managed workspace is unavailable")
+	ErrInvalidStandardProfile      = errors.New("invalid standard programming profile")
 )
+
+// ProgrammingProfileMode identifica o modo de workspace confiável recebido
+// do owner-side. Não é um valor escolhido pelo cliente MCP.
+type ProgrammingProfileMode string
+
+const (
+	ProgrammingProfileCheckout     ProgrammingProfileMode = "checkout"
+	ProgrammingProfileManaged      ProgrammingProfileMode = "worktree"
+	standardProfileDefaultPriority                        = -100
+	persistentPolicyPriority                              = -50
+	explicitSessionPriority                               = 100
+)
+
+// StandardProfileInput é o envelope já criado pelo owner-side. A função de
+// aplicação valida o conjunto fechado de capabilities antes de instalar
+// qualquer regra; assim o profile não pode ampliar o grant.
+type StandardProfileInput struct {
+	OwnerID             string
+	ClientID            string
+	WorkspaceID         string
+	ManagedWorkspaceID  string
+	SessionID           string
+	Mode                ProgrammingProfileMode
+	GrantedCapabilities []capability.Capability
+}
 
 // Context contém os vínculos que uma decisão precisa revalidar. Campos
 // ausentes não são tratados como curingas: Evaluate falha fechado.
@@ -70,7 +96,10 @@ type Rule struct {
 	Tool          string
 	Fingerprint   string
 	Effect        Effect
-	ExpiresAt     time.Time
+	// Priority separa decisões explícitas do proprietário das regras ASK
+	// padrão do profile. Valores maiores vencem antes da especificidade.
+	Priority  int
+	ExpiresAt time.Time
 }
 
 type Engine struct {
@@ -113,7 +142,7 @@ func NewEngineWithStore(now func() time.Time, store *Store, workspaceStable func
 		}
 		engine.rules = append(engine.rules, Rule{
 			OwnerID: item.OwnerID, ClientID: item.ClientID, WorkspaceID: item.WorkspaceID,
-			Capability: item.Capability, Effect: EffectAllowWorkspace,
+			Capability: item.Capability, Effect: EffectAllowWorkspace, Priority: persistentPolicyPriority,
 		})
 	}
 	return engine, nil
@@ -193,9 +222,7 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 			return Deny
 		}
 		specificity := specificity(rule)
-		if specificity > bestSpecificity ||
-			(specificity == bestSpecificity && bestIndex >= 0 && rule.Effect == EffectDeny && e.rules[bestIndex].Effect != EffectDeny) ||
-			(specificity == bestSpecificity && bestIndex >= 0 && rule.Effect == e.rules[bestIndex].Effect && index > bestIndex) {
+		if bestIndex < 0 || betterRule(rule, e.rules[bestIndex], specificity, bestSpecificity) {
 			bestIndex = index
 			bestSpecificity = specificity
 		}
@@ -225,7 +252,7 @@ func (e *Engine) ApplyApproval(snapshot approval.Snapshot, decision approval.Dec
 	case approval.DecisionDeny, approval.DecisionAllowOnce:
 		return nil
 	case approval.DecisionAllowSession:
-		return e.SetRule(Rule{OwnerID: snapshot.OwnerID, ClientID: snapshot.ClientID, WorkspaceID: snapshot.WorkspaceID, SessionID: snapshot.SessionID, Capability: snapshot.Capability, Effect: EffectAllowSession})
+		return e.SetRule(Rule{OwnerID: snapshot.OwnerID, ClientID: snapshot.ClientID, WorkspaceID: snapshot.WorkspaceID, SessionID: snapshot.SessionID, Capability: snapshot.Capability, Effect: EffectAllowSession, Priority: explicitSessionPriority})
 	case approval.DecisionAllowWorkspace:
 		if e.store == nil || snapshot.ManagedWorkspaceID == "" || e.workspaceStable == nil || !e.workspaceStable(snapshot.ManagedWorkspaceID) {
 			return ErrManagedWorkspaceUnavailable
@@ -237,7 +264,7 @@ func (e *Engine) ApplyApproval(snapshot approval.Snapshot, decision approval.Dec
 		if err != nil {
 			return err
 		}
-		rule := Rule{OwnerID: stored.OwnerID, ClientID: stored.ClientID, WorkspaceID: stored.WorkspaceID, Capability: stored.Capability, Effect: EffectAllowWorkspace}
+		rule := Rule{OwnerID: stored.OwnerID, ClientID: stored.ClientID, WorkspaceID: stored.WorkspaceID, Capability: stored.Capability, Effect: EffectAllowWorkspace, Priority: persistentPolicyPriority}
 		for index, existing := range e.rules {
 			if sameSelectors(existing, rule) {
 				e.rules[index] = rule
@@ -288,6 +315,87 @@ func (e *Engine) RevokePolicy(id string) error {
 		}
 	}
 	return nil
+}
+
+// ApplyStandardProgrammingProfile instala o profile owner-side da composição
+// Programming depois que o grant já foi criado. O conjunto de capabilities é
+// fechado por modo e validado integralmente antes de alterar o engine.
+func (e *Engine) ApplyStandardProgrammingProfile(input StandardProfileInput) error {
+	if e == nil || input.OwnerID == "" || input.ClientID == "" || input.WorkspaceID == "" || input.SessionID == "" {
+		return ErrInvalidStandardProfile
+	}
+	if input.Mode == ProgrammingProfileManaged {
+		if input.ManagedWorkspaceID == "" || input.ManagedWorkspaceID != input.WorkspaceID {
+			return ErrInvalidStandardProfile
+		}
+	} else if input.Mode != ProgrammingProfileCheckout || input.ManagedWorkspaceID != "" {
+		return ErrInvalidStandardProfile
+	}
+	expected := []capability.Capability{capability.WorkspaceRead, capability.WorkspaceWrite, capability.WorkspaceDelete, capability.GitReview}
+	if input.Mode == ProgrammingProfileManaged {
+		expected = append(expected, capability.GitIndex, capability.GitCommit)
+	}
+	if !sameCapabilitySet(input.GrantedCapabilities, expected) {
+		return ErrInvalidStandardProfile
+	}
+
+	rules := make([]Rule, 0, len(expected))
+	for _, item := range expected {
+		effect := EffectAsk
+		priority := standardProfileDefaultPriority
+		if item == capability.WorkspaceRead || item == capability.WorkspaceWrite || item == capability.GitReview || (input.Mode == ProgrammingProfileManaged && item == capability.GitIndex) {
+			effect = EffectAllowSession
+			priority = 0
+		}
+		rules = append(rules, Rule{
+			OwnerID: input.OwnerID, ClientID: input.ClientID, WorkspaceID: input.WorkspaceID,
+			SessionID: input.SessionID, Capability: item, Effect: effect, Priority: priority,
+		})
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	next := append([]Rule(nil), e.rules...)
+	for _, rule := range rules {
+		replaced := false
+		for index, existing := range next {
+			if !sameSelectors(existing, rule) {
+				continue
+			}
+			if existing.Priority > rule.Priority {
+				replaced = true
+				break
+			}
+			next[index] = rule
+			replaced = true
+			break
+		}
+		if !replaced {
+			next = append(next, rule)
+		}
+	}
+	e.rules = next
+	return nil
+}
+
+func sameCapabilitySet(got, expected []capability.Capability) bool {
+	if len(got) != len(expected) {
+		return false
+	}
+	wanted := make(map[capability.Capability]struct{}, len(expected))
+	for _, item := range expected {
+		wanted[item] = struct{}{}
+	}
+	for _, item := range got {
+		if !capability.IsKnown(item) {
+			return false
+		}
+		if _, ok := wanted[item]; !ok {
+			return false
+		}
+		delete(wanted, item)
+	}
+	return len(wanted) == 0
 }
 
 // ApprovalRequester é a única ponte interna deste gate. Ela não é utilizada
@@ -403,4 +511,17 @@ func specificity(rule Rule) int {
 		value += 64
 	}
 	return value
+}
+
+func betterRule(candidate, current Rule, candidateSpecificity, currentSpecificity int) bool {
+	if candidate.Priority != current.Priority {
+		return candidate.Priority > current.Priority
+	}
+	if candidateSpecificity != currentSpecificity {
+		return candidateSpecificity > currentSpecificity
+	}
+	if candidate.Effect == EffectDeny && current.Effect != EffectDeny {
+		return true
+	}
+	return candidate.Effect == current.Effect
 }

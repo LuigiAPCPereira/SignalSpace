@@ -30,6 +30,7 @@ type CapabilityRequest struct {
 	Root     string
 	ClientID string
 	Scopes   []string
+	Standard bool
 	Expires  time.Time
 }
 
@@ -131,6 +132,16 @@ func ValidateApprovedRoot(root string) error {
 // Request registra a seleção sem criar concessão. Existe no máximo uma
 // solicitação pendente por instância, e o client_id é revalidado na aprovação.
 func (a *CapabilityApproval) Request(root, clientID string, scopes ...string) (CapabilityRequest, error) {
+	return a.request(root, clientID, false, scopes...)
+}
+
+// RequestProgramming seleciona o envelope fechado de Programming para um
+// checkout comum. O cliente não fornece capabilities nem scopes.
+func (a *CapabilityApproval) RequestProgramming(root, clientID string) (CapabilityRequest, error) {
+	return a.request(root, clientID, true, ScopeRead, ScopeWrite, ScopeGit)
+}
+
+func (a *CapabilityApproval) request(root, clientID string, standard bool, scopes ...string) (CapabilityRequest, error) {
 	canonical, err := NormalizeCapabilities(scopes...)
 	if err != nil {
 		return CapabilityRequest{}, err
@@ -162,6 +173,7 @@ func (a *CapabilityApproval) Request(root, clientID string, scopes ...string) (C
 		Root:     root,
 		ClientID: clientID,
 		Scopes:   append([]string(nil), canonical...),
+		Standard: standard,
 		Expires:  a.now().Add(CapabilityApprovalTTL),
 	}
 	a.pending = &capabilityApproval{request: request}
@@ -186,7 +198,13 @@ func (a *CapabilityApproval) Confirm(id string) (CapabilityRequest, string, erro
 		return CapabilityRequest{}, "", ErrCapabilityClientRejected
 	}
 	a.pending = nil
-	sessionID, err := a.grants.GrantWithScopes(request.Root, request.ClientID, request.Scopes...)
+	var sessionID string
+	var err error
+	if request.Standard {
+		sessionID, err = a.grants.GrantProgrammingCheckout(request.Root, request.ClientID)
+	} else {
+		sessionID, err = a.grants.GrantWithScopes(request.Root, request.ClientID, request.Scopes...)
+	}
 	if err != nil {
 		return CapabilityRequest{}, "", err
 	}

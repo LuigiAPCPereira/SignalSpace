@@ -232,3 +232,118 @@ func TestEnginePolicyRevokeAndEvaluateAreSafeConcurrently(t *testing.T) {
 		t.Fatalf("post-revoke decision = %q", got)
 	}
 }
+
+func TestStandardProgrammingProfileUsesClosedEnvelopesAndSessionRules(t *testing.T) {
+	engine := NewEngine()
+	checkout := StandardProfileInput{
+		OwnerID: "owner", ClientID: "client", WorkspaceID: "session-1", SessionID: "session-1",
+		Mode: ProgrammingProfileCheckout,
+		GrantedCapabilities: []capability.Capability{
+			capability.WorkspaceRead, capability.WorkspaceWrite, capability.WorkspaceDelete, capability.GitReview,
+		},
+	}
+	if err := engine.ApplyStandardProgrammingProfile(checkout); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		name       string
+		capability capability.Capability
+		want       Decision
+	}{
+		{"read", capability.WorkspaceRead, Allow},
+		{"write", capability.WorkspaceWrite, Allow},
+		{"review", capability.GitReview, Allow},
+		{"delete", capability.WorkspaceDelete, RequireApproval},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			ctx := testContext()
+			ctx.ClientID, ctx.WorkspaceID, ctx.SessionID = "client", "session-1", "session-1"
+			ctx.Capability, ctx.GrantedCapabilities = item.capability, checkout.GrantedCapabilities
+			if got := engine.Evaluate(ctx); got != item.want {
+				t.Fatalf("checkout %s decision = %q, want %q", item.name, got, item.want)
+			}
+		})
+	}
+	managed := StandardProfileInput{
+		OwnerID: "owner", ClientID: "client", WorkspaceID: "managed-1", ManagedWorkspaceID: "managed-1", SessionID: "session-2",
+		Mode: ProgrammingProfileManaged,
+		GrantedCapabilities: []capability.Capability{
+			capability.WorkspaceRead, capability.WorkspaceWrite, capability.WorkspaceDelete, capability.GitReview, capability.GitIndex, capability.GitCommit,
+		},
+	}
+	if err := engine.ApplyStandardProgrammingProfile(managed); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		name       string
+		capability capability.Capability
+		want       Decision
+	}{
+		{"read", capability.WorkspaceRead, Allow},
+		{"write", capability.WorkspaceWrite, Allow},
+		{"review", capability.GitReview, Allow},
+		{"index", capability.GitIndex, Allow},
+		{"delete", capability.WorkspaceDelete, RequireApproval},
+		{"commit", capability.GitCommit, RequireApproval},
+	} {
+		t.Run("managed/"+item.name, func(t *testing.T) {
+			ctx := testContext()
+			ctx.ClientID, ctx.WorkspaceID, ctx.SessionID = "client", "managed-1", "session-2"
+			ctx.Capability, ctx.GrantedCapabilities = item.capability, managed.GrantedCapabilities
+			if got := engine.Evaluate(ctx); got != item.want {
+				t.Fatalf("managed %s decision = %q, want %q", item.name, got, item.want)
+			}
+		})
+	}
+	ctx := testContext()
+	ctx.ClientID, ctx.WorkspaceID, ctx.SessionID = "client", "managed-1", "session-3"
+	ctx.Capability, ctx.GrantedCapabilities = capability.GitIndex, managed.GrantedCapabilities
+	if got := engine.Evaluate(ctx); got != RequireApproval {
+		t.Fatalf("new session inherited ALLOW_SESSION = %q, want %q", got, RequireApproval)
+	}
+}
+
+func TestStandardProgrammingProfileRejectsNonCanonicalEnvelope(t *testing.T) {
+	engine := NewEngine()
+	input := StandardProfileInput{
+		OwnerID: "owner", ClientID: "client", WorkspaceID: "session", SessionID: "session", Mode: ProgrammingProfileCheckout,
+		GrantedCapabilities: []capability.Capability{capability.WorkspaceRead, capability.WorkspaceWrite},
+	}
+	if err := engine.ApplyStandardProgrammingProfile(input); !errors.Is(err, ErrInvalidStandardProfile) {
+		t.Fatalf("partial envelope error = %v, want %v", err, ErrInvalidStandardProfile)
+	}
+}
+
+func TestPersistentWorkspaceAllowOverridesStandardAskWithoutExpandingGrant(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "policies.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := NewEngineWithStore(time.Now, store, func(id string) bool { return id == "managed" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := StandardProfileInput{
+		OwnerID: "owner", ClientID: "client", WorkspaceID: "managed", ManagedWorkspaceID: "managed", SessionID: "session",
+		Mode: ProgrammingProfileManaged,
+		GrantedCapabilities: []capability.Capability{
+			capability.WorkspaceRead, capability.WorkspaceWrite, capability.WorkspaceDelete, capability.GitReview, capability.GitIndex, capability.GitCommit,
+		},
+	}
+	if err := engine.ApplyStandardProgrammingProfile(managed); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.ApplyApproval(approval.Snapshot{OwnerID: "owner", ClientID: "client", ManagedWorkspaceID: "managed", Capability: capability.GitCommit}, approval.DecisionAllowWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testContext()
+	ctx.ClientID, ctx.WorkspaceID, ctx.SessionID = "client", "managed", "new-session"
+	ctx.Capability, ctx.GrantedCapabilities = capability.GitCommit, managed.GrantedCapabilities
+	if got := engine.Evaluate(ctx); got != Allow {
+		t.Fatalf("persistent workspace allow = %q, want %q", got, Allow)
+	}
+	ctx.GrantedCapabilities = []capability.Capability{capability.WorkspaceRead}
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("persistent policy escaped grant ceiling = %q, want %q", got, Deny)
+	}
+}

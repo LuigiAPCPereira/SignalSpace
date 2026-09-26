@@ -223,6 +223,43 @@ func TestWorkspaceConsoleManagedWorktreeLifecycleUsesSeparateApproval(t *testing
 	}
 }
 
+func TestWorkspaceConsoleCanonicalManagedProgrammingAppliesStandardProfile(t *testing.T) {
+	console := testWorkspaceConsole(t)
+	manager, err := workspace.NewManagedWorktreeManager(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	console.managed = manager
+	if err := manager.SetGitIdentity("owner@example.invalid", "Owner Local"); err != nil {
+		t.Fatal(err)
+	}
+	var applied workspace.GrantSnapshot
+	console.programmingProfile = func(snapshot workspace.GrantSnapshot) error {
+		applied = snapshot
+		return nil
+	}
+	root := gitWorkspaceFixture(t)
+	var out bytes.Buffer
+	console.handleWorkspaceCommand("workspace request-worktree "+testConsoleClient+" "+root, &out)
+	if console.managedPending == nil || !strings.Contains(out.String(), "Managed Programming solicitada") {
+		t.Fatalf("canonical managed Programming request was not created: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace approve-worktree "+console.managedPending.id, &out)
+	if applied.ManagedWorkspaceID == "" || applied.Mode != workspace.WorkspaceModeWorktree || !applied.Active {
+		t.Fatalf("managed Standard profile was not applied: %+v\n%s", applied, out.String())
+	}
+	for _, wanted := range []string{workspace.ScopeRead, workspace.ScopeWrite, workspace.ScopeGit, workspace.ScopeGitIndex, workspace.ScopeGitCommit} {
+		if !containsScope(applied.Scopes, wanted) {
+			t.Fatalf("managed Standard envelope omitted %s: %+v", wanted, applied)
+		}
+	}
+	if !strings.Contains(out.String(), "Managed Programming grant created") || !strings.Contains(out.String(), "profile=STANDARD") {
+		t.Fatalf("managed Standard activation was not reported: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace revoke "+applied.SessionID, &out)
+	console.handleWorkspaceCommand("workspace remove-worktree "+applied.ManagedWorkspaceID, &out)
+}
+
 func TestWorkspaceConsoleProgrammingApprovalIsExplicitAndIndependent(t *testing.T) {
 	grants, err := workspace.NewGrants("local-owner")
 	if err != nil {
@@ -290,6 +327,49 @@ func TestWorkspaceConsoleProgrammingApprovalIsExplicitAndIndependent(t *testing.
 	console.handleWorkspaceCommand("workspace revoke "+match[1], &out)
 	if grants.AllowsClientScope(testConsoleClient, workspace.ScopeWrite) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeTest) || grants.AllowsClientScope(testConsoleClient, workspace.ScopeGit) {
 		t.Fatal("revocation retained programming capabilities")
+	}
+}
+
+func TestWorkspaceConsoleCanonicalProgrammingAppliesStandardProfileAfterGrant(t *testing.T) {
+	grants, err := workspace.NewGrants("local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := workspace.NewCapabilityApproval(grants, func(clientID string) bool { return clientID == testConsoleClient })
+	if err != nil {
+		_ = grants.Close()
+		t.Fatal(err)
+	}
+	var applied workspace.GrantSnapshot
+	console := &workspaceConsole{
+		grants:              grants,
+		issuedClients:       func() []auth.ClientInfo { return []auth.ClientInfo{{ID: testConsoleClient, Name: "Cliente de teste"}} },
+		programmingApproval: approval,
+		programmingProfile: func(snapshot workspace.GrantSnapshot) error {
+			applied = snapshot
+			return nil
+		},
+	}
+	t.Cleanup(func() { _ = console.Close() })
+	root := filepath.Join(t.TempDir(), "checkout")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	console.handleWorkspaceCommand("workspace request-programming "+testConsoleClient+" "+root, &out)
+	approvalID := regexp.MustCompile(`workspace approve-programming ([a-f0-9]{32})`).FindStringSubmatch(out.String())
+	if len(approvalID) != 2 || !strings.Contains(out.String(), "profile STANDARD") {
+		t.Fatalf("canonical Programming request was not created: %s", out.String())
+	}
+	console.handleWorkspaceCommand("workspace approve-programming "+approvalID[1], &out)
+	if applied.SessionID == "" || !applied.Active || applied.Mode != workspace.WorkspaceModeCheckout {
+		t.Fatalf("profile was not applied after grant: %+v\n%s", applied, out.String())
+	}
+	if !strings.Contains(out.String(), "Local Programming Standard grant created") {
+		t.Fatalf("standard activation was not reported: %s", out.String())
+	}
+	if !containsScope(applied.Scopes, workspace.ScopeRead) || !containsScope(applied.Scopes, workspace.ScopeWrite) || !containsScope(applied.Scopes, workspace.ScopeGit) {
+		t.Fatalf("standard checkout envelope is incomplete: %+v", applied)
 	}
 }
 

@@ -31,6 +31,7 @@ type pendingManagedWorkspace struct {
 	id          string
 	clientID    string
 	scopes      []string
+	standard    bool
 	sourceRoot  string
 	baseRef     string
 	workspaceID string
@@ -51,6 +52,7 @@ type workspaceConsole struct {
 	managed                *workspace.ManagedWorktreeManager
 	programmingApproval    *workspace.CapabilityApproval
 	programmingGitReviewer *workspaceGitReviewer
+	programmingProfile     func(workspace.GrantSnapshot) error
 }
 
 func newWorkspaceConsole(authorization *auth.Server, stateDir string) (*workspaceConsole, error) {
@@ -100,6 +102,23 @@ func (c *workspaceConsole) managedWorkspaceStable(id string) bool {
 	default:
 		return false
 	}
+}
+
+// applyStandardProfile instala as policies somente depois de a concessão
+// Programming existir. Se a aplicação falhar, o chamador deve revogar a
+// sessão antes de expor qualquer estado de ativação.
+func (c *workspaceConsole) applyStandardProfile(sessionID string) error {
+	if c == nil || c.programmingProfile == nil || c.grants == nil {
+		return errors.New("standard programming profile unavailable")
+	}
+	snapshot, err := c.grants.Snapshot()
+	if err != nil {
+		return err
+	}
+	if !snapshot.Active || snapshot.SessionID != sessionID {
+		return errors.New("standard programming profile grant mismatch")
+	}
+	return c.programmingProfile(snapshot)
 }
 
 func localWorkspacePath(raw string) bool {
@@ -340,20 +359,33 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			return true
 		}
 		clientID, rest, valid := strings.Cut(argument, " ")
-		scopeText, sourceAndRef, validScopes := strings.Cut(rest, " ")
-		if !valid || !validScopes || clientID == "" || scopeText == "" || sourceAndRef == "" || !c.isIssuedClient(clientID) {
-			fmt.Fprintln(output, "use workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref]")
+		if !valid || clientID == "" || rest == "" || !c.isIssuedClient(clientID) {
+			fmt.Fprintln(output, "use workspace request-worktree <client-id> <source-root> [base-ref] | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref]")
 			return true
+		}
+		standard := strings.HasPrefix(rest, "/")
+		scopeText, sourceAndRef := "", rest
+		if !standard {
+			var validScopes bool
+			scopeText, sourceAndRef, validScopes = strings.Cut(rest, " ")
+			if !validScopes || scopeText == "" || sourceAndRef == "" {
+				fmt.Fprintln(output, "use workspace request-worktree <client-id> <source-root> [base-ref] | workspace request-worktree <client-id> <scope1,scope2,...> <source-root> [base-ref]")
+				return true
+			}
 		}
 		sourceRoot, baseRef := splitManagedSourceAndRef(sourceAndRef)
 		if sourceRoot == "" || !localWorkspacePath(sourceRoot) {
 			fmt.Fprintln(output, "managed worktree source rejected: use a canonical absolute Git repository root")
 			return true
 		}
-		scopes, err := workspace.NormalizeManagedCapabilities(strings.Split(scopeText, ",")...)
-		if err != nil {
-			fmt.Fprintf(output, "managed worktree request rejected: %v\n", err)
-			return true
+		var scopes []string
+		if !standard {
+			var err error
+			scopes, err = workspace.NormalizeManagedCapabilities(strings.Split(scopeText, ",")...)
+			if err != nil {
+				fmt.Fprintf(output, "managed worktree request rejected: %v\n", err)
+				return true
+			}
 		}
 		if err := c.managed.ValidateCreateRequest(sourceRoot, baseRef); err != nil {
 			fmt.Fprintf(output, "managed worktree request rejected: %v\n", err)
@@ -364,8 +396,13 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintf(output, "managed worktree approval unavailable: %v\n", err)
 			return true
 		}
+		pending.standard = standard
 		c.managedPending = pending
-		fmt.Fprintf(output, "Managed worktree solicitada (criação local após confirmação): source=%q client=%s scopes=%s", sourceRoot, clientID, strings.Join(scopes, ","))
+		if standard {
+			fmt.Fprintf(output, "Managed Programming solicitada (envelope padrão após confirmação): source=%q client=%s", sourceRoot, clientID)
+		} else {
+			fmt.Fprintf(output, "Managed worktree solicitada (criação local após confirmação): source=%q client=%s scopes=%s", sourceRoot, clientID, strings.Join(scopes, ","))
+		}
 		if baseRef != "" {
 			fmt.Fprintf(output, " base_ref=%q", baseRef)
 		}
@@ -377,15 +414,28 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			return true
 		}
 		clientID, rest, valid := strings.Cut(argument, " ")
-		scopeText, workspaceID, validID := strings.Cut(rest, " ")
-		if !valid || !validID || !c.isIssuedClient(clientID) {
-			fmt.Fprintln(output, "use workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id>")
+		if !valid || clientID == "" || rest == "" || !c.isIssuedClient(clientID) {
+			fmt.Fprintln(output, "use workspace request-worktree-resume <client-id> <workspace-id> | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id>")
 			return true
 		}
-		scopes, err := workspace.NormalizeManagedCapabilities(strings.Split(scopeText, ",")...)
-		if err != nil {
-			fmt.Fprintf(output, "managed worktree resume rejected: %v\n", err)
-			return true
+		standard := !strings.Contains(rest, " ")
+		scopeText, workspaceID := "", rest
+		if !standard {
+			var validID bool
+			scopeText, workspaceID, validID = strings.Cut(rest, " ")
+			if !validID || scopeText == "" || workspaceID == "" {
+				fmt.Fprintln(output, "use workspace request-worktree-resume <client-id> <workspace-id> | workspace request-worktree-resume <client-id> <scope1,scope2,...> <workspace-id>")
+				return true
+			}
+		}
+		var scopes []string
+		if !standard {
+			var err error
+			scopes, err = workspace.NormalizeManagedCapabilities(strings.Split(scopeText, ",")...)
+			if err != nil {
+				fmt.Fprintf(output, "managed worktree resume rejected: %v\n", err)
+				return true
+			}
 		}
 		descriptor, err := c.managed.Descriptor(workspaceID)
 		if err != nil || descriptor.State == workspace.ManagedWorkspaceMissing || descriptor.State == workspace.ManagedWorkspaceInconsistent || descriptor.State == workspace.ManagedWorkspaceStale {
@@ -400,8 +450,14 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintf(output, "managed worktree approval unavailable: %v\n", err)
 			return true
 		}
+		pending.standard = standard
 		c.managedPending = pending
-		fmt.Fprintf(output, "Managed worktree resume solicitada: workspace_id=%s client=%s scopes=%s\nConfirme com workspace approve-worktree-resume %s ou cancele com workspace cancel-worktree %s (expira em 2 minutos).\n", workspaceID, clientID, strings.Join(scopes, ","), pending.id, pending.id)
+		if standard {
+			fmt.Fprintf(output, "Managed Programming resume solicitada: workspace_id=%s client=%s\n", workspaceID, clientID)
+		} else {
+			fmt.Fprintf(output, "Managed worktree resume solicitada: workspace_id=%s client=%s scopes=%s\n", workspaceID, clientID, strings.Join(scopes, ","))
+		}
+		fmt.Fprintf(output, "Confirme com workspace approve-worktree-resume %s ou cancele com workspace cancel-worktree %s (expira em 2 minutos).\n", pending.id, pending.id)
 		return true
 	case "approve-worktree", "approve-worktree-resume", "cancel-worktree":
 		if c.managed == nil || c.managedPending == nil || argument != c.managedPending.id || time.Now().After(c.managedPending.expires) {
@@ -432,12 +488,27 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			}
 			workspaceID = descriptor.WorkspaceID
 		}
-		sessionID, descriptor, err := c.managed.Activate(workspaceID, pending.clientID, c.grants, pending.scopes...)
+		var sessionID string
+		var descriptor workspace.ManagedWorkspaceDescriptor
+		var err error
+		if pending.standard {
+			sessionID, descriptor, err = c.managed.ActivateProgramming(workspaceID, pending.clientID, c.grants)
+		} else {
+			sessionID, descriptor, err = c.managed.Activate(workspaceID, pending.clientID, c.grants, pending.scopes...)
+		}
 		if err != nil {
 			fmt.Fprintf(output, "managed worktree activation rejected: %v\n", err)
 			return true
 		}
-		if containsScope(pending.scopes, workspace.ScopeGit) && c.programmingGitReviewer != nil {
+		if pending.standard {
+			if err := c.applyStandardProfile(sessionID); err != nil {
+				_ = c.grants.Revoke(sessionID)
+				_ = c.managed.Deactivate(workspaceID)
+				fmt.Fprintf(output, "managed Programming profile rejected: %v\n", err)
+				return true
+			}
+		}
+		if (pending.standard || containsScope(pending.scopes, workspace.ScopeGit)) && c.programmingGitReviewer != nil {
 			if err := c.programmingGitReviewer.CaptureBaseline(c.owner, pending.clientID, sessionID); err != nil {
 				_ = c.grants.Revoke(sessionID)
 				_ = c.managed.Deactivate(workspaceID)
@@ -445,7 +516,11 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 				return true
 			}
 		}
-		fmt.Fprintf(output, "Managed worktree grant created: workspace_id=%s state=%s session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", descriptor.WorkspaceID, descriptor.State, sessionID, pending.clientID, strings.Join(pending.scopes, ","), sessionID)
+		if pending.standard {
+			fmt.Fprintf(output, "Managed Programming grant created: workspace_id=%s state=%s session=%s client=%s profile=STANDARD. Revoke using workspace revoke %s\n", descriptor.WorkspaceID, descriptor.State, sessionID, pending.clientID, sessionID)
+		} else {
+			fmt.Fprintf(output, "Managed worktree grant created: workspace_id=%s state=%s session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", descriptor.WorkspaceID, descriptor.State, sessionID, pending.clientID, strings.Join(pending.scopes, ","), sessionID)
+		}
 		return true
 	case "remove-worktree":
 		if c.managed == nil || !hasArgument || argument == "" || strings.ContainsAny(argument, " \t\r\n") {
@@ -487,9 +562,8 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			return true
 		}
 		clientID, rest, valid := strings.Cut(argument, " ")
-		scopeText, root, validRoot := strings.Cut(rest, " ")
-		if !valid || !validRoot || clientID == "" || scopeText == "" || root == "" {
-			fmt.Fprintln(output, "use workspace request-programming <client-id> <scope1,scope2,...> <absolute-path>")
+		if !valid || clientID == "" || rest == "" {
+			fmt.Fprintln(output, "use workspace request-programming <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path>")
 			return true
 		}
 		client, ok := c.issuedClient(clientID)
@@ -497,13 +571,32 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			fmt.Fprintln(output, "workspace client rejected: complete OAuth and select an ID shown by workspace clients")
 			return true
 		}
-		requested := strings.Split(scopeText, ",")
-		pending, err := c.programmingApproval.Request(root, clientID, requested...)
+		standard := strings.HasPrefix(rest, "/")
+		scopeText, root := "", rest
+		if !standard {
+			var validRoot bool
+			scopeText, root, validRoot = strings.Cut(rest, " ")
+			if !validRoot || scopeText == "" || root == "" {
+				fmt.Fprintln(output, "use workspace request-programming <client-id> <absolute-path> | workspace request-programming <client-id> <scope1,scope2,...> <absolute-path>")
+				return true
+			}
+		}
+		var pending workspace.CapabilityRequest
+		var err error
+		if standard {
+			pending, err = c.programmingApproval.RequestProgramming(root, clientID)
+		} else {
+			pending, err = c.programmingApproval.Request(root, clientID, strings.Split(scopeText, ",")...)
+		}
 		if err != nil {
 			fmt.Fprintf(output, "workspace programming request rejected: %v\n", err)
 			return true
 		}
-		fmt.Fprintf(output, "Pasta solicitada para programação: %q\nCliente OAuth selecionado: %s (%s)\nCapacidades solicitadas: %s\nEfeitos: %s\n", root, client.Name, client.ID, strings.Join(pending.Scopes, ","), capabilityDescriptions(pending.Scopes))
+		if standard {
+			fmt.Fprintf(output, "Pasta solicitada para Programming Standard: %q\nCliente OAuth selecionado: %s (%s)\nEnvelope: checkout Programming + profile STANDARD\n", root, client.Name, client.ID)
+		} else {
+			fmt.Fprintf(output, "Pasta solicitada para programação: %q\nCliente OAuth selecionado: %s (%s)\nCapacidades solicitadas: %s\nEfeitos: %s\n", root, client.Name, client.ID, strings.Join(pending.Scopes, ","), capabilityDescriptions(pending.Scopes))
+		}
 		fmt.Fprintf(output, "Confirme com workspace approve-programming %s ou cancele com workspace cancel-programming %s (expira em 2 minutos).\n", pending.ID, pending.ID)
 	case "approve-programming":
 		if c.programmingApproval == nil {
@@ -516,6 +609,13 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			return true
 		}
 		c.deactivateManagedAfterGrant()
+		if pending.Standard {
+			if err := c.applyStandardProfile(sessionID); err != nil {
+				_ = c.grants.Revoke(sessionID)
+				fmt.Fprintf(output, "workspace Programming profile rejected: %v\n", err)
+				return true
+			}
+		}
 		if containsScope(pending.Scopes, workspace.ScopeGit) && c.programmingGitReviewer != nil {
 			if err := c.programmingGitReviewer.CaptureBaseline(c.owner, pending.ClientID, sessionID); err != nil {
 				_ = c.grants.Revoke(sessionID)
@@ -523,7 +623,11 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 				return true
 			}
 		}
-		fmt.Fprintf(output, "Local programming workspace grant created: session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", sessionID, pending.ClientID, strings.Join(pending.Scopes, ","), sessionID)
+		if pending.Standard {
+			fmt.Fprintf(output, "Local Programming Standard grant created: session=%s client=%s profile=STANDARD. Revoke using workspace revoke %s\n", sessionID, pending.ClientID, sessionID)
+		} else {
+			fmt.Fprintf(output, "Local programming workspace grant created: session=%s client=%s scopes=%s. Revoke using workspace revoke %s\n", sessionID, pending.ClientID, strings.Join(pending.Scopes, ","), sessionID)
+		}
 	case "cancel-programming":
 		if c.programmingApproval == nil {
 			fmt.Fprintln(output, "workspace programming approval unavailable")

@@ -17,6 +17,7 @@ import (
 	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/auth"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
+	"github.com/LuigiAPCPereira/SignalSpace/internal/policy"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
 )
 
@@ -199,6 +200,8 @@ func embeddedHandlerForPlanWithAuthorizerMode(resource, stateDir string, plan co
 		}
 		console = &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients, readEnabled: true, managed: managed}
 		if plan.consoleMode == workspaceConsoleProgramming {
+			profileEngine := policy.NewEngine()
+			console.programmingProfile = standardProgrammingProfile(authorization.OwnerSubject(), profileEngine)
 			approval, approvalErr := workspace.NewCapabilityApproval(grants, func(clientID string) bool {
 				return console.isIssuedClient(clientID)
 			})
@@ -274,6 +277,34 @@ func embeddedHandlerForPlanWithAuthorizerMode(resource, stateDir string, plan co
 	// Consulta pública apenas do próprio pedido OAuth; nenhum handler administrativo.
 	mux.Handle("/authorize/status", authorization.PublicStatusHandler())
 	return rejectPublicAdministrativePaths(mux), authorization, console, nil
+}
+
+func standardProgrammingProfile(owner string, engine *policy.Engine) func(workspace.GrantSnapshot) error {
+	return func(snapshot workspace.GrantSnapshot) error {
+		if owner == "" || engine == nil || !snapshot.Active {
+			return policy.ErrInvalidStandardProfile
+		}
+		workspaceID := snapshot.ManagedWorkspaceID
+		mode := policy.ProgrammingProfileManaged
+		switch snapshot.Mode {
+		case workspace.WorkspaceModeCheckout:
+			workspaceID = snapshot.SessionID
+			mode = policy.ProgrammingProfileCheckout
+		case workspace.WorkspaceModeWorktree:
+			// Managed workspaces are identified by their stable workspace ID.
+		default:
+			return policy.ErrInvalidStandardProfile
+		}
+		return engine.ApplyStandardProgrammingProfile(policy.StandardProfileInput{
+			OwnerID:             owner,
+			ClientID:            snapshot.ClientID,
+			WorkspaceID:         workspaceID,
+			ManagedWorkspaceID:  snapshot.ManagedWorkspaceID,
+			SessionID:           snapshot.SessionID,
+			Mode:                mode,
+			GrantedCapabilities: snapshot.Capabilities,
+		})
+	}
 }
 
 // rejectPublicAdministrativePaths rejeita segmentos administrativos antes que

@@ -146,6 +146,7 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 		if storeErr != nil {
 			return fmt.Errorf("load local capability policies: %w", storeErr)
 		}
+		console.programmingProfile = standardProgrammingProfile(authorization.OwnerSubject(), capabilityPolicies)
 		config := approval.DefaultConfig()
 		config.BeforeDecision = capabilityPolicies.ApplyApproval
 		capabilityApprovals, storeErr = approval.NewWithConfig(config)
