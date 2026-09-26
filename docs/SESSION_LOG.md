@@ -682,8 +682,8 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - Patches protegidos verificados: `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` mantêm os hashes SHA-256 intactos.
 - Nova repetição externa ao vivo iniciada em `.agents/reviewer_2/disposable_fixture`:
   - Runtime executado via `/home/luigiapcp/Documentos/Projetos/SignalSpace/.agents/reviewer_2/run_quick.sh` com `go run ./cmd/signalspace connect quick programming panel`.
-  - Preflight HTTPS passou e anunciou a URL pública: `https://color-arguments-youth-them.trycloudflare.com/mcp`.
-  - Painel administrativo local ativo em `http://localhost:7677/` com código de pareamento `MzOFBEZQQmeSTWungs3NJ4m4PrjhFp29`.
+  - Preflight HTTPS passou e anunciou a URL pública: `https://stick-allowing-sauce-investigation.trycloudflare.com/mcp`.
+  - Painel administrativo local ativo em `http://localhost:7677/` com código de pareamento `SrtWHTC_SEbM95xkhlQR-c8KfpQwuOIE`.
   - Verificação ao vivo via `curl`:
     - `/.well-known/oauth-protected-resource` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
     - `/.well-known/oauth-authorization-server` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
