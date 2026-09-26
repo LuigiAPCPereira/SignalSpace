@@ -117,3 +117,7 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617a
 Esta etapa fecha a semântica local do perfil Programming: request canônico owner-side, grant tipado, policies por sessão/workspace, envelope sem expansão e integração com a UX de Pending Approvals já existente. Checkout e managed têm envelopes distintos; delete/commit não são autorizados implicitamente.
 
 Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal. O aceite externo separado continua sendo o próximo gate somente após a entrega deste relatório e nova missão/autorização explícita.
+
+## Aceite externo Programming v2 — `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` — 26/09/2026
+
+Resultado: **BLOQUEADO / PARCIAL no preflight**. O Quick Tunnel real iniciou e registrou conexão, mas a verificação HTTPS rejeitou a metadata do protected resource por divergência com resource/issuer/scope configurado. Não houve OAuth, connector, discovery, workspace ou tool externa. O próximo passo requer gate próprio de diagnóstico/correção do runtime; não é evidência de falha do bridge MCP.

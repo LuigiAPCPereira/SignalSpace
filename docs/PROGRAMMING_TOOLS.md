@@ -276,3 +276,7 @@ O owner-side oferece duas entradas canônicas: `request-programming <client-id> 
 Depois do grant, o profile aplica políticas locais fechadas. Checkout: read/write/Git review em `ALLOW_SESSION`, delete em `ASK`, Git index/commit ausentes. Managed: read/write/Git review/Git index em `ALLOW_SESSION`, delete/commit em `ASK`. `ALLOW_WORKSPACE` persistente é exclusivo de managed worktree estável e não ultrapassa o grant. Revogação, sessão nova, restart, capability ausente e modo inválido falham fechado.
 
 Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal. O catálogo MCP público não foi ampliado nesta missão; ChatGPT Web, túnel e workspace real não foram exercitados.
+
+## Aceite externo v2 — resultado do preflight
+
+`SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` ficou **BLOQUEADO / PARCIAL** antes do OAuth: o Quick Tunnel registrou conexão, mas a verificação HTTPS recusou a metadata do protected resource por incompatibilidade com resource/issuer/scope. Nenhuma tool, connector, discovery ou workspace foi exercitada; não há resultado externo positivo ou negativo sobre o bridge. Retomar somente após novo gate de runtime.

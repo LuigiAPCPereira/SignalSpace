@@ -643,3 +643,11 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - O console ganhou formas canônicas sem scopes fornecidos pelo cliente para request de Programming, criação/resume de managed worktree e aplicação transacional do profile. Formas legadas permanecem compatíveis. O modo desconhecido passou a falhar fechado.
 - A UX administrativa existente já separa OAuth requests, Pending Approvals e Persistent Policies; foi reconciliada na documentação, sem alteração visual ou nova superfície pública nesta missão.
 - Gates finais passaram: suíte Go completa, race proporcional, `go vet ./...`, `go build ./...`, `gofmt`, `git diff --check` e 23 testes Node do painel. Commits `c33b03f` e `db06a29` foram publicados por fast-forward normal; `git ls-remote` confirmou `db06a2932874dd2f382426b2e6683cfd41edc955`. Quick Tunnel, workspace real, CI e aceite ChatGPT Web permanecem não validados.
+
+## 26/09/2026 — aceite externo Programming v2 bloqueado no preflight — `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001`
+
+- A missão foi aprovada para o HEAD remoto `b06bd56eaa09f31b2f92d1fa329b8617ce659477`, com fixture e workspace descartáveis, sem alterar código.
+- `go run ./cmd/signalspace connect quick programming panel` iniciou a tentativa real; após uma conexão registrada, o runtime encerrou com `public HTTPS verification failed` porque a metadata do protected resource não correspondia ao resource/issuer/scope configurado. A URL pública não foi anunciada como utilizável.
+- Não houve OAuth/PKCE, connector novo, discovery, tools/list, filesystem, Git ou aprovação local; portanto a aceitação externa não pode ser classificada como PASS, apenas **BLOQUEADA / PARCIAL — PREFLIGHT**.
+- Cleanup confirmado: listeners 7676/7677 e processos SignalSpace/cloudflared ausentes; fixture descartável movida para a lixeira. Patches protegidos preservados, untracked, não aplicados, não staged e intocados.
+- Retomada exige novo gate para diagnosticar/corrigir a divergência de metadata/URL do runtime Quick. Não executar correção de código automaticamente a partir deste bloqueio.

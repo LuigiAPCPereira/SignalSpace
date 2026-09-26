@@ -449,3 +449,10 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 - Semântica: `ALLOW_SESSION` é vinculada a owner/client/workspace/session/capability; `ALLOW_WORKSPACE` persistente só vale para `ManagedWorkspaceID` estável e pode superar o `ASK` padrão sem ampliar o grant. O grant continua sendo o teto; envelope não canônico ou modo desconhecido falha fechado.
 - Superfícies owner-side: `workspace request-programming <client-id> <absolute-path>`, `workspace request-worktree <client-id> <source-root> [base-ref]` e resume canônico por client/workspace ID. Formas legadas com scopes permanecem compatíveis; a UI existente já separa OAuth requests, capability approvals e policies.
 - Evidência: suíte Go completa, race proporcional, `go vet ./...`, `go build ./...`, `gofmt`, `git diff --check` e 23 testes Node do painel passaram. Limites: Quick Tunnel, ChatGPT Web, workspace real, CI e aceite externo continuam não validados; os patches protegidos permanecem untracked e intocados.
+
+## Tarefa `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` — 26/09/2026
+
+- Estado: **BLOQUEADO / PARCIAL — PREFLIGHT EXTERNO** no HEAD `b06bd56eaa09f31b2f92d1fa329b8617ce659477`.
+- O Quick Tunnel registrou uma conexão, mas fechou antes de anunciar uma URL utilizável: `public HTTPS verification failed; protected resource metadata does not match the configured resource, issuer or diagnostic scope`. Nenhum OAuth/PKCE, connector novo, discovery ou tool MCP foi exercitado.
+- Cleanup confirmado: `7676`/`7677` livres, nenhum processo residual; fixture Git descartável e managed workspace não chegaram a ser ativados. Os patches protegidos continuam untracked, não aplicados e intocados.
+- Próxima ação: novo gate para diagnosticar/corrigir somente a divergência de metadata/URL do runtime Quick; não alterar código nem prosseguir com aceite externo nesta missão bloqueada.

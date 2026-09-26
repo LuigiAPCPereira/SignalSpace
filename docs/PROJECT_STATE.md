@@ -761,3 +761,13 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Evidência final:** suíte Go completa, race proporcional, `go vet ./...`, `go build ./...`, `gofmt`, `git diff --check` e 23 testes Node do painel passaram. Os commits `c33b03f` e `db06a29` foram publicados normalmente; `git ls-remote` confirmou o SHA acima. Quick Tunnel, ChatGPT Web, workspace real e CI continuam não validados até prova específica.
 
 **Próxima ação:** enviar o relatório com `<continuidade_codex>` ao ChatGPT Web e aguardar a próxima missão.
+
+## Checkpoint — `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` — 26/09/2026
+
+**Estado:** **BLOQUEADO / PARCIAL — PREFLIGHT EXTERNO**. HEAD local/remoto: `b06bd56eaa09f31b2f92d1fa329b8617ce659477` em `codex/mvp-vertical-programming`.
+
+**Evidência:** o Quick Tunnel real registrou uma conexão, mas a verificação HTTPS protegida falhou porque a metadata do protected resource não correspondeu ao resource/issuer/scope configurado. O processo encerrou sem URL pública utilizável; não houve OAuth/PKCE, connector novo, discovery nem chamada de tool.
+
+**Cleanup:** portas `7676` e `7677` livres; nenhum processo residual; fixture Git descartável movida para a lixeira do sistema. Patches protegidos preservados com os hashes já registrados.
+
+**Limite e retomada:** não corrigir automaticamente neste gate. É necessário novo gate para investigar a divergência de metadata/URL do runtime Quick; depois disso, repetir o aceite externo desde o preflight.
