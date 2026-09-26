@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
+	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/workspace"
 )
 
@@ -31,52 +32,56 @@ const (
 )
 
 type compositionPlan struct {
-	mode                compositionMode
-	oauthScope          string
-	workspaceReadScope  string
-	workspaceWriteScope string
-	gitReviewScope      string
-	gitIndexScope       string
-	gitCommitScope      string
-	consoleMode         workspaceConsoleMode
-	validatorMode       compositionValidatorMode
-	mcpAddress          string
+	mode                     compositionMode
+	oauthScope               string
+	expectedCompositionScope string
+	workspaceReadScope       string
+	workspaceWriteScope      string
+	gitReviewScope           string
+	gitIndexScope            string
+	gitCommitScope           string
+	consoleMode              workspaceConsoleMode
+	validatorMode            compositionValidatorMode
+	mcpAddress               string
 }
 
-const compositionDiagnosticScope = "signalspace:diagnostic"
-const compositionProgrammingScope = "signalspace:programming"
+const compositionDiagnosticScope = mcp.ScopeDiagnostic
+const compositionProgrammingScope = mcp.ScopeProgramming
 
 func planComposition(mode compositionMode) (compositionPlan, error) {
 	switch mode {
 	case compositionDiagnostic:
 		return compositionPlan{
-			mode:          compositionDiagnostic,
-			oauthScope:    compositionDiagnosticScope,
-			consoleMode:   workspaceConsoleApprovalsOnly,
-			validatorMode: compositionLocalOAuthJWTValidator,
-			mcpAddress:    admin.PublicAddress,
+			mode:                     compositionDiagnostic,
+			oauthScope:               compositionDiagnosticScope,
+			expectedCompositionScope: compositionDiagnosticScope,
+			consoleMode:              workspaceConsoleApprovalsOnly,
+			validatorMode:            compositionLocalOAuthJWTValidator,
+			mcpAddress:               admin.PublicAddress,
 		}, nil
 	case compositionRead:
 		return compositionPlan{
-			mode:               compositionRead,
-			oauthScope:         compositionDiagnosticScope,
-			workspaceReadScope: workspace.ScopeRead,
-			consoleMode:        workspaceConsoleRead,
-			validatorMode:      compositionLocalOAuthJWTValidator,
-			mcpAddress:         admin.PublicAddress,
+			mode:                     compositionRead,
+			oauthScope:               compositionDiagnosticScope,
+			expectedCompositionScope: compositionDiagnosticScope,
+			workspaceReadScope:       workspace.ScopeRead,
+			consoleMode:              workspaceConsoleRead,
+			validatorMode:            compositionLocalOAuthJWTValidator,
+			mcpAddress:               admin.PublicAddress,
 		}, nil
 	case compositionProgramming:
 		return compositionPlan{
-			mode:                compositionProgramming,
-			oauthScope:          compositionDiagnosticScope,
-			workspaceReadScope:  workspace.ScopeRead,
-			workspaceWriteScope: workspace.ScopeWrite,
-			gitReviewScope:      workspace.ScopeGit,
-			gitIndexScope:       workspace.ScopeGitIndex,
-			gitCommitScope:      workspace.ScopeGitCommit,
-			consoleMode:         workspaceConsoleProgramming,
-			validatorMode:       compositionLocalOAuthJWTValidator,
-			mcpAddress:          admin.PublicAddress,
+			mode:                     compositionProgramming,
+			oauthScope:               compositionDiagnosticScope,
+			expectedCompositionScope: compositionProgrammingScope,
+			workspaceReadScope:       workspace.ScopeRead,
+			workspaceWriteScope:      workspace.ScopeWrite,
+			gitReviewScope:           workspace.ScopeGit,
+			gitIndexScope:            workspace.ScopeGitIndex,
+			gitCommitScope:           workspace.ScopeGitCommit,
+			consoleMode:              workspaceConsoleProgramming,
+			validatorMode:            compositionLocalOAuthJWTValidator,
+			mcpAddress:               admin.PublicAddress,
 		}, nil
 	default:
 		return compositionPlan{}, errors.New("unsupported SignalSpace composition; allowed modes are diagnostic, read and programming")

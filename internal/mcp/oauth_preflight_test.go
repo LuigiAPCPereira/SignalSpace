@@ -171,3 +171,16 @@ func TestOAuthPreflightRejectsBrokenJWKS(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestOAuthPreflightParsesScopesSupported(t *testing.T) {
+	issuer, jwks, client, _ := startPreflightIssuer(t, func(m map[string]any) {
+		m["scopes_supported"] = []string{"signalspace:programming", "custom:scope"}
+	}, 0)
+	report, err := CheckOAuthProvider(context.Background(), issuer, jwks, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.ScopesSupported) != 2 || report.ScopesSupported[0] != "signalspace:programming" || report.ScopesSupported[1] != "custom:scope" {
+		t.Fatalf("unexpected scopes_supported: %v", report.ScopesSupported)
+	}
+}

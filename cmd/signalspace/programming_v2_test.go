@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,5 +58,75 @@ func TestPublicProgrammingV2UsesOneOAuthScopeAndFailsClosedWithoutPanel(t *testi
 	response := readRequest(t, handler, http.MethodPost, "/mcp", call, "application/json", token, nil)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "LOCAL_APPROVAL_UNAVAILABLE") || !strings.Contains(response.Body.String(), "not executed") {
 		t.Fatalf("Programming without local panel did not fail closed: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestProgrammingPreflightPassesAndRejectsDiagnostic(t *testing.T) {
+	plan, err := planComposition(compositionProgramming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var handler http.Handler
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(server.Close)
+	resource := server.URL + "/mcp"
+	h, authorization, console, err := embeddedHandlerForPlanWithAuthorizer(resource, filepath.Join(t.TempDir(), "identity"), plan, func() mcp.ProgrammingAuthorizer { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = console.Close()
+		_ = authorization.Close()
+	})
+	handler = h
+
+	// Preflight with expected composition scope (signalspace:programming) passes.
+	report, err := mcp.CheckEmbeddedTransportForScope(context.Background(), resource, plan.expectedCompositionScope, server.Client())
+	if err != nil || report.ResourceURL != resource {
+		t.Fatalf("Programming preflight failed with expected scope: %v", err)
+	}
+
+	// Preflight expecting diagnostic scope on Programming server fails.
+	if _, err := mcp.CheckEmbeddedTransport(context.Background(), resource, server.Client()); err == nil {
+		t.Fatal("Programming preflight should fail when expecting diagnostic scope")
+	}
+}
+
+func TestQuickProgrammingPreflightWiringDerivesScopeFromPlan(t *testing.T) {
+	plan, err := planComposition(compositionProgramming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.expectedCompositionScope != compositionProgrammingScope {
+		t.Fatalf("expected scope %q, got %q", compositionProgrammingScope, plan.expectedCompositionScope)
+	}
+
+	diagPlan, err := planComposition(compositionDiagnostic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diagPlan.expectedCompositionScope != compositionDiagnosticScope {
+		t.Fatalf("expected scope %q, got %q", compositionDiagnosticScope, diagPlan.expectedCompositionScope)
+	}
+
+	readPlan, err := planComposition(compositionRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readPlan.expectedCompositionScope != compositionDiagnosticScope {
+		t.Fatalf("expected scope %q, got %q", compositionDiagnosticScope, readPlan.expectedCompositionScope)
+	}
+}
+
+func TestQuickProgrammingPanelPublishesProgrammingDescription(t *testing.T) {
+	var output strings.Builder
+	err := runQuickWithOptions(context.Background(), strings.NewReader("CANCELAR\n"), &output, nil, nil, compositionProgramming, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "READ + WRITE + GIT") || !strings.Contains(output.String(), "PUBLICAR PROGRAMAÇÃO PAINEL") {
+		t.Fatalf("unexpected prompt: %s", output.String())
 	}
 }

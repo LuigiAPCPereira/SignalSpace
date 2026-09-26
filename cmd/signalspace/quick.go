@@ -33,8 +33,12 @@ func runQuickMode(ctx context.Context, input io.Reader, output io.Writer, mode c
 }
 
 func runQuickModePanel(ctx context.Context, input io.Reader, output io.Writer, mode compositionMode, panel bool) error {
+	plan, err := planComposition(mode)
+	if err != nil {
+		return err
+	}
 	return runQuickWithOptions(ctx, input, output, tunnel.Start, func(ctx context.Context, resource string) (mcp.TransportReport, error) {
-		return mcp.CheckEmbeddedTransport(ctx, resource, nil)
+		return mcp.CheckEmbeddedTransportForScope(ctx, resource, plan.expectedCompositionScope, nil)
 	}, mode, panel)
 }
 
@@ -58,6 +62,11 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	plan, err := planComposition(mode)
 	if err != nil {
 		return err
+	}
+	if verify == nil {
+		verify = func(ctx context.Context, resource string) (mcp.TransportReport, error) {
+			return mcp.CheckEmbeddedTransportForScope(ctx, resource, plan.expectedCompositionScope, nil)
+		}
 	}
 	for _, name := range []string{"SIGNALSPACE_AUTH_MODE", "SIGNALSPACE_RESOURCE_URL", "SIGNALSPACE_OAUTH_ISSUER", "SIGNALSPACE_JWKS_URL", "SIGNALSPACE_OAUTH_OWNER_SUBJECT", "SIGNALSPACE_LOCAL_TOKEN", "SIGNALSPACE_STATE_DIR"} {
 		if os.Getenv(name) != "" {

@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// ScopeDiagnostic e ScopeProgramming definem os escopos de composição fechados aceitos pelo preflight.
+const (
+	ScopeDiagnostic  = diagnosticScope
+	ScopeProgramming = programmingScope
+)
+
 // TransportReport descreve apenas os endpoints observados, sem autenticar o ChatGPT.
 type TransportReport struct {
 	ResourceURL string
@@ -25,10 +31,20 @@ type protectedResourceMetadata struct {
 	ScopesSupported      []string `json:"scopes_supported"`
 }
 
-// CheckEmbeddedTransport testa o HTTPS público sem credenciais e sem modificar estado.
+// CheckEmbeddedTransport testa o HTTPS público sem credenciais e sem modificar estado,
+// usando a composição diagnóstica padrão.
 // O teste não registra clientes, solicita autorização nem conclui uma conexão ChatGPT.
 func CheckEmbeddedTransport(ctx context.Context, resourceURL string, client *http.Client) (TransportReport, error) {
+	return CheckEmbeddedTransportForScope(ctx, resourceURL, ScopeDiagnostic, client)
+}
+
+// CheckEmbeddedTransportForScope testa o HTTPS público sem credenciais e sem modificar estado,
+// validando a coerência com o escopo de composição fechado esperado.
+func CheckEmbeddedTransportForScope(ctx context.Context, resourceURL, expectedCompositionScope string, client *http.Client) (TransportReport, error) {
 	var report TransportReport
+	if expectedCompositionScope != ScopeDiagnostic && expectedCompositionScope != ScopeProgramming {
+		return report, errors.New("unsupported composition scope for transport preflight")
+	}
 	resource, err := parseSecureURL(resourceURL)
 	if err != nil || resource.Path != "/mcp" || resource.RawPath != "" || resource.String() != resourceURL {
 		return report, errors.New("transport diagnostic requires a canonical HTTPS /mcp resource URL")
@@ -46,8 +62,8 @@ func CheckEmbeddedTransport(ctx context.Context, resourceURL string, client *htt
 	if err := fetchTransportJSON(ctx, &bounded, metadataURL, &protected); err != nil {
 		return report, fmt.Errorf("protected resource metadata: %w", err)
 	}
-	if protected.Resource != resourceURL || len(protected.AuthorizationServers) != 1 || protected.AuthorizationServers[0] != origin || !contains(protected.ScopesSupported, diagnosticScope) {
-		return report, errors.New("protected resource metadata does not match the configured resource, issuer or diagnostic scope")
+	if protected.Resource != resourceURL || len(protected.AuthorizationServers) != 1 || protected.AuthorizationServers[0] != origin || !contains(protected.ScopesSupported, expectedCompositionScope) {
+		return report, errors.New("protected resource metadata does not match the configured resource, issuer or composition scope")
 	}
 	provider, err := CheckOAuthProvider(ctx, origin, origin+"/oauth/jwks", &bounded)
 	if err != nil {
@@ -56,6 +72,9 @@ func CheckEmbeddedTransport(ctx context.Context, resourceURL string, client *htt
 	if provider.Registration != "dcr" || provider.AuthorizationEndpoint != origin+"/authorize" || provider.TokenEndpoint != origin+"/token" || provider.MetadataURL != origin+"/.well-known/oauth-authorization-server" {
 		return report, errors.New("authorization server endpoints do not match embedded OAuth")
 	}
+	if !contains(provider.ScopesSupported, expectedCompositionScope) {
+		return report, errors.New("authorization server metadata does not advertise the expected composition scope")
+	}
 
 	// Um cliente sem token deve receber o desafio HTTP para descobrir o OAuth.
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
@@ -63,7 +82,7 @@ func CheckEmbeddedTransport(ctx context.Context, resourceURL string, client *htt
 	if err != nil {
 		return report, err
 	}
-	if response.StatusCode != http.StatusUnauthorized || (!strings.Contains(response.Header.Get("WWW-Authenticate"), `resource_metadata="`+metadataURL+`"`) || !strings.Contains(response.Header.Get("WWW-Authenticate"), `scope="`+diagnosticScope+`"`)) {
+	if response.StatusCode != http.StatusUnauthorized || (!strings.Contains(response.Header.Get("WWW-Authenticate"), `resource_metadata="`+metadataURL+`"`) || !strings.Contains(response.Header.Get("WWW-Authenticate"), `scope="`+expectedCompositionScope+`"`)) {
 		response.Body.Close()
 		return report, errors.New("unauthenticated MCP request did not advertise the expected OAuth metadata")
 	}
@@ -90,7 +109,10 @@ func CheckEmbeddedTransport(ctx context.Context, resourceURL string, client *htt
 			} `json:"_meta"`
 		} `json:"result"`
 	}
-	if json.Unmarshal(data, &challenge) != nil || !challenge.Result.IsError || len(challenge.Result.Meta.Challenges) != 1 || !strings.Contains(challenge.Result.Meta.Challenges[0], `resource_metadata="`+metadataURL+`"`) || (!strings.Contains(challenge.Result.Meta.Challenges[0], `error="invalid_token"`) || !strings.Contains(challenge.Result.Meta.Challenges[0], `error_description="`)) {
+	if json.Unmarshal(data, &challenge) != nil || !challenge.Result.IsError || len(challenge.Result.Meta.Challenges) != 1 ||
+		!strings.Contains(challenge.Result.Meta.Challenges[0], `resource_metadata="`+metadataURL+`"`) ||
+		!strings.Contains(challenge.Result.Meta.Challenges[0], `scope="`+expectedCompositionScope+`"`) ||
+		(!strings.Contains(challenge.Result.Meta.Challenges[0], `error="invalid_token"`) || !strings.Contains(challenge.Result.Meta.Challenges[0], `error_description="`)) {
 		return report, errors.New("MCP tool did not return the expected OAuth authentication challenge")
 	}
 	return TransportReport{ResourceURL: resourceURL, Issuer: origin, MetadataURL: metadataURL}, nil

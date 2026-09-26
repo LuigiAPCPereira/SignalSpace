@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,15 +14,55 @@ import (
 )
 
 func testPublicEmbedded(t *testing.T) (string, *http.Client, *string) {
+	return testPublicEmbeddedMode(t, ScopeDiagnostic)
+}
+
+func testPublicEmbeddedMode(t *testing.T, scope string) (string, *http.Client, *string) {
 	t.Helper()
 	var handler http.Handler
 	fault := new(string)
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := serverOrigin(r)
 		switch *fault {
 		case "wrong_resource":
 			if r.URL.Path == metadataPath {
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]any{"resource": "https://other.example/mcp", "authorization_servers": []string{strings.TrimSuffix(serverOrigin(r), "/")}, "scopes_supported": []string{diagnosticScope}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"resource": "https://other.example/mcp", "authorization_servers": []string{strings.TrimSuffix(origin, "/")}, "scopes_supported": []string{scope}})
+				return
+			}
+		case "issuer_mismatch":
+			if r.URL.Path == metadataPath {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"resource": origin + "/mcp", "authorization_servers": []string{"https://other.example"}, "scopes_supported": []string{scope}})
+				return
+			}
+		case "missing_scope":
+			if r.URL.Path == metadataPath {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"resource": origin + "/mcp", "authorization_servers": []string{strings.TrimSuffix(origin, "/")}, "scopes_supported": []string{"unrelated:scope"}})
+				return
+			}
+		case "extra_scope":
+			if r.URL.Path == metadataPath {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"resource": origin + "/mcp", "authorization_servers": []string{strings.TrimSuffix(origin, "/")}, "scopes_supported": []string{scope, "unrelated:scope"}})
+				return
+			}
+		case "auth_server_missing_scope":
+			if r.URL.Path == "/.well-known/oauth-authorization-server" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"issuer":                                origin,
+					"authorization_endpoint":                origin + "/authorize",
+					"token_endpoint":                        origin + "/token",
+					"registration_endpoint":                 origin + "/register",
+					"jwks_uri":                              origin + "/oauth/jwks",
+					"response_types_supported":              []string{"code"},
+					"grant_types_supported":                 []string{"authorization_code"},
+					"code_challenge_methods_supported":      []string{"S256"},
+					"token_endpoint_auth_methods_supported": []string{"none"},
+					"scopes_supported":                      []string{"unrelated:scope"},
+				})
 				return
 			}
 		case "redirect":
@@ -34,11 +75,26 @@ func testPublicEmbedded(t *testing.T) (string, *http.Client, *string) {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
+		case "wrong_http_challenge_scope":
+			if r.URL.Path == "/mcp" && r.Header.Get("Authorization") == "" {
+				w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+origin+metadataPath+`", scope="unrelated:scope"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 		case "no_tool_challenge":
 			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 				if r.ContentLength > 56 {
 					w.Header().Set("Content-Type", "application/json")
 					_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":2,"result":{"isError":false}}`))
+					return
+				}
+			}
+		case "wrong_tool_challenge_scope":
+			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+				if r.ContentLength > 56 {
+					w.Header().Set("Content-Type", "application/json")
+					challenge := fmt.Sprintf(`Bearer resource_metadata="%s%s", scope="unrelated:scope", error="invalid_token", error_description="Authentication required to use this tool"`, origin, metadataPath)
+					_, _ = w.Write([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"result":{"isError":true,"_meta":{"mcp/www_authenticate":[%q]}}}`, challenge)))
 					return
 				}
 			}
@@ -48,7 +104,12 @@ func testPublicEmbedded(t *testing.T) (string, *http.Client, *string) {
 	server.StartTLS()
 	t.Cleanup(server.Close)
 	resource := server.URL + "/mcp"
-	identity, err := auth.New(auth.Config{ResourceURL: resource, Issuer: server.URL, Scope: diagnosticScope, StateDir: filepath.Join(t.TempDir(), "state")})
+	authCfg := auth.Config{ResourceURL: resource, Issuer: server.URL, Scope: scope, StateDir: filepath.Join(t.TempDir(), "state")}
+	if scope == ScopeProgramming {
+		authCfg.CompositionScope = ScopeProgramming
+		authCfg.EnableRefreshTokens = true
+	}
+	identity, err := auth.New(authCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +118,12 @@ func testPublicEmbedded(t *testing.T) (string, *http.Client, *string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	protected, err := NewOAuthHandler(OAuthConfig{ResourceURL: resource, Issuer: server.URL, OwnerSubject: identity.OwnerSubject()}, verifier)
+	mcpCfg := OAuthConfig{ResourceURL: resource, Issuer: server.URL, OwnerSubject: identity.OwnerSubject()}
+	if scope == ScopeProgramming {
+		mcpCfg.discoverProgrammingTools = true
+		mcpCfg.programmingOAuthV2 = true
+	}
+	protected, err := NewOAuthHandler(mcpCfg, verifier)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,6 +156,81 @@ func TestEmbeddedTransportPublicContract(t *testing.T) {
 	}
 	if _, err := CheckEmbeddedTransport(context.Background(), resource, nil); err == nil {
 		t.Fatal("untrusted HTTPS certificate accepted")
+	}
+}
+
+func TestEmbeddedTransportCompositionMatrix(t *testing.T) {
+	diagResource, diagClient, diagFault := testPublicEmbeddedMode(t, ScopeDiagnostic)
+	progResource, progClient, progFault := testPublicEmbeddedMode(t, ScopeProgramming)
+
+	// Diagnostic metadata + diagnostic expected: PASS
+	diagReport, err := CheckEmbeddedTransportForScope(context.Background(), diagResource, ScopeDiagnostic, diagClient)
+	if err != nil || diagReport.ResourceURL != diagResource {
+		t.Fatalf("diagnostic metadata + diagnostic expected failed: %v", err)
+	}
+
+	// Programming metadata + programming expected: PASS
+	progReport, err := CheckEmbeddedTransportForScope(context.Background(), progResource, ScopeProgramming, progClient)
+	if err != nil || progReport.ResourceURL != progResource {
+		t.Fatalf("programming metadata + programming expected failed: %v", err)
+	}
+
+	// Programming metadata + diagnostic expected: FAIL
+	if _, err := CheckEmbeddedTransportForScope(context.Background(), progResource, ScopeDiagnostic, progClient); err == nil {
+		t.Fatal("programming metadata + diagnostic expected should have failed")
+	}
+
+	// Diagnostic metadata + programming expected: FAIL
+	if _, err := CheckEmbeddedTransportForScope(context.Background(), diagResource, ScopeProgramming, diagClient); err == nil {
+		t.Fatal("diagnostic metadata + programming expected should have failed")
+	}
+
+	// Unsupported composition scope: FAIL
+	for _, invalidScope := range []string{"", "unsupported", "signalspace:workspace.read"} {
+		if _, err := CheckEmbeddedTransportForScope(context.Background(), diagResource, invalidScope, diagClient); err == nil {
+			t.Fatalf("unsupported scope %q was accepted", invalidScope)
+		}
+	}
+
+	// Matrix of failures and extra scope for both modes
+	modes := []struct {
+		name     string
+		resource string
+		client   *http.Client
+		fault    *string
+		scope    string
+	}{
+		{"diagnostic", diagResource, diagClient, diagFault, ScopeDiagnostic},
+		{"programming", progResource, progClient, progFault, ScopeProgramming},
+	}
+
+	for _, m := range modes {
+		// Extra unrelated scope: PASS
+		t.Run(m.name+"_extra_scope", func(t *testing.T) {
+			*m.fault = "extra_scope"
+			defer func() { *m.fault = "" }()
+			report, err := CheckEmbeddedTransportForScope(context.Background(), m.resource, m.scope, m.client)
+			if err != nil || report.ResourceURL != m.resource {
+				t.Fatalf("extra scope rejected: %v", err)
+			}
+		})
+
+		for _, failureFault := range []string{
+			"wrong_resource",
+			"issuer_mismatch",
+			"missing_scope",
+			"auth_server_missing_scope",
+			"wrong_http_challenge_scope",
+			"wrong_tool_challenge_scope",
+		} {
+			t.Run(m.name+"_"+failureFault, func(t *testing.T) {
+				*m.fault = failureFault
+				defer func() { *m.fault = "" }()
+				if _, err := CheckEmbeddedTransportForScope(context.Background(), m.resource, m.scope, m.client); err == nil {
+					t.Fatalf("fault %s passed transport preflight for %s", failureFault, m.name)
+				}
+			})
+		}
 	}
 }
 

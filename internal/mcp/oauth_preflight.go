@@ -22,6 +22,7 @@ type OAuthPreflightReport struct {
 	TokenEndpoint         string
 	Registration          string
 	JWKSURL               string
+	ScopesSupported       []string
 }
 
 type authorizationServerMetadata struct {
@@ -35,6 +36,7 @@ type authorizationServerMetadata struct {
 	ResponseTypes            []string `json:"response_types_supported"`
 	GrantTypes               []string `json:"grant_types_supported"`
 	TokenEndpointAuthMethods []string `json:"token_endpoint_auth_methods_supported"`
+	ScopesSupported          []string `json:"scopes_supported"`
 }
 
 // CheckOAuthProvider consulta apenas metadados de URLs derivadas do emissor fixado.
@@ -122,6 +124,7 @@ func CheckOAuthProvider(ctx context.Context, issuer, jwksURL string, client *htt
 	report.AuthorizationEndpoint = metadata.AuthorizationEndpoint
 	report.TokenEndpoint = metadata.TokenEndpoint
 	report.JWKSURL = jwksURL
+	report.ScopesSupported = metadata.ScopesSupported
 	return report, nil
 }
 
