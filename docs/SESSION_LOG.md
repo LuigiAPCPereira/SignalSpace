@@ -670,3 +670,24 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - Gates executados e aprovados: `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s` (10/10 pacotes PASS), `go test -count=1 -race ./internal/mcp ./cmd/signalspace`, `go vet ./...`, `go build ./...`, 23 testes Node do painel, 8 testes Node de consentimento, `gofmt` e `git diff --check`.
 - Patches protegidos verificados: `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` permanecem untracked e intocados com SHA-256 idênticos aos de referência.
 - Nova repetição externa iniciada com fixture Git descartável limpa (`.agents/reviewer_1/disposable_fixture`): preflight HTTPS validado e aprovado com sucesso, anunciando a URL pública `https://election-deferred-operator-compromise.trycloudflare.com/mcp` e o painel local em `http://localhost:7677/` (código de pareamento: `C6VWC1KJRfo3L1yb9U1Euip96djfaRu6`). A sessão permanece ativa na porta 7676/7677 aguardando o conector do ChatGPT Web sem dispará-lo antecipadamente.
+
+## 26/09/2026 — revisão adversarial round 2 e consolidação de testes — `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001`
+
+- Auditoria adversarial Round 2 identificou lacunas remanescentes de validação:
+  1. `TestPublicProgrammingV2UsesOneOAuthScopeAndFailsClosedWithoutPanel` não consultava explicitamente `/.well-known/oauth-protected-resource` e não verificava a contagem estrita de 20 tools nem o isolamento Programming-only de `securitySchemes` em cada tool individual.
+  2. `TestProgrammingPreflightPassesAndRejectsDiagnostic` cobria apenas o runtime Programming rejeitando Diagnostic, sem validar o inverso (runtime Diagnostic rejeitando preflight com escopo esperado Programming).
+  3. `TestQuickAdminPanelDoesNotChangeCompositionMode` cobria apenas combinações de `read` e `diagnostic`, omitindo `connect quick programming panel`.
+  4. Limpeza e reexecução da suíte seriada: o processo ativo na porta 7676 foi encerrado, a suíte completa serial `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s` e race `go test -count=1 -race ./internal/mcp ./cmd/signalspace` foram executados e aprovados sem qualquer erro ou race.
+- Melhorias aplicadas em `cmd/signalspace/programming_v2_test.go`, `cmd/signalspace/composition_policy_test.go` e `internal/mcp/transport_preflight_test.go`.
+- Patches protegidos verificados: `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` mantêm os hashes SHA-256 intactos.
+- Nova repetição externa ao vivo iniciada em `.agents/reviewer_2/disposable_fixture`:
+  - Runtime executado via `/home/luigiapcp/Documentos/Projetos/SignalSpace/.agents/reviewer_2/run_quick.sh` com `go run ./cmd/signalspace connect quick programming panel`.
+  - Preflight HTTPS passou e anunciou a URL pública: `https://color-arguments-youth-them.trycloudflare.com/mcp`.
+  - Painel administrativo local ativo em `http://localhost:7677/` com código de pareamento `MzOFBEZQQmeSTWungs3NJ4m4PrjhFp29`.
+  - Verificação ao vivo via `curl`:
+    - `/.well-known/oauth-protected-resource` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
+    - `/.well-known/oauth-authorization-server` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
+    - POST `/mcp` sem bearer → 401 Unauthorized com `WWW-Authenticate: Bearer resource_metadata="https://color-arguments-youth-them.trycloudflare.com/.well-known/oauth-protected-resource", scope="signalspace:programming"`.
+    - POST `/mcp` `connection_diagnostic` sem bearer → 200 OK com `isError: true` e `_meta.mcp/www_authenticate` contendo o desafio com `scope="signalspace:programming"`.
+- A sessão permanece ativa aguardando o conector do ChatGPT Web sem dispará-lo antecipadamente.
+
