@@ -34,6 +34,9 @@ type OAuthConfig struct {
 	ResourceURL  string
 	Issuer       string
 	OwnerSubject string
+	// discoverProgrammingTools separa a superfície configurada da autorização
+	// do bearer corrente. Só NewOAuthProgrammingHandler pode ativá-lo.
+	discoverProgrammingTools bool
 	// WorkspaceReader é opcional e nunca é configurado por parâmetros HTTP.
 	// Uma instância sem este componente permanece exclusivamente diagnóstico.
 	WorkspaceReader WorkspaceTextReader
@@ -122,6 +125,7 @@ func NewOAuthProgrammingHandler(config OAuthConfig, ports ProgrammingPorts, veri
 	config.gitStatusReader = ports.GitStatusReader
 	config.gitIndexer = ports.GitIndexer
 	config.gitCommitter = ports.GitCommitter
+	config.discoverProgrammingTools = true
 	return NewOAuthHandler(config, verifier)
 }
 
@@ -248,10 +252,13 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceReadScope),
+				challenge: requiredScopeChallenge(metadataURL, workspaceReadScope),
 			}
-			if _, err := readAccess.verify(r.Context()); err == nil {
-				readAccess.advertise = true
+			readAccess.discoverable = config.discoverProgrammingTools
+			if !readAccess.discoverable {
+				if _, err := readAccess.verify(r.Context()); err == nil {
+					readAccess.discoverable = true
+				}
 			}
 		}
 		var writeAccess *writeToolAccess
@@ -277,12 +284,13 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, workspaceWriteScope),
+				challenge: requiredScopeChallenge(metadataURL, workspaceWriteScope),
 			}
-			// A descoberta só anuncia a capacidade que o token atual pode
-			// solicitar; a concessão local continua sendo verificada na chamada.
-			if _, err := writeAccess.verify(r.Context()); err == nil {
-				writeAccess.advertise = true
+			writeAccess.discoverable = config.discoverProgrammingTools
+			if !writeAccess.discoverable {
+				if _, err := writeAccess.verify(r.Context()); err == nil {
+					writeAccess.discoverable = true
+				}
 			}
 		}
 		var gitAccess *gitToolAccess
@@ -301,10 +309,13 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, gitReviewScope),
+				challenge: requiredScopeChallenge(metadataURL, gitReviewScope),
 			}
-			if _, err := gitAccess.verify(r.Context()); err == nil {
-				gitAccess.advertise = true
+			gitAccess.discoverable = config.discoverProgrammingTools
+			if !gitAccess.discoverable {
+				if _, err := gitAccess.verify(r.Context()); err == nil {
+					gitAccess.discoverable = true
+				}
 			}
 		}
 		var gitIndexAccess *gitIndexToolAccess
@@ -322,10 +333,13 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, gitIndexScope),
+				challenge: requiredScopeChallenge(metadataURL, gitIndexScope),
 			}
-			if _, err := gitIndexAccess.verify(r.Context()); err == nil {
-				gitIndexAccess.advertise = true
+			gitIndexAccess.discoverable = config.discoverProgrammingTools
+			if !gitIndexAccess.discoverable {
+				if _, err := gitIndexAccess.verify(r.Context()); err == nil {
+					gitIndexAccess.discoverable = true
+				}
 			}
 		}
 		var gitCommitAccess *gitCommitToolAccess
@@ -343,10 +357,13 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, gitCommitScope),
+				challenge: requiredScopeChallenge(metadataURL, gitCommitScope),
 			}
-			if _, err := gitCommitAccess.verify(r.Context()); err == nil {
-				gitCommitAccess.advertise = true
+			gitCommitAccess.discoverable = config.discoverProgrammingTools
+			if !gitCommitAccess.discoverable {
+				if _, err := gitCommitAccess.verify(r.Context()); err == nil {
+					gitCommitAccess.discoverable = true
+				}
 			}
 		}
 		var testAccess *testToolAccess
@@ -364,13 +381,20 @@ func NewOAuthHandler(config OAuthConfig, verifier TokenVerifier) (http.Handler, 
 					}
 					return identity, nil
 				},
-				challenge: fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s"`, metadataURL, testRunScope),
+				challenge: requiredScopeChallenge(metadataURL, testRunScope),
 			}
-			if _, err := testAccess.verify(r.Context()); err == nil {
-				testAccess.advertise = true
+			testAccess.discoverable = config.discoverProgrammingTools
+			if !testAccess.discoverable {
+				if _, err := testAccess.verify(r.Context()); err == nil {
+					testAccess.discoverable = true
+				}
 			}
 		}
-		serveMCP(w, r, "oauth_diagnostic", config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess)
+		mode := "oauth_diagnostic"
+		if config.discoverProgrammingTools {
+			mode = "oauth_programming"
+		}
+		serveMCP(w, r, mode, config.OnMCPEvent, readAccess, writeAccess, gitAccess, gitIndexAccess, gitCommitAccess, testAccess)
 	}), nil
 }
 
@@ -404,6 +428,17 @@ func toolAuthChallenge(w http.ResponseWriter, r *http.Request, challenge string)
 		"isError": true,
 	}})
 	return true
+}
+
+func requiredScopeChallenge(metadataURL, capabilityScope string) string {
+	return fmt.Sprintf(`Bearer resource_metadata="%s", scope="%s %s"`, metadataURL, diagnosticScope, capabilityScope)
+}
+
+func oauthSecuritySchemes(capabilityScope string) []any {
+	return []any{map[string]any{
+		"type":   "oauth2",
+		"scopes": []string{diagnosticScope, capabilityScope},
+	}}
 }
 
 func parseSecureURL(raw string) (*url.URL, error) {

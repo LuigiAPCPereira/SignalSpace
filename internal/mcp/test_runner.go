@@ -22,10 +22,10 @@ type WorkspaceTestRunner interface {
 }
 
 type testToolAccess struct {
-	runner    WorkspaceTestRunner
-	verify    func(context.Context) (VerifiedIdentity, error)
-	challenge string
-	advertise bool
+	runner       WorkspaceTestRunner
+	verify       func(context.Context) (VerifiedIdentity, error)
+	challenge    string
+	discoverable bool
 }
 
 func testRunToolDefinition() map[string]any {
@@ -38,7 +38,7 @@ func testRunToolDefinition() map[string]any {
 			"required":             []string{"session_id"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{testRunScope}}},
+		"securitySchemes": oauthSecuritySchemes(testRunScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false},
 	}
 }

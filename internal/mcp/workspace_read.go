@@ -36,14 +36,14 @@ type WorkspaceTextSearcher interface {
 }
 
 type readToolAccess struct {
-	reader    WorkspaceTextReader
-	lister    WorkspaceDirectoryLister
-	statter   WorkspacePathStatter
-	finder    WorkspacePathFinder
-	searcher  WorkspaceTextSearcher
-	verify    func(context.Context) (VerifiedIdentity, error)
-	challenge string
-	advertise bool
+	reader       WorkspaceTextReader
+	lister       WorkspaceDirectoryLister
+	statter      WorkspacePathStatter
+	finder       WorkspacePathFinder
+	searcher     WorkspaceTextSearcher
+	verify       func(context.Context) (VerifiedIdentity, error)
+	challenge    string
+	discoverable bool
 }
 
 func workspaceToolSchema() map[string]any {
@@ -63,7 +63,7 @@ func readToolDefinition() map[string]any {
 		"name":            readToolName,
 		"description":     "Read UTF-8 text (up to 32 KiB) from an explicitly approved workspace. Provide the active session ID and a relative path; no edits or commands.",
 		"inputSchema":     workspaceToolSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceReadScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false},
 	}
 }
@@ -73,7 +73,7 @@ func listDirectoryToolDefinition() map[string]any {
 		"name":            listDirectoryToolName,
 		"description":     "List up to 128 UTF-8 entry names in an approved directory. Provide the active session ID and a relative directory path, or '.' for the approved root. No file contents, types or absolute paths are returned.",
 		"inputSchema":     workspaceToolSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceReadScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false},
 	}
 }
@@ -83,7 +83,7 @@ func statPathToolDefinition() map[string]any {
 		"name":            statPathToolName,
 		"description":     "Return structured metadata for one relative path in an approved workspace without reading file content. The path may be '.' for the workspace root.",
 		"inputSchema":     workspaceToolSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceReadScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true},
 	}
 }
@@ -104,7 +104,7 @@ func findPathsToolDefinition() map[string]any {
 			"required":             []string{"session_id", "pattern"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceReadScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true},
 	}
 }
@@ -124,7 +124,7 @@ func searchTextToolDefinition() map[string]any {
 			"required":             []string{"session_id", "query"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceReadScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceReadScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true},
 	}
 }

@@ -120,8 +120,9 @@ func TestDirectoryToolRequiresReadScopeAndCurrentGrant(t *testing.T) {
 		t.Fatalf("wrong opt-in tools: %v", tools)
 	}
 	listing := tools[2].(map[string]any)
-	if listing["securitySchemes"].([]any)[0].(map[string]any)["scopes"].([]any)[0] != workspaceReadScope {
-		t.Fatal("directory listing was not bound to read scope")
+	scopes := listing["securitySchemes"].([]any)[0].(map[string]any)["scopes"].([]any)
+	if len(scopes) != 2 || scopes[0] != diagnosticScope || scopes[1] != workspaceReadScope {
+		t.Fatalf("directory listing did not declare cumulative scopes: %v", scopes)
 	}
 	schema := listing["inputSchema"].(map[string]any)
 	if schema["additionalProperties"] != false || len(schema["required"].([]any)) != 2 {

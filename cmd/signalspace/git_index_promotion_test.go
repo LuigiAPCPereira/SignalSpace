@@ -58,9 +58,10 @@ func TestPublicGitIndexPromotionIsManagedWorktreeOnly(t *testing.T) {
 	reviewToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeGit)
 	allToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeRead+" "+workspace.ScopeWrite+" "+workspace.ScopeGit+" "+workspace.ScopeGitIndex)
 
-	assertPublicToolNames(t, handler, indexToken, "connection_diagnostic", "stage_git_paths", "unstage_git_paths")
-	assertPublicToolNames(t, handler, reviewToken, "connection_diagnostic", "review_git_changes", "git_status")
-	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes", "git_status", "stage_git_paths", "unstage_git_paths")
+	programmingTools := []string{"connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes", "git_status", "stage_git_paths", "unstage_git_paths", "commit_git_index"}
+	assertPublicToolNames(t, handler, indexToken, programmingTools...)
+	assertPublicToolNames(t, handler, reviewToken, programmingTools...)
+	assertPublicToolNames(t, handler, allToken, programmingTools...)
 
 	statusText, statusError := publicGitIndexToolText(t, handler, reviewToken, "git_status", map[string]string{"session_id": snapshot.SessionID})
 	if statusError {

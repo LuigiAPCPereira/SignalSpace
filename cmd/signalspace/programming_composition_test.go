@@ -17,6 +17,7 @@ import (
 )
 
 func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *testing.T) {
+	programmingTools := []string{"connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes", "git_status", "stage_git_paths", "unstage_git_paths", "commit_git_index"}
 	handler, authorization, console, err := embeddedHandlerWithWorkspace(readTestResource, filepath.Join(t.TempDir(), "identity"), compositionProgramming)
 	if err != nil {
 		t.Fatal(err)
@@ -53,12 +54,19 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *
 		t.Fatalf("client registration: %v", err)
 	}
 
-	// O token diagnóstico torna o cliente elegível, mas não concede nenhuma
-	// capacidade de workspace por si só.
+	// O token diagnóstico torna o cliente elegível, mas a descoberta da
+	// composição programming não depende de scopes ou grants locais.
 	diagnosticToken := authorizeClient(t, handler, func(id string) error {
 		return authorization.DecideTerminal(id, true)
 	}, client.ID, compositionDiagnosticScope)
-	assertPublicToolNames(t, handler, diagnosticToken, "connection_diagnostic")
+	assertPublicToolNames(t, handler, diagnosticToken, programmingTools...)
+	assertProgrammingSecuritySchemes(t, handler, diagnosticToken)
+	assertPublicInitializeInstructionsContains(t, handler, diagnosticToken,
+		"Programming tools are discoverable",
+		"separate OAuth scope",
+		"active local grant",
+		"managed SignalSpace worktree",
+		"no shell")
 
 	root := gitWorkspaceFixture(t)
 	var approvalOutput strings.Builder
@@ -79,10 +87,10 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *
 	gitToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeGit)
 	allToken := authorizeClient(t, handler, func(id string) error { return authorization.DecideTerminal(id, true) }, client.ID, compositionDiagnosticScope+" "+workspace.ScopeRead+" "+workspace.ScopeWrite+" "+workspace.ScopeGit)
 
-	assertPublicToolNames(t, handler, readToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text")
-	assertPublicToolNames(t, handler, writeToken, "connection_diagnostic", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch")
-	assertPublicToolNames(t, handler, gitToken, "connection_diagnostic", "review_git_changes", "git_status")
-	assertPublicToolNames(t, handler, allToken, "connection_diagnostic", "read_file", "list_directory", "stat_path", "find_paths", "search_text", "replace_text", "create_directory", "create_text_file", "write_text_file", "copy_path", "move_path", "delete_file", "delete_directory", "apply_patch", "review_git_changes", "git_status")
+	assertPublicToolNames(t, handler, readToken, programmingTools...)
+	assertPublicToolNames(t, handler, writeToken, programmingTools...)
+	assertPublicToolNames(t, handler, gitToken, programmingTools...)
+	assertPublicToolNames(t, handler, allToken, programmingTools...)
 	for _, token := range []string{readToken, writeToken, gitToken, allToken} {
 		listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
 		if strings.Contains(listing.Body.String(), `"name":"run_workspace_tests"`) || strings.Contains(listing.Body.String(), `"name":"shell"`) {
@@ -90,8 +98,12 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *
 		}
 	}
 
-	assertPublicInitializeInstructions(t, handler, readToken, "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands. Structured path metadata, bounded path search and literal text search are available without shell.")
-	assertPublicInitializeInstructions(t, handler, writeToken, "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations. Directory creation, create-only text files and hash-preconditioned full-file updates use the same separate write scope. Structured apply_patch supports bounded create, hash-preconditioned update/delete, move and directory operations after a complete preflight; it has no shell, Git mutation or arbitrary diff parser.")
+	assertProgrammingInsufficientScopeHasNoEffects(t, handler, diagnosticToken, root)
+
+	assertPublicInitializeInstructionsContains(t, handler, readToken,
+		"Programming tools are discoverable", "separate OAuth scope", "active local grant", "managed SignalSpace worktree", "no shell")
+	assertPublicInitializeInstructionsContains(t, handler, writeToken,
+		"Programming tools are discoverable", "separate OAuth scope", "active local grant", "managed SignalSpace worktree", "no shell")
 
 	readCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{"session_id":"` + sessionID + `","path":"tracked.txt"}}}`
 	readResponse := readRequest(t, handler, http.MethodPost, "/mcp", readCall, "application/json", readToken, nil)
@@ -187,6 +199,153 @@ func TestPublicProgrammingCompositionPromotesOnlyReadWriteGitAndManagedIndex(t *
 	if !strings.Contains(revoked.Body.String(), "Workspace write unavailable or not authorized") {
 		t.Fatalf("revoked JWT retained write capability: %s", revoked.Body.String())
 	}
+}
+
+func assertPublicInitializeInstructionsContains(t *testing.T, handler http.Handler, token string, fragments ...string) {
+	t.Helper()
+	initialized := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`, "application/json", token, nil)
+	if initialized.Code != http.StatusOK {
+		t.Fatalf("initialize: %d %s", initialized.Code, initialized.Body.String())
+	}
+	var payload struct {
+		Result struct {
+			Instructions string `json:"instructions"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(initialized.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range fragments {
+		if !strings.Contains(payload.Result.Instructions, fragment) {
+			t.Fatalf("initialize instructions omitted %q: %q", fragment, payload.Result.Instructions)
+		}
+	}
+}
+
+func assertProgrammingSecuritySchemes(t *testing.T, handler http.Handler, token string) {
+	t.Helper()
+	listing := readRequest(t, handler, http.MethodPost, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, "application/json", token, nil)
+	if listing.Code != http.StatusOK {
+		t.Fatalf("tools/list: %d %s", listing.Code, listing.Body.String())
+	}
+	var payload struct {
+		Result struct {
+			Tools []struct {
+				Name            string `json:"name"`
+				SecuritySchemes []struct {
+					Type   string   `json:"type"`
+					Scopes []string `json:"scopes"`
+				} `json:"securitySchemes"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(listing.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]string{
+		"connection_diagnostic": {compositionDiagnosticScope},
+		"read_file":             {compositionDiagnosticScope, workspace.ScopeRead},
+		"list_directory":        {compositionDiagnosticScope, workspace.ScopeRead},
+		"stat_path":             {compositionDiagnosticScope, workspace.ScopeRead},
+		"find_paths":            {compositionDiagnosticScope, workspace.ScopeRead},
+		"search_text":           {compositionDiagnosticScope, workspace.ScopeRead},
+		"replace_text":          {compositionDiagnosticScope, workspace.ScopeWrite},
+		"create_directory":      {compositionDiagnosticScope, workspace.ScopeWrite},
+		"create_text_file":      {compositionDiagnosticScope, workspace.ScopeWrite},
+		"write_text_file":       {compositionDiagnosticScope, workspace.ScopeWrite},
+		"copy_path":             {compositionDiagnosticScope, workspace.ScopeWrite},
+		"move_path":             {compositionDiagnosticScope, workspace.ScopeWrite},
+		"delete_file":           {compositionDiagnosticScope, workspace.ScopeWrite},
+		"delete_directory":      {compositionDiagnosticScope, workspace.ScopeWrite},
+		"apply_patch":           {compositionDiagnosticScope, workspace.ScopeWrite},
+		"review_git_changes":    {compositionDiagnosticScope, workspace.ScopeGit},
+		"git_status":            {compositionDiagnosticScope, workspace.ScopeGit},
+		"stage_git_paths":       {compositionDiagnosticScope, workspace.ScopeGitIndex},
+		"unstage_git_paths":     {compositionDiagnosticScope, workspace.ScopeGitIndex},
+		"commit_git_index":      {compositionDiagnosticScope, workspace.ScopeGitCommit},
+	}
+	for _, tool := range payload.Result.Tools {
+		if tool.Name == "run_workspace_tests" || tool.Name == "shell" {
+			t.Fatalf("forbidden tool discovered: %s", tool.Name)
+		}
+		wantScopes, ok := want[tool.Name]
+		if !ok {
+			t.Fatalf("unexpected programming tool: %s", tool.Name)
+		}
+		if len(tool.SecuritySchemes) != 1 || tool.SecuritySchemes[0].Type != "oauth2" || strings.Join(tool.SecuritySchemes[0].Scopes, " ") != strings.Join(wantScopes, " ") {
+			t.Fatalf("unexpected security schemes for %s: %+v", tool.Name, tool.SecuritySchemes)
+		}
+	}
+	if len(payload.Result.Tools) != len(want) {
+		t.Fatalf("programming discovery omitted tools: got=%d want=%d", len(payload.Result.Tools), len(want))
+	}
+}
+
+func assertProgrammingInsufficientScopeHasNoEffects(t *testing.T, handler http.Handler, token, root string) {
+	t.Helper()
+	beforeBytes, err := os.ReadFile(filepath.Join(root, "tracked.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeHead := gitOutput(t, root, "rev-parse", "HEAD")
+	beforeCached := gitOutput(t, root, "diff", "--cached", "--raw")
+	fileHash := sha256.Sum256(beforeBytes)
+	for _, testCase := range []struct {
+		name  string
+		scope string
+		args  map[string]any
+	}{
+		{name: "read", scope: workspace.ScopeRead, args: map[string]any{"session_id": "missing-scope", "path": "tracked.txt"}},
+		{name: "write", scope: workspace.ScopeWrite, args: map[string]any{"session_id": "missing-scope", "path": "tracked.txt", "expected": string(beforeBytes), "replacement": "must-not-write"}},
+		{name: "git-review", scope: workspace.ScopeGit, args: map[string]any{"session_id": "missing-scope"}},
+		{name: "git-index", scope: workspace.ScopeGitIndex, args: map[string]any{"session_id": "missing-scope", "expected_index_sha256": strings.Repeat("0", 64), "entries": []map[string]any{{"path": "tracked.txt", "expected_sha256": hex.EncodeToString(fileHash[:])}}}},
+		{name: "git-commit", scope: workspace.ScopeGitCommit, args: map[string]any{"session_id": "missing-scope", "expected_head_oid": strings.Repeat("0", 40), "expected_index_sha256": strings.Repeat("0", 64), "message": "must-not-commit"}},
+	} {
+		name := map[string]string{"read": "read_file", "write": "replace_text", "git-review": "review_git_changes", "git-index": "stage_git_paths", "git-commit": "commit_git_index"}[testCase.name]
+		params, err := json.Marshal(map[string]any{"name": name, "arguments": testCase.args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 100, "method": "tools/call", "params": json.RawMessage(params)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := readRequest(t, handler, http.MethodPost, "/mcp", string(request), "application/json", token, nil)
+		var payload struct {
+			Result struct {
+				IsError bool `json:"isError"`
+				Meta    struct {
+					Authenticate []string `json:"mcp/www_authenticate"`
+				} `json:"_meta"`
+			} `json:"result"`
+		}
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &payload) != nil || !payload.Result.IsError || len(payload.Result.Meta.Authenticate) != 1 {
+			t.Fatalf("%s did not fail closed: %d %s", testCase.name, response.Code, response.Body.String())
+		}
+		challenge := payload.Result.Meta.Authenticate[0]
+		if !strings.Contains(challenge, `error="insufficient_scope"`) || !strings.Contains(challenge, `scope="`+compositionDiagnosticScope+" "+testCase.scope+`"`) {
+			t.Fatalf("%s challenge did not request cumulative scopes: %s", testCase.name, challenge)
+		}
+	}
+	if afterBytes, err := os.ReadFile(filepath.Join(root, "tracked.txt")); err != nil || string(afterBytes) != string(beforeBytes) {
+		t.Fatalf("insufficient-scope calls changed bytes: %v %q", err, afterBytes)
+	}
+	if afterHead := gitOutput(t, root, "rev-parse", "HEAD"); afterHead != beforeHead {
+		t.Fatalf("insufficient-scope calls changed HEAD: before=%s after=%s", beforeHead, afterHead)
+	}
+	if afterCached := gitOutput(t, root, "diff", "--cached", "--raw"); afterCached != beforeCached {
+		t.Fatalf("insufficient-scope calls changed index: before=%s after=%s", beforeCached, afterCached)
+	}
+}
+
+func gitOutput(t *testing.T, root string, args ...string) string {
+	t.Helper()
+	command := exec.Command("git", append([]string{"-C", root}, args...)...)
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v", args, err)
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func gitWorkspaceFixture(t *testing.T) string {

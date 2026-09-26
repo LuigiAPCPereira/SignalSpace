@@ -32,7 +32,7 @@ type gitToolAccess struct {
 	statusReader WorkspaceGitStatusReader
 	verify       func(context.Context) (VerifiedIdentity, error)
 	challenge    string
-	advertise    bool
+	discoverable bool
 }
 
 func gitReviewToolDefinition() map[string]any {
@@ -45,7 +45,7 @@ func gitReviewToolDefinition() map[string]any {
 			"required":             []string{"session_id"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{gitReviewScope}}},
+		"securitySchemes": oauthSecuritySchemes(gitReviewScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true},
 	}
 }
@@ -60,7 +60,7 @@ func gitStatusToolDefinition() map[string]any {
 			"required":             []string{"session_id"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{gitReviewScope}}},
+		"securitySchemes": oauthSecuritySchemes(gitReviewScope),
 		"annotations":     map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true},
 	}
 }

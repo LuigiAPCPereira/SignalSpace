@@ -31,7 +31,7 @@ func copyPathToolDefinition() map[string]any {
 		"name":            copyPathToolName,
 		"description":     "Copy one regular file or a tree of regular files and directories inside the approved workspace. The destination must be absent; symlinks and special files are rejected, entries/depth/bytes are bounded, files are created as owner-only 0600 and partial cleanup is reported.",
 		"inputSchema":     structuralPairSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false},
 	}
 }
@@ -41,7 +41,7 @@ func movePathToolDefinition() map[string]any {
 		"name":            movePathToolName,
 		"description":     "Move one regular file or directory inside the approved workspace with descriptor-relative no-replace rename. The destination must be absent, directories cannot move into themselves, and cross-device moves are reported unsupported rather than copied and deleted.",
 		"inputSchema":     structuralPairSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false},
 	}
 }
@@ -72,7 +72,7 @@ func structuralDeleteDefinition(name, description string) map[string]any {
 		"name":            name,
 		"description":     description,
 		"inputSchema":     workspaceToolSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false},
 	}
 }

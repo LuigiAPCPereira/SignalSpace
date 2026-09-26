@@ -19,10 +19,10 @@ type WorkspaceGitCommitter interface {
 }
 
 type gitCommitToolAccess struct {
-	committer WorkspaceGitCommitter
-	verify    func(context.Context) (VerifiedIdentity, error)
-	challenge string
-	advertise bool
+	committer    WorkspaceGitCommitter
+	verify       func(context.Context) (VerifiedIdentity, error)
+	challenge    string
+	discoverable bool
 }
 
 func commitGitIndexDefinition() map[string]any {
@@ -40,7 +40,7 @@ func commitGitIndexDefinition() map[string]any {
 			"required":             []string{"session_id", "expected_head_oid", "expected_index_sha256", "message"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{gitCommitScope}}},
+		"securitySchemes": oauthSecuritySchemes(gitCommitScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false},
 	}
 }

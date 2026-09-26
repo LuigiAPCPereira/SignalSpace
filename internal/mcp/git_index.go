@@ -24,10 +24,10 @@ type WorkspaceGitIndexMutator interface {
 }
 
 type gitIndexToolAccess struct {
-	mutator   WorkspaceGitIndexMutator
-	verify    func(context.Context) (VerifiedIdentity, error)
-	challenge string
-	advertise bool
+	mutator      WorkspaceGitIndexMutator
+	verify       func(context.Context) (VerifiedIdentity, error)
+	challenge    string
+	discoverable bool
 }
 
 func stageGitPathsDefinition() map[string]any {
@@ -52,7 +52,7 @@ func gitIndexToolDefinition(name, description string, readOnly bool) map[string]
 			"required":             []string{"session_id", "expected_index_sha256", "entries"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{gitIndexScope}}},
+		"securitySchemes": oauthSecuritySchemes(gitIndexScope),
 		"annotations":     map[string]any{"readOnlyHint": readOnly, "destructiveHint": !readOnly, "idempotentHint": false},
 	}
 }

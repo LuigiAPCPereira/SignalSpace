@@ -68,7 +68,7 @@ func applyPatchToolDefinition() map[string]any {
 			"required":             []string{"session_id", "operations"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false},
 	}
 }

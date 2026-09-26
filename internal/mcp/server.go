@@ -221,7 +221,10 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			return
 		}
 		instructions := "Diagnostic only; no development tools are available."
-		if readAccess != nil && readAccess.advertise {
+		programmingDiscovery := mode == "oauth_programming"
+		if programmingDiscovery {
+			instructions = "Programming tools are discoverable; each category requires a separate OAuth scope and active local grant. Git index and commit require a managed SignalSpace worktree; no shell, remote Git or test.run."
+		} else if readAccess != nil && readAccess.discoverable {
 			instructions = "File reading requires a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
 			if readAccess.lister != nil {
 				instructions = "File reading and directory listing require a separate OAuth read scope, an active local workspace grant and its session ID. No editing or commands."
@@ -230,7 +233,7 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				instructions += " Structured path metadata, bounded path search and literal text search are available without shell."
 			}
 		}
-		if writeAccess != nil && writeAccess.advertise {
+		if !programmingDiscovery && writeAccess != nil && writeAccess.discoverable {
 			if instructions == "Diagnostic only; no development tools are available." {
 				instructions = "Workspace text replacement requires a separate OAuth write scope, an active local workspace write grant and its session ID. No commands or Git mutations."
 			} else {
@@ -243,16 +246,16 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				instructions += " Structured apply_patch supports bounded create, hash-preconditioned update/delete, move and directory operations after a complete preflight; it has no shell, Git mutation or arbitrary diff parser."
 			}
 		}
-		if gitAccess != nil && gitAccess.advertise {
+		if !programmingDiscovery && gitAccess != nil && gitAccess.discoverable {
 			instructions += " Git review requires a separate OAuth Git review scope and active local Git review grant; it is read-only and never stages, commits or pushes."
 		}
-		if gitIndexAccess != nil && gitIndexAccess.advertise {
+		if !programmingDiscovery && gitIndexAccess != nil && gitIndexAccess.discoverable {
 			instructions += " Git index staging and unstaging require a separate Git index scope and an active managed SignalSpace worktree; checkout sessions, shell, commit and remote Git remain unavailable."
 		}
-		if testAccess != nil && testAccess.advertise {
+		if !programmingDiscovery && testAccess != nil && testAccess.discoverable {
 			instructions += " Test execution requires a separate OAuth test scope and active local test grant; it runs only go test ./... and is not a process sandbox."
 		}
-		if gitCommitAccess != nil && gitCommitAccess.advertise {
+		if !programmingDiscovery && gitCommitAccess != nil && gitCommitAccess.discoverable {
 			instructions += " Git commits require a separate signalspace:git.commit scope, a managed worktree and a configured owner identity; commits are staged-only, detached, local and never push or run hooks/signing."
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{
@@ -270,11 +273,11 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
 			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false},
 		}
-		if mode == "oauth_diagnostic" {
+		if mode == "oauth_diagnostic" || mode == "oauth_programming" {
 			tool["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{diagnosticScope}}}
 		}
 		tools := []any{tool}
-		if readAccess != nil && readAccess.advertise {
+		if readAccess != nil && readAccess.discoverable {
 			tools = append(tools, readToolDefinition())
 			if readAccess.lister != nil {
 				tools = append(tools, listDirectoryToolDefinition())
@@ -289,7 +292,7 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				tools = append(tools, searchTextToolDefinition())
 			}
 		}
-		if writeAccess != nil && writeAccess.advertise {
+		if writeAccess != nil && writeAccess.discoverable {
 			tools = append(tools, writeToolDefinition())
 			if writeAccess.directoryCreator != nil {
 				tools = append(tools, createDirectoryToolDefinition())
@@ -316,21 +319,21 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				tools = append(tools, applyPatchToolDefinition())
 			}
 		}
-		if gitAccess != nil && gitAccess.advertise && gitAccess.reviewer != nil {
+		if gitAccess != nil && gitAccess.discoverable && gitAccess.reviewer != nil {
 			tools = append(tools, gitReviewToolDefinition())
 		}
-		if gitAccess != nil && gitAccess.advertise {
+		if gitAccess != nil && gitAccess.discoverable {
 			if gitAccess.statusReader != nil {
 				tools = append(tools, gitStatusToolDefinition())
 			}
 		}
-		if gitIndexAccess != nil && gitIndexAccess.advertise {
+		if gitIndexAccess != nil && gitIndexAccess.discoverable {
 			tools = append(tools, stageGitPathsDefinition(), unstageGitPathsDefinition())
 		}
-		if gitCommitAccess != nil && gitCommitAccess.advertise {
+		if gitCommitAccess != nil && gitCommitAccess.discoverable {
 			tools = append(tools, commitGitIndexDefinition())
 		}
-		if testAccess != nil && testAccess.advertise {
+		if testAccess != nil && testAccess.discoverable {
 			tools = append(tools, testRunToolDefinition())
 		}
 		reply(w, http.StatusOK, response{JSONRPC: "2.0", ID: id, Result: map[string]any{

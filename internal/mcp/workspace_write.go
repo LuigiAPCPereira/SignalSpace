@@ -57,7 +57,7 @@ type writeToolAccess struct {
 	patchApplier     WorkspacePatchApplier
 	verify           func(context.Context) (VerifiedIdentity, error)
 	challenge        string
-	advertise        bool
+	discoverable     bool
 }
 
 func writeToolSchema() map[string]any {
@@ -79,7 +79,7 @@ func writeToolDefinition() map[string]any {
 		"name":            writeToolName,
 		"description":     "Replace an exact UTF-8 text value in an explicitly approved workspace. Requires a separate write scope and active local write grant; no commands or Git mutations.",
 		"inputSchema":     writeToolSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false},
 	}
 }
@@ -89,7 +89,7 @@ func createDirectoryToolDefinition() map[string]any {
 		"name":            createDirectoryToolName,
 		"description":     "Create exactly one relative directory in an approved workspace. Parent directories must already exist; an existing directory is reported idempotently and no path is followed through a symlink.",
 		"inputSchema":     workspaceToolSchema(),
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true},
 	}
 }
@@ -108,7 +108,7 @@ func createTextFileToolDefinition() map[string]any {
 			"required":             []string{"session_id", "path", "content"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false},
 	}
 }
@@ -128,7 +128,7 @@ func writeTextFileToolDefinition() map[string]any {
 			"required":             []string{"session_id", "path", "expected_sha256", "content"},
 			"additionalProperties": false,
 		},
-		"securitySchemes": []any{map[string]any{"type": "oauth2", "scopes": []string{workspaceWriteScope}}},
+		"securitySchemes": oauthSecuritySchemes(workspaceWriteScope),
 		"annotations":     map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false},
 	}
 }

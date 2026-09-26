@@ -116,8 +116,9 @@ func TestWorkspaceReadToolAuthGrantRevocationAndPaths(t *testing.T) {
 		t.Fatalf("unexpected opt-in tools: %v", tools)
 	}
 	schemes := tools[1].(map[string]any)["securitySchemes"].([]any)
-	if schemes[0].(map[string]any)["scopes"].([]any)[0] != workspaceReadScope {
-		t.Fatalf("read tool missing separate OAuth scope: %v", schemes)
+	scopes := schemes[0].(map[string]any)["scopes"].([]any)
+	if len(scopes) != 2 || scopes[0] != diagnosticScope || scopes[1] != workspaceReadScope {
+		t.Fatalf("read tool missing cumulative OAuth scopes: %v", schemes)
 	}
 	res, result = oauthRequest(t, server, http.MethodPost, "/mcp", readToken, `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`, nil)
 	if res.StatusCode != http.StatusOK {
