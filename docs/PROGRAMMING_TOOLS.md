@@ -221,6 +221,14 @@ O fluxo usa somente `git write-tree`, `git commit-tree` por stdin e uma transaç
 
 **Estado:** `SS-MVP-002` permanece **PARCIAL quanto ao aceite operacional externo**; `SS-MVP-002-GIT-COMMIT-GATE-001` está **APROVADO / IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `0420c9a`. `SS-MVP-002-GIT-COMMIT-PUBLISH-001` foi concluído com desvio procedural de pré-checagem, sem impacto material no conteúdo publicado. CI, HTTPS, túnel, navegador, grant ChatGPT Web, workspace real, merge e deploy permanecem **DESCONHECIDOS/NÃO VALIDADOS**. Os patches protegidos continuam fora do Git, não aplicados e com os SHA-256 aprovados.
 
+## Núcleo interno de capabilities e policy — `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001`
+
+`internal/capability` mantém o catálogo fechado de `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`, `git.index`, `git.commit`, capabilities Git futuras e `test.run`/`shell.exec`. Os seis scopes OAuth legados aceitos pelo grant são adaptados explicitamente para esse catálogo; capabilities futuras não ganham scope OAuth por coincidência.
+
+`workspace.Grants` agora armazena capabilities tipadas e faz a checagem interna com elas. `GrantWithScopes`, `AllowsClientScope` e `GrantSnapshot.Scopes` continuam sendo adaptadores de compatibilidade, preservando o contrato atual do console e do MCP. Não houve ampliação de acesso, nova tool ou mudança de composição.
+
+`internal/policy` fornece um Policy Engine em memória, determinístico e fail-closed. O contexto exige owner, client, token family, workspace, sessão, capability, tool e fingerprint; regras podem ser `DENY`, `ASK`, `ALLOW_SESSION` ou `ALLOW_WORKSPACE`, com precedência por especificidade, negação em empate e expiração. O resultado é `ALLOW`, `DENY` ou `REQUIRE_APPROVAL`. Nesta fatia o engine não está ligado ao handler MCP: `REQUIRE_APPROVAL`, approvals, permits, persistência e painel permanecem gates posteriores.
+
 ## Arquitetura alvo v2 — autorização local por composição
 
 `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001` aceita a direção descrita em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). A superfície pública atualmente implementada/publicada continua sendo a matriz tipada registrada nesta documentação, com escopos e grants independentes. O auth harness opt-in agora implementa o ciclo OAuth v2 e a composição `signalspace:programming`, sem alterar discovery, autorização ou catálogo das tools públicas.

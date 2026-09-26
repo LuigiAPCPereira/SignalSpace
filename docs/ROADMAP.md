@@ -82,4 +82,10 @@ O segundo commit também registra que worktrees são direção futura, não capa
 
 Esta tarefa aceita a direção **OAuth por composição + Autorização Local de Capabilities** e a registra em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md). O alvo separa autenticação OAuth, grants de workspace, Policy Engine, approvals locais e `OperationPermit`; propõe as composições `diagnostic`, `read` e `programming`, sem confundir `programming` com acesso irrestrito.
 
-O estado documental original era **ACEITA / NÃO IMPLEMENTADA**. A tarefa seguinte `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` implementa agora o ciclo OAuth/token family somente no auth harness opt-in, sem alterar tool, capability ou escopo do runtime público. Policy Engine, migração pública, approvals e shell permanecem fases próprias.
+O estado documental original era **ACEITA / NÃO IMPLEMENTADA**. A tarefa seguinte `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` implementa agora o ciclo OAuth/token family somente no auth harness opt-in, sem alterar tool, capability ou escopo do runtime público. O núcleo interno de capabilities/policy foi implementado em tarefa própria; migração pública, approvals e shell permanecem fases próprias.
+
+## Núcleo interno de capabilities/policy — `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` — 26/09/2026
+
+O slice implementa `internal/capability` como catálogo fechado e adaptador explícito dos scopes legados, refatora `workspace.Grants` para armazenar capabilities tipadas e adiciona `internal/policy` com decisões `ALLOW`, `DENY` e `REQUIRE_APPROVAL`. O Policy Engine é em memória, fail-closed e não é chamado pelo transporte MCP nesta etapa; não há nova tool, scope público, grant automático, approval, permit, persistência, painel, shell ou Git remoto.
+
+O estado é **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. O fechamento exige gates completos, commit focado e verificação fast-forward; o aceite externo ChatGPT Web, CI, HTTPS, túnel e workspace real permanecem desconhecidos.

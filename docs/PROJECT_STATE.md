@@ -681,7 +681,7 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 ## Checkpoint `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` — 26/09/2026
 
-**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. O ciclo OAuth v2 está disponível somente no auth harness opt-in; `SS-MVP-002` permanece **PARCIAL/em andamento**, porque a migração da superfície pública e o aceite externo continuam pendentes. CI permanece **DESCONHECIDA**.
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `18873819f2dceaa525285df22f1dc6edf9d63ba2`. O ciclo OAuth v2 está disponível somente no auth harness opt-in; `SS-MVP-002` permanece **PARCIAL/em andamento**, porque a migração da superfície pública e o aceite externo continuam pendentes. CI permanece **DESCONHECIDA**.
 
 **Implementação:** `internal/auth` agora suporta a composição `signalspace:programming`, DCR/metadata com `authorization_code + refresh_token`, access TTL configurável (default 60 minutos), refresh TTL configurável (default 30 dias), segredo opaco retornado uma vez e persistido somente por hash SHA-256, token family vinculada a client/resource/scope, rotação, detecção de reuse, revogação persistente e migração v1 explícita. O access JWT preserva issuer, audience, owner subject, client ID e JTI.
 
@@ -689,4 +689,16 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 **Limites:** não houve Policy Engine, grant/capability local novo, migração das tools públicas, painel, shell, `test.run`, lifecycle MCP de worktree, workspace real, CI, HTTPS, túnel, navegador, merge ou deploy. Os patches protegidos continuam untracked, não aplicados e intocados com os SHA-256 registrados anteriormente.
 
-**Próxima ação vinculada:** executar gates completos, criar commit focado, verificar fast-forward e publicar somente na branch `codex/mvp-vertical-programming`; depois enviar o relatório ao ChatGPT Web e aguardar a próxima missão.
+**Próxima ação vinculada:** manter o ciclo OAuth publicado, executar a tarefa interna de capabilities/policy e depois enviar o relatório ao ChatGPT Web e aguardar a próxima missão.
+
+## Checkpoint `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` — 26/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. `SS-MVP-002` permanece **PARCIAL/em andamento**; a superfície pública MCP/OAuth continua granular e CI permanece **DESCONHECIDA**.
+
+**Implementação:** `internal/capability` define o catálogo fechado de capabilities internas, adapta explicitamente os seis scopes OAuth legados e não atribui scopes a capabilities futuras. `internal/workspace/grants.go` armazena capabilities tipadas e checa capabilities nas operações; `GrantWithScopes`, `AllowsClientScope` e `GrantSnapshot.Scopes` preservam a compatibilidade de borda. `internal/policy` fornece engine em memória com contexto completo, regras `DENY`/`ASK`/`ALLOW_SESSION`/`ALLOW_WORKSPACE`, precedência por especificidade, negação em empate, expiração e retorno `ALLOW`/`DENY`/`REQUIRE_APPROVAL`.
+
+**Validação:** testes focais de `internal/capability`, `internal/policy` e `internal/workspace` passaram, incluindo mapeamento sem aceitar scope desconhecido, armazenamento sem raw scope, snapshot legado, decisões fail-closed, `ASK`, allow workspace/session, precedência, deny em empate e expiração. Ainda faltam suíte completa, race proporcional, vet, build, commit e publicação desta fatia.
+
+**Limites:** o Policy Engine não está conectado ao MCP e não expõe `REQUIRE_APPROVAL`; não há approvals, permits, persistência, painel, nova tool/scope, shell, Git remoto, branch, workspace real, CI, HTTPS, túnel, navegador, merge ou deploy. Os dois patches protegidos permanecem untracked, não aplicados e intocados com SHA-256 preservados.
+
+**Próxima ação vinculada:** executar gates completos, criar commit focado, verificar fast-forward e publicar apenas em `codex/mvp-vertical-programming`; então enviar o relatório ao ChatGPT Web e aguardar nova missão.

@@ -1,9 +1,9 @@
 # ADR — autorização local v2 para a composição Programming
 
 **ID:** `SS-MVP-002-LOCAL-AUTHORIZATION-V2-DESIGN-001`
-**Estado:** **ACEITA / CICLO OAUTH V2 IMPLEMENTADO NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA**
+**Estado:** **ACEITA / CICLO OAUTH V2 E NÚCLEO INTERNO DE CAPABILITIES/POLICY IMPLEMENTADOS NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA**
 **Data da decisão:** 25/09/2026
-**Escopo:** arquitetura, contratos, modelo de domínio, migração e critérios de aceite. Esta ADR não autoriza alteração funcional, nova capability, push, merge ou deploy.
+**Escopo:** arquitetura, contratos, modelo de domínio, migração e critérios de aceite. O slice `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` implementa somente o núcleo interno descrito nesta ADR; não autoriza migração pública, push, merge ou deploy por consequência.
 
 ## Contexto
 
@@ -12,7 +12,7 @@ O SignalSpace conecta o ChatGPT Web a ferramentas locais por MCP/OAuth e precisa
 1. o cliente está autenticado para usar uma composição do SignalSpace?
 2. o proprietário autorizou esta operação local, neste workspace, nesta sessão e sob esta política?
 
-A composição `programming` pública continua demonstrando a superfície tipada por escopos granulares (`workspace.read`, `workspace.write`, `git.review`, `git.index` e `git.commit`) e por concessões locais. Como passo intermediário, o auth harness agora implementa opt-in o ciclo OAuth v2 (composição `signalspace:programming`, refresh token e token family), sem migrar as tools públicas para esse escopo. A implementação do ciclo não equivale à implementação do Policy Engine ou à promoção pública da composição.
+A composição `programming` pública continua demonstrando a superfície tipada por escopos granulares (`workspace.read`, `workspace.write`, `git.review`, `git.index` e `git.commit`) e por concessões locais. Como passos intermediários, o auth harness implementa opt-in o ciclo OAuth v2 (composição `signalspace:programming`, refresh token e token family) e o núcleo interno de capabilities/policy, sem migrar as tools públicas para esse escopo. A implementação interna não equivale à exposição de `REQUIRE_APPROVAL`, à persistência de políticas ou à promoção pública da composição.
 
 ## Problema
 
@@ -135,7 +135,7 @@ O desenho futuro considera access token de 60 minutos e refresh token de 30 dias
 
 ### Trade-offs
 
-- Será necessário implementar persistência/rotação OAuth e Policy Engine sem decisões implícitas.
+- Será necessário implementar persistência de políticas, approvals/permits e a migração pública sem decisões implícitas; rotação OAuth já existe somente no auth harness opt-in.
 - O cliente precisa repetir uma chamada após aprovação local.
 - A UX terá mais estados explícitos e pode exigir painel local acessível.
 - O contrato granular atual precisa de migração controlada e aceites externos renovados.
@@ -155,8 +155,8 @@ O desenho futuro considera access token de 60 minutos e refresh token de 30 dias
 
 1. **A — documental:** esta ADR e reconciliação dos contratos, sem código. **Concluída.**
 2. **B — ciclo OAuth:** token families, rotação, revogação e vínculo resource/client. **Implementada no auth harness opt-in por `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001`; a migração pública permanece pendente.**
-3. **C — capabilities internas:** normalização independente sem mudar ainda a superfície pública.
-4. **D — Policy Engine:** `ALLOW`/`DENY`/`REQUIRE_APPROVAL`, grants e permits.
+3. **C — capabilities internas:** **Implementada** em `internal/capability`; `workspace.Grants` usa capabilities como autoridade interna e preserva scopes somente nas bordas compatíveis. A superfície pública não mudou.
+4. **D — Policy Engine:** **Implementado no núcleo interno** em `internal/policy` com `ALLOW`/`DENY`/`REQUIRE_APPROVAL`, regras em memória, fail-closed, precedência e expiração. Grants/persistência/permits e integração pública permanecem posteriores.
 5. **E — approvals/painel:** persistência, deduplicação, expiração e auditoria segura.
 6. **F — Programming:** composição, tools e anotações contra o novo contrato.
 7. **G — aceite externo:** fixture descartável, navegador/cliente real, revogação e cleanup.
@@ -168,14 +168,14 @@ Como os clientes de aceite são descartáveis, a compatibilidade preferida é um
 
 - ADR, TASKLIST e checkpoint citam o mesmo ID e estado explícito.
 - Os documentos de produto, MVP, autorização local, segurança, Programming, painel, transporte e roadmap apontam para esta ADR sem declarar implementação inexistente.
-- Nenhum arquivo de código, workflow, capability, escopo runtime, grant ou permissão muda nesta missão.
+- O slice atual altera somente o adaptador interno de grant e adiciona catálogo/Policy Engine sem alterar workflow, escopo OAuth público, catálogo MCP, grant público ou permissão efetiva do runtime.
 - O modelo diferencia OAuth, policy, grant, approval e permit.
 - O próximo gate de implementação é identificável e não inclui shell, Git remoto, deploy ou workspace real por consequência.
 
 ## Itens futuros
 
-Implementar somente mediante novas tarefas/gates: Policy Engine, armazenamento/painel de approvals, migração pública da composição Programming, stable origin, auditoria redigida, aceites externos e shell independente. O ciclo OAuth v2 do auth harness foi entregue separadamente e não concede capabilities locais.
+Implementar somente mediante novas tarefas/gates: integração do Policy Engine ao runtime, armazenamento/painel de approvals, `OperationPermit`, migração pública da composição Programming, stable origin, auditoria redigida, aceites externos e shell independente. O núcleo atual não concede por si só capabilities locais ao MCP.
 
 ## Estado da decisão
 
-**ACEITA / CICLO OAUTH V2 IMPLEMENTADO NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA.** O ciclo mantém o runtime público granular e não cria Policy Engine, capability local, tool nova ou shell.
+**ACEITA / CICLO OAUTH V2 E NÚCLEO INTERNO DE CAPABILITIES/POLICY IMPLEMENTADOS NO AUTH HARNESS / MIGRAÇÃO PÚBLICA NÃO IMPLEMENTADA.** O runtime público permanece granular; `REQUIRE_APPROVAL`, approvals, permits, tools novas e shell não são expostos.

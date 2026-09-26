@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"sync"
+
+	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
 )
 
 var ErrNotAuthorized = errors.New("workspace session not authorized")
@@ -44,9 +46,11 @@ type Grants struct {
 	mu       sync.Mutex
 	owner    string
 	clientID string
-	scopes   map[string]struct{}
-	current  *Session
-	closed   bool
+	// capabilities é a autoridade interna. Scopes só atravessam esta
+	// fronteira nos adaptadores de compatibilidade OAuth/console.
+	capabilities map[capability.Capability]struct{}
+	current      *Session
+	closed       bool
 }
 
 func NewGrants(owner string) (*Grants, error) {
@@ -98,14 +102,15 @@ func (g *Grants) grantWithMetadata(root, clientID string, metadata WorkspaceMeta
 	if !validClientID(clientID) {
 		return "", ErrNotAuthorized
 	}
-	allowedScopes := make(map[string]struct{}, len(scopes))
+	allowedCapabilities := make(map[capability.Capability]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeWrite && scope != ScopeGit && scope != ScopeGitIndex && scope != ScopeGitCommit && scope != ScopeTest {
+		internalCapability, ok := capability.FromOAuthScope(scope)
+		if !ok {
 			return "", ErrNotAuthorized
 		}
-		allowedScopes[scope] = struct{}{}
+		allowedCapabilities[internalCapability] = struct{}{}
 	}
-	if len(allowedScopes) == 0 {
+	if len(allowedCapabilities) == 0 {
 		return "", ErrNotAuthorized
 	}
 	var opened *Session
@@ -129,13 +134,13 @@ func (g *Grants) grantWithMetadata(root, clientID string, metadata WorkspaceMeta
 			_ = opened.Close()
 			g.current = nil
 			g.clientID = ""
-			g.scopes = nil
+			g.capabilities = nil
 			return "", err
 		}
 	}
 	g.current = opened
 	g.clientID = clientID
-	g.scopes = allowedScopes
+	g.capabilities = allowedCapabilities
 	return opened.ID(), nil
 }
 
@@ -152,7 +157,7 @@ func (g *Grants) WithAuthorizedGitProcessDir(owner, clientID, id string, operati
 	if g.closed {
 		return ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeGit) {
+	if !g.authorizedLocked(owner, clientID, id, capability.GitReview) {
 		return ErrNotAuthorized
 	}
 	return operation(g.current)
@@ -170,7 +175,7 @@ func (g *Grants) WithAuthorizedManagedGitProcessDir(owner, clientID, id string, 
 	if g.closed {
 		return ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeGitIndex) || g.current.metadata.Mode != WorkspaceModeWorktree || g.current.metadata.ManagedWorkspaceID == "" {
+	if !g.authorizedLocked(owner, clientID, id, capability.GitIndex) || g.current.metadata.Mode != WorkspaceModeWorktree || g.current.metadata.ManagedWorkspaceID == "" {
 		return ErrManagedWorktreeRequired
 	}
 	return operation(g.current)
@@ -187,7 +192,7 @@ func (g *Grants) WithAuthorizedManagedGitCommit(owner, clientID, id string, oper
 	if g.closed {
 		return ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeGitCommit) || g.current.metadata.Mode != WorkspaceModeWorktree || g.current.metadata.ManagedWorkspaceID == "" {
+	if !g.authorizedLocked(owner, clientID, id, capability.GitCommit) || g.current.metadata.Mode != WorkspaceModeWorktree || g.current.metadata.ManagedWorkspaceID == "" {
 		return ErrManagedWorktreeRequired
 	}
 	return operation(g.current, g.current.metadata)
@@ -205,7 +210,7 @@ func (g *Grants) WithAuthorizedTestProcessDir(owner, clientID, id string, operat
 	if g.closed {
 		return ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeTest) {
+	if !g.authorizedLocked(owner, clientID, id, capability.TestRun) {
 		return ErrNotAuthorized
 	}
 	return operation(g.current)
@@ -223,7 +228,8 @@ func (g *Grants) AllowsClient(clientID string) bool {
 func (g *Grants) AllowsClientScope(clientID, scope string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && g.hasScopeLocked(scope)
+	internalCapability, ok := capability.FromOAuthScope(scope)
+	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && ok && g.hasCapabilityLocked(internalCapability)
 }
 
 // Snapshot retorna uma cópia independente dos metadados da concessão atual.
@@ -240,10 +246,12 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 		return GrantSnapshot{}, nil
 	}
 
-	scopes := make([]string, 0, len(g.scopes))
-	for _, scope := range []string{ScopeRead, ScopeWrite, ScopeGit, ScopeGitIndex, ScopeGitCommit, ScopeTest} {
-		if g.hasScopeLocked(scope) {
-			scopes = append(scopes, scope)
+	scopes := make([]string, 0, len(g.capabilities))
+	for _, internalCapability := range capability.LegacyCapabilities() {
+		if g.hasCapabilityLocked(internalCapability) {
+			if scope, ok := capability.OAuthScope(internalCapability); ok {
+				scopes = append(scopes, scope)
+			}
 		}
 	}
 	return GrantSnapshot{
@@ -259,14 +267,14 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 	}, nil
 }
 
-func (g *Grants) hasScopeLocked(scope string) bool {
-	_, ok := g.scopes[scope]
+func (g *Grants) hasCapabilityLocked(internalCapability capability.Capability) bool {
+	_, ok := g.capabilities[internalCapability]
 	return ok
 }
 
-func (g *Grants) authorizedLocked(owner, clientID, id, scope string) bool {
+func (g *Grants) authorizedLocked(owner, clientID, id string, required capability.Capability) bool {
 	return owner == g.owner && validClientID(clientID) && clientID == g.clientID &&
-		g.current != nil && id == g.current.ID() && g.hasScopeLocked(scope)
+		g.current != nil && id == g.current.ID() && g.hasCapabilityLocked(required)
 }
 
 // ReadText exige proprietário, cliente e sessão exatos. A fronteira de transporte
@@ -278,7 +286,7 @@ func (g *Grants) ReadText(owner, clientID, id, relative string) (string, error) 
 	if g.closed {
 		return "", ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceRead) {
 		return "", ErrNotAuthorized
 	}
 	return g.current.ReadText(relative)
@@ -293,7 +301,7 @@ func (g *Grants) ReplaceText(owner, clientID, id, relative, expected, replacemen
 	if g.closed {
 		return ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return ErrNotAuthorized
 	}
 	return g.current.ReplaceText(relative, expected, replacement)
@@ -307,7 +315,7 @@ func (g *Grants) ListDirectory(owner, clientID, id, relative string) ([]string, 
 	if g.closed {
 		return nil, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceRead) {
 		return nil, ErrNotAuthorized
 	}
 	return g.current.ListDirectory(relative)
@@ -321,7 +329,7 @@ func (g *Grants) StatPath(owner, clientID, id, relative string) (PathStat, error
 	if g.closed {
 		return PathStat{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceRead) {
 		return PathStat{}, ErrNotAuthorized
 	}
 	return g.current.StatPath(relative)
@@ -333,7 +341,7 @@ func (g *Grants) FindPaths(owner, clientID, id, root, pattern string, maxResults
 	if g.closed {
 		return FindResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceRead) {
 		return FindResult{}, ErrNotAuthorized
 	}
 	return g.current.FindPaths(root, pattern, maxResults, maxDepth)
@@ -345,7 +353,7 @@ func (g *Grants) SearchText(owner, clientID, id, root, query string, maxResults 
 	if g.closed {
 		return SearchResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeRead) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceRead) {
 		return SearchResult{}, ErrNotAuthorized
 	}
 	return g.current.SearchText(root, query, maxResults)
@@ -357,7 +365,7 @@ func (g *Grants) CreateDirectory(owner, clientID, id, relative string) (Director
 	if g.closed {
 		return DirectoryResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return DirectoryResult{}, ErrNotAuthorized
 	}
 	return g.current.CreateDirectory(relative)
@@ -369,7 +377,7 @@ func (g *Grants) CreateTextFile(owner, clientID, id, relative, content string) (
 	if g.closed {
 		return TextFileResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return TextFileResult{}, ErrNotAuthorized
 	}
 	return g.current.CreateTextFile(relative, content)
@@ -381,7 +389,7 @@ func (g *Grants) WriteTextFile(owner, clientID, id, relative, expectedSHA256, co
 	if g.closed {
 		return TextFileResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return TextFileResult{}, ErrNotAuthorized
 	}
 	return g.current.WriteTextFile(relative, expectedSHA256, content)
@@ -393,7 +401,7 @@ func (g *Grants) Copy(owner, clientID, id, source, destination string) (CopyResu
 	if g.closed {
 		return CopyResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return CopyResult{}, ErrNotAuthorized
 	}
 	return g.current.Copy(source, destination)
@@ -405,7 +413,7 @@ func (g *Grants) Move(owner, clientID, id, source, destination string) (MoveResu
 	if g.closed {
 		return MoveResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return MoveResult{}, ErrNotAuthorized
 	}
 	return g.current.Move(source, destination)
@@ -417,7 +425,7 @@ func (g *Grants) DeleteFile(owner, clientID, id, relative string) (DeleteResult,
 	if g.closed {
 		return DeleteResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return DeleteResult{}, ErrNotAuthorized
 	}
 	return g.current.DeleteFile(relative)
@@ -429,7 +437,7 @@ func (g *Grants) DeleteDirectory(owner, clientID, id, relative string) (DeleteRe
 	if g.closed {
 		return DeleteResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return DeleteResult{}, ErrNotAuthorized
 	}
 	return g.current.DeleteDirectory(relative)
@@ -444,7 +452,7 @@ func (g *Grants) ApplyPatch(owner, clientID, id string, operations []PatchOperat
 	if g.closed {
 		return PatchResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, ScopeWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
 		return PatchResult{}, ErrNotAuthorized
 	}
 	return g.current.ApplyPatch(operations)
@@ -463,7 +471,7 @@ func (g *Grants) Revoke(id string) error {
 	err := g.current.Close()
 	g.current = nil
 	g.clientID = ""
-	g.scopes = nil
+	g.capabilities = nil
 	return err
 }
 
@@ -481,6 +489,6 @@ func (g *Grants) Close() error {
 	err := g.current.Close()
 	g.current = nil
 	g.clientID = ""
-	g.scopes = nil
+	g.capabilities = nil
 	return err
 }
