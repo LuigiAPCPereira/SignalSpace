@@ -208,4 +208,4 @@ Esta extensão aplica o profile somente depois de um grant Programming owner-sid
 
 `ALLOW_SESSION` contém owner, client, workspace, session e capability e não atravessa revoke, restart ou nova sessão. `ALLOW_WORKSPACE` continua limitado a managed workspace estável e ao mesmo owner/client/workspace/capability; sua prioridade supera somente o `ASK` padrão do profile, nunca um deny explícito e nunca um grant ausente. A UI existente de approvals e policies é reutilizada; não há novo scope OAuth, tool MCP ou privilégio implícito.
 
-Estado desta reconciliação: **IMPLEMENTADO / VALIDADO LOCALMENTE EM FOCO / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**. O aceite ChatGPT Web, Quick Tunnel, workspace real e CI permanecem fora da evidência.
+Estado desta reconciliação: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal. O aceite ChatGPT Web, Quick Tunnel, workspace real e CI permanecem fora da evidência.

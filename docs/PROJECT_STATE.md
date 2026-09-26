@@ -752,10 +752,12 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 ## Checkpoint vigente — `SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001` — 26/09/2026
 
-**Estado:** **IMPLEMENTADO / VALIDAÇÃO FOCAL PASSOU / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**. Base local: branch `codex/mvp-vertical-programming`, HEAD inicial `4ce9a95`; a alteração defensiva de modo desconhecido falha fechado.
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal. Base local: branch `codex/mvp-vertical-programming`, HEAD inicial `4ce9a95`; a alteração defensiva de modo desconhecido falha fechado.
 
 **Implementação:** profile owner-side fechado para checkout e managed, commands canônicos de request/resume, aplicação transacional após grant e precedência explícita entre `ALLOW_SESSION`, `ALLOW_WORKSPACE`, `ASK` padrão e deny. A UI administrativa existente de Pending Approvals e Persistent Policies foi mantida como superfície integrada; não houve nova tool, scope, shell, `test.run` ou Git remoto.
 
 **Proteção:** os patches untracked `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` permanecem não aplicados, não staged e intocados; hashes registrados no checkpoint anterior seguem obrigatórios.
 
-**Próxima ação:** executar gates completos, criar commits focados e publicar por fast-forward normal se todos passarem. Depois enviar o relatório com `<continuidade_codex>` ao ChatGPT Web e aguardar a próxima missão. Quick Tunnel, ChatGPT Web, workspace real e CI continuam não validados até prova específica.
+**Evidência final:** suíte Go completa, race proporcional, `go vet ./...`, `go build ./...`, `gofmt`, `git diff --check` e 23 testes Node do painel passaram. Os commits `c33b03f` e `db06a29` foram publicados normalmente; `git ls-remote` confirmou o SHA acima. Quick Tunnel, ChatGPT Web, workspace real e CI continuam não validados até prova específica.
+
+**Próxima ação:** enviar o relatório com `<continuidade_codex>` ao ChatGPT Web e aguardar a próxima missão.

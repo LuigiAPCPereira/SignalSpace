@@ -116,4 +116,4 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `e617a
 
 Esta etapa fecha a semântica local do perfil Programming: request canônico owner-side, grant tipado, policies por sessão/workspace, envelope sem expansão e integração com a UX de Pending Approvals já existente. Checkout e managed têm envelopes distintos; delete/commit não são autorizados implicitamente.
 
-Estado: **IMPLEMENTADO / VALIDAÇÃO FOCAL PASSOU / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**. O aceite externo separado continua sendo o próximo gate somente após a entrega deste relatório e nova missão/autorização explícita.
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal. O aceite externo separado continua sendo o próximo gate somente após a entrega deste relatório e nova missão/autorização explícita.

@@ -211,4 +211,4 @@ O console local oferece uma forma canônica sem lista de scopes fornecida pelo c
 
 O profile não substitui a aprovação nem o grant. `ALLOW_SESSION` é efêmero e vinculado à sessão; `ALLOW_WORKSPACE` só pode ser persistido para managed workspace estável. Checkout não recebe policy persistente. A aprovação do profile conserva o teto do envelope Programming e mantém delete/commit em `ASK`, sem shell, `test.run`, Git remoto ou lifecycle MCP de worktree. A UI separada de approvals e policies existente é a superfície administrativa; nenhuma nova rota pública foi criada.
 
-Estado: **IMPLEMENTADO / VALIDAÇÃO FOCAL PASSOU / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**.
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal.

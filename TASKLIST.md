@@ -444,8 +444,8 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 
 ## Tarefa `SS-MVP-002-PROGRAMMING-STANDARD-PROFILE-V2-001` — 26/09/2026
 
-- Estado: **IMPLEMENTADA / VALIDAÇÃO FOCAL PASSOU / GATES COMPLETOS E PUBLICAÇÃO REMOTA PENDENTES**; base local `codex/mvp-vertical-programming` em `4ce9a95`.
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICADA REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955`; base local `codex/mvp-vertical-programming` partiu de `4ce9a95`.
 - Implementação: profile owner-side fechado para checkout e managed Programming. Checkout instala `ALLOW_SESSION` para `workspace.read`, `workspace.write` e `git.review`, mantém `workspace.delete` em `ASK` e deixa `git.index`/`git.commit` fora do envelope. Managed acrescenta `git.index` como `ALLOW_SESSION` e mantém `workspace.delete`/`git.commit` em `ASK`.
 - Semântica: `ALLOW_SESSION` é vinculada a owner/client/workspace/session/capability; `ALLOW_WORKSPACE` persistente só vale para `ManagedWorkspaceID` estável e pode superar o `ASK` padrão sem ampliar o grant. O grant continua sendo o teto; envelope não canônico ou modo desconhecido falha fechado.
 - Superfícies owner-side: `workspace request-programming <client-id> <absolute-path>`, `workspace request-worktree <client-id> <source-root> [base-ref]` e resume canônico por client/workspace ID. Formas legadas com scopes permanecem compatíveis; a UI existente já separa OAuth requests, capability approvals e policies.
-- Evidência focal: políticas, grants canônicos, checkout, managed worktree e aplicação do profile após aprovação passaram. Limites: Quick Tunnel, ChatGPT Web, workspace real, CI e aceite externo continuam não validados; os patches protegidos permanecem untracked e intocados.
+- Evidência: suíte Go completa, race proporcional, `go vet ./...`, `go build ./...`, `gofmt`, `git diff --check` e 23 testes Node do painel passaram. Limites: Quick Tunnel, ChatGPT Web, workspace real, CI e aceite externo continuam não validados; os patches protegidos permanecem untracked e intocados.
