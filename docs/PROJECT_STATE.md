@@ -774,12 +774,12 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 ## Checkpoint — `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001` — 26/09/2026
 
-**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** na branch `codex/mvp-vertical-programming`.
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `bc37020` na branch `codex/mvp-vertical-programming`.
 
 **Implementação:** preflight HTTPS do Quick Tunnel tornado composition-aware através de `CheckEmbeddedTransportForScope(ctx, resourceURL, expectedCompositionScope, client)`, preservando `CheckEmbeddedTransport(...)` com escopo de diagnóstico para compatibilidade. Wiring de `cmd/signalspace` deriva o escopo esperado exclusivamente de `plan.expectedCompositionScope` (`signalspace:programming` para Programming; `signalspace:diagnostic` para Diagnostic). O preflight valida Protected-Resource Metadata, Authorization Server Metadata (`scopes_supported`), desafio HTTP WWW-Authenticate e desafio MCP de `connection_diagnostic` coerentes com a composição esperada.
 
-**Evidência:** matriz de validação em `internal/mcp` cobrindo diagnósticos e programming válidos, rejeição cruzada entre eles, incompatibilidade de resource/issuer, escopo ausente, escopo extra permitido e desafios não autenticados; wiring testado em `cmd/signalspace`; suíte completa serial, race proporcional em pacotes afetados, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram limpos.
+**Evidência:** matriz de validação em `internal/mcp` cobrindo diagnósticos e programming válidos, rejeição cruzada entre eles, incompatibilidade de resource/issuer, escopo ausente, escopo extra permitido e desafios não autenticados; wiring testado em `cmd/signalspace`; suíte completa serial, race proporcional em pacotes afetados, `go vet ./...`, `go build ./...`, `gofmt` e `git diff --check` passaram limpos. A repetição externa com Quick Tunnel real confirmou que o preflight HTTPS passou com sucesso e anunciou a URL pública `https://says-helping-days-invitations.trycloudflare.com/mcp`.
 
 **Patches protegidos:** preservados untracked e intocados com os hashes de referência (`02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b` e `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`).
 
-**Próxima ação:** repetição externa controlada com Quick Tunnel novo e fixture descartável, publicando commits por fast-forward normal e gerando handoff com `<continuidade_codex>`.
+**Próxima ação:** handoff ao ChatGPT Web com `<continuidade_codex>` mantendo a sessão ativa na porta 7676/7677 aguardando conexão.
