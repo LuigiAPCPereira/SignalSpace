@@ -83,6 +83,25 @@ func (c *workspaceConsole) Close() error {
 	return c.grants.Close()
 }
 
+// managedWorkspaceStable revalida a identidade criada pelo gerenciador. O
+// resultado não depende de caminho fornecido pela UI nem transforma checkout
+// comum em alvo de política persistente.
+func (c *workspaceConsole) managedWorkspaceStable(id string) bool {
+	if c == nil || c.managed == nil || id == "" {
+		return false
+	}
+	descriptor, err := c.managed.Descriptor(id)
+	if err != nil || descriptor.WorkspaceID != id || descriptor.Mode != workspace.WorkspaceModeWorktree {
+		return false
+	}
+	switch descriptor.State {
+	case workspace.ManagedWorkspaceAvailable, workspace.ManagedWorkspaceActive, workspace.ManagedWorkspaceDirty:
+		return true
+	default:
+		return false
+	}
+}
+
 func localWorkspacePath(raw string) bool {
 	if len(raw) == 0 || len(raw) > 4096 || !utf8.ValidString(raw) || !filepath.IsAbs(raw) || filepath.Clean(raw) != raw || raw == "/" {
 		return false

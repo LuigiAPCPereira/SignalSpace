@@ -9,12 +9,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/admin"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/approval"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/mcp"
+	"github.com/LuigiAPCPereira/SignalSpace/internal/policy"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/tunnel"
 )
 
@@ -97,14 +99,13 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 	var gate *admin.Gate
 	var pairingCode string
 	var capabilityApprovals *approval.Manager
+	var capabilityPolicies *policy.Engine
 	if panel {
 		gate, pairingCode, err = admin.NewGate()
 		if err != nil {
 			return fmt.Errorf("initialize local admin authentication: %w", err)
 		}
 		defer gate.Close()
-		capabilityApprovals = approval.New()
-		defer capabilityApprovals.Close()
 	}
 	quick, err := start(ctx)
 	if err != nil {
@@ -133,12 +134,29 @@ func runQuickWithAdminFactory(ctx context.Context, input io.Reader, output io.Wr
 		return errors.New("composition plan has no supported workspace console")
 	}
 	defer console.Close()
+	if panel {
+		policyStore, storeErr := policy.OpenStore(filepath.Join(stateDir, "policies.json"))
+		if storeErr != nil {
+			return fmt.Errorf("initialize local capability policies: %w", storeErr)
+		}
+		capabilityPolicies, storeErr = policy.NewEngineWithStore(time.Now, policyStore, console.managedWorkspaceStable)
+		if storeErr != nil {
+			return fmt.Errorf("load local capability policies: %w", storeErr)
+		}
+		config := approval.DefaultConfig()
+		config.BeforeDecision = capabilityPolicies.ApplyApproval
+		capabilityApprovals, storeErr = approval.NewWithConfig(config)
+		if storeErr != nil {
+			return fmt.Errorf("initialize capability approvals: %w", storeErr)
+		}
+		defer capabilityApprovals.Close()
+	}
 
 	server := diagnosticServer(handler)
 	serveDone := make(chan error, 2)
 	serverExited := make(chan struct{})
 	if panel {
-		adminServer := adminServerFactory(gate.HandlerWithRequestsAndCapabilityApprovals(authorization, capabilityApprovals))
+		adminServer := adminServerFactory(gate.HandlerWithRequestsAndCapabilityApprovalsAndPolicies(authorization, capabilityApprovals, capabilityPolicies))
 		adminExited := make(chan struct{})
 		go func() {
 			serveDone <- fmt.Errorf("administrative HTTP server: %w", adminServer.Serve(ports.Admin))

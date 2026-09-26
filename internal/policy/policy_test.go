@@ -2,6 +2,8 @@ package policy
 
 import (
 	"errors"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -123,7 +125,82 @@ func TestEngineCreatesApprovalOnlyForRequireApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	decision, empty, reused, err := engine.EvaluateAndRequest(ctx, manager, "Write src/main.go")
-	if err != nil || decision != Deny || reused || empty != (approval.Snapshot{}) {
+	if err != nil || decision != Deny || reused || empty.RequestID != "" {
 		t.Fatalf("deny created approval: decision=%q snapshot=%+v reused=%t err=%v", decision, empty, reused, err)
+	}
+}
+
+func TestEngineAppliesSessionAndWorkspaceApprovalsWithRevalidation(t *testing.T) {
+	managed := map[string]bool{"managed": true}
+	store, err := OpenStore(filepath.Join(t.TempDir(), "policies.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := NewEngineWithStore(time.Now, store, func(id string) bool { return managed[id] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := testContext()
+	ctx.ManagedWorkspaceID = "managed"
+	if err := engine.ApplyApproval(approval.Snapshot{OwnerID: "owner", ClientID: "client", WorkspaceID: "workspace", SessionID: "session", Capability: capability.WorkspaceWrite}, approval.DecisionAllowSession); err != nil {
+		t.Fatal(err)
+	}
+	if got := engine.Evaluate(ctx); got != Allow {
+		t.Fatalf("session policy decision = %q", got)
+	}
+	if err := engine.ApplyApproval(approval.Snapshot{OwnerID: "owner", ClientID: "client", ManagedWorkspaceID: "managed", Capability: capability.WorkspaceWrite}, approval.DecisionAllowWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	items, err := engine.ListPolicies()
+	if err != nil || len(items) != 1 {
+		t.Fatalf("persisted policies = %+v err=%v", items, err)
+	}
+	ctx.WorkspaceID = "managed"
+	if got := engine.Evaluate(ctx); got != Allow {
+		t.Fatalf("workspace policy decision = %q", got)
+	}
+	managed["managed"] = false
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("stale workspace decision = %q, want %q", got, Deny)
+	}
+	managed["managed"] = true
+	if err := engine.RevokePolicy(items[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("revoked workspace decision = %q", got)
+	}
+}
+
+func TestEnginePolicyRevokeAndEvaluateAreSafeConcurrently(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "policies.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := NewEngineWithStore(time.Now, store, func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.ApplyApproval(approval.Snapshot{OwnerID: "owner", ClientID: "client", ManagedWorkspaceID: "managed", Capability: capability.WorkspaceWrite}, approval.DecisionAllowWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	items, err := engine.ListPolicies()
+	if err != nil || len(items) != 1 {
+		t.Fatal(err)
+	}
+	ctx := testContext()
+	ctx.WorkspaceID = "managed"
+	var group sync.WaitGroup
+	group.Add(2)
+	go func() {
+		defer group.Done()
+		for i := 0; i < 20; i++ {
+			_ = engine.Evaluate(ctx)
+		}
+	}()
+	go func() { defer group.Done(); _ = engine.RevokePolicy(items[0].ID) }()
+	group.Wait()
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("post-revoke decision = %q", got)
 	}
 }

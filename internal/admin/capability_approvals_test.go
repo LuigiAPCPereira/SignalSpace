@@ -4,11 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/LuigiAPCPereira/SignalSpace/internal/approval"
 	"github.com/LuigiAPCPereira/SignalSpace/internal/capability"
+	"github.com/LuigiAPCPereira/SignalSpace/internal/policy"
 )
 
 func capabilityApprovalTestInput(summary string, last byte) approval.RequestInput {
@@ -114,5 +116,47 @@ func TestCapabilityApprovalHTTPRejectsCrossOriginMutation(t *testing.T) {
 	handler.ServeHTTP(response, req)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("cross-origin approval mutation status = %d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestCapabilityPolicyHTTPListsAndRevokesWithCSRF(t *testing.T) {
+	gate, code, err := NewGate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gate.Close()
+	store, err := policy.OpenStore(filepath.Join(t.TempDir(), "policies.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := policy.NewEngineWithStore(nil, store, func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := gate.HandlerWithRequestsAndCapabilityApprovalsAndPolicies(nil, nil, engine)
+	bootstrapResponse := adminRequest(handler, http.MethodGet, "/api/admin/v1/session", "", "")
+	bootstrapCookie := responseCookie(t, bootstrapResponse, bootstrapCookie)
+	bootstrapCSRF := adminResponse(t, bootstrapResponse)["csrf_token"].(string)
+	paired := adminRequest(handler, http.MethodPost, "/api/admin/v1/pair", `{"pairing_code":"`+code+`","passphrase":"`+testPassphrase+`"}`, bootstrapCSRF, bootstrapCookie)
+	ownerCookie := responseCookie(t, paired, adminCookie)
+	ownerCSRF := adminResponse(t, paired)["csrf_token"].(string)
+	if err := engine.ApplyApproval(approval.Snapshot{OwnerID: "owner", ClientID: "client", ManagedWorkspaceID: "managed", Capability: capability.WorkspaceWrite}, approval.DecisionAllowWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	list := adminRequest(handler, http.MethodGet, "/api/admin/v1/capability-policies", "", "", ownerCookie)
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"workspace_id":"managed"`) {
+		t.Fatalf("policy list = %d %s", list.Code, list.Body.String())
+	}
+	items, err := engine.ListPolicies()
+	if err != nil || len(items) != 1 {
+		t.Fatalf("policies = %+v err=%v", items, err)
+	}
+	wrong := adminRequest(handler, http.MethodDelete, "/api/admin/v1/capability-policies/"+items[0].ID, "", "wrong", ownerCookie)
+	if wrong.Code != http.StatusForbidden {
+		t.Fatalf("wrong csrf policy revoke = %d", wrong.Code)
+	}
+	revoked := adminRequest(handler, http.MethodDelete, "/api/admin/v1/capability-policies/"+items[0].ID, "", ownerCSRF, ownerCookie)
+	if revoked.Code != http.StatusOK || !strings.Contains(revoked.Body.String(), `"revoked":"`+items[0].ID+`"`) {
+		t.Fatalf("policy revoke = %d %s", revoked.Code, revoked.Body.String())
 	}
 }

@@ -96,8 +96,9 @@ function invalidJSONResponse(status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => { throw new SyntaxError('truncated response'); } };
 }
 
-function harness(plans) {
+function harness(plans, extraIds = []) {
   const documentRef = new FakeDocument();
+  for (const id of extraIds) documentRef.elements.set(id, new FakeElement('div'));
   const calls = [];
   let index = 0;
   const fetcher = async (path, options) => {
@@ -300,6 +301,24 @@ test('nome malicioso entra como texto e não executa HTML', async () => {
   const row = element(h.documentRef, 'requests').children[0];
   assert.equal(row.children[0].children[0].textContent, '<img src=x onerror=alert(1)>');
   assert.equal(row.children[0].children.length, 2);
+});
+
+test('aprovações de capability usam allowed_decisions e reconciliação própria', async () => {
+  const approval = {
+    request_id: 'apr-1', version: 3, status: 'PENDING', capability: 'workspace.write', tool: 'write_text_file',
+    safe_summary: 'Write src/main.go', allowed_decisions: ['ALLOW_SESSION', 'DENY']
+  };
+  const h = harness([
+    jsonResponse(authSession), jsonResponse({ requests: [] }), jsonResponse({ approvals: [approval] }), jsonResponse({ policies: [] }),
+    jsonResponse({ request_id: 'apr-1', status: 'APPROVED', version: 4 }), jsonResponse({ approvals: [] })
+  ], ['capability-approvals-status', 'capability-approval-count', 'capability-approvals', 'capability-policies-status', 'capability-policies']);
+  h.app.start(); await settle();
+  assert.equal(element(h.documentRef, 'capability-approvals').children.length, 1);
+  assert.match(element(h.documentRef, 'capability-approvals').textContent, /Permitir nesta sessão/);
+  await h.app.decideCapability(approval, 'ALLOW_SESSION');
+  assert.equal(h.calls[4].path, '/api/admin/v1/capability-approvals/apr-1/decision');
+  assert.equal(JSON.parse(h.calls[4].options.body).decision, 'ALLOW_SESSION');
+  assert.equal(element(h.documentRef, 'capability-approval-count').textContent, '0');
 });
 
 test('GET 404 e 410 são apresentados distintamente', async () => {

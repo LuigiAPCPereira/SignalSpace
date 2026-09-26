@@ -286,3 +286,33 @@ func TestManagerConcurrentDecisionAndConsumptionAreSingleWinner(t *testing.T) {
 		t.Fatalf("consumption winners = %d, want 1", consumed)
 	}
 }
+
+func TestManagerValidatesAllowedPolicyDecisionsAndRunsHookBeforeTerminalizing(t *testing.T) {
+	config := approvalTestConfig()
+	var hookCalls []Decision
+	config.BeforeDecision = func(snapshot Snapshot, decision Decision) error {
+		hookCalls = append(hookCalls, decision)
+		if snapshot.Status != StatusPending {
+			t.Fatalf("hook received non-pending snapshot: %+v", snapshot)
+		}
+		return nil
+	}
+	manager := newApprovalTestManager(t, config)
+	input := approvalTestInput(approvalFingerprint('e'))
+	input.ManagedWorkspaceID = "managed"
+	input.AllowedDecisions = []Decision{DecisionAllowSession, DecisionAllowWorkspace, DecisionDeny}
+	request, _, err := manager.Create(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(request.AllowedDecisions) != 3 || request.AllowedDecisions[0] != DecisionAllowSession {
+		t.Fatalf("allowed decisions = %v", request.AllowedDecisions)
+	}
+	if _, err := manager.DecideSnapshot(request.RequestID, 1, DecisionAllowOnce); !errors.Is(err, ErrInvalidDecision) {
+		t.Fatalf("disallowed ALLOW_ONCE error = %v", err)
+	}
+	result, err := manager.Decide(request.RequestID, 1, DecisionAllowSession)
+	if err != nil || result.Permit != nil || result.Request.Status != StatusApproved || len(hookCalls) != 1 {
+		t.Fatalf("session decision = %+v hooks=%v err=%v", result, hookCalls, err)
+	}
+}

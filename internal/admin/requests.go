@@ -80,14 +80,20 @@ func requestFailure(w http.ResponseWriter, err error) {
 // HandlerWithRequests mantém as rotas existentes e isola a API de pedidos.
 // O modo Quick ainda precisa conectar este handler ao listener administrativo.
 func (g *Gate) HandlerWithRequests(requests OAuthRequests) http.Handler {
-	return g.HandlerWithRequestsAndCapabilityApprovals(requests, nil)
+	return g.HandlerWithRequestsAndCapabilityApprovalsAndPolicies(requests, nil, nil)
 }
 
 // HandlerWithRequestsAndCapabilityApprovals mantém a fila OAuth e a fila de
 // approvals de capability em domínios e rotas independentes.
 func (g *Gate) HandlerWithRequestsAndCapabilityApprovals(requests OAuthRequests, approvals CapabilityApprovals) http.Handler {
+	return g.HandlerWithRequestsAndCapabilityApprovalsAndPolicies(requests, approvals, nil)
+}
+
+// HandlerWithRequestsAndCapabilityApprovalsAndPolicies compõe as filas sem
+// misturar OAuth, approvals transitórios e políticas persistentes.
+func (g *Gate) HandlerWithRequestsAndCapabilityApprovalsAndPolicies(requests OAuthRequests, approvals CapabilityApprovals, policies CapabilityPolicies) http.Handler {
 	if requests == nil {
-		if approvals == nil {
+		if approvals == nil && policies == nil {
 			return g.Handler()
 		}
 	}
@@ -175,6 +181,9 @@ func (g *Gate) HandlerWithRequestsAndCapabilityApprovals(requests OAuthRequests,
 	}
 	if approvals != nil {
 		registerCapabilityApprovalRoutes(mux, g, approvals)
+	}
+	if policies != nil {
+		registerCapabilityPolicyRoutes(mux, g, policies)
 	}
 	// O handler legado cobre apenas sessões, pareamento e bloqueio.
 	mux.Handle("/", g.Handler())

@@ -62,8 +62,10 @@ const (
 type Decision string
 
 const (
-	DecisionAllowOnce Decision = "ALLOW_ONCE"
-	DecisionDeny      Decision = "DENY"
+	DecisionAllowOnce      Decision = "ALLOW_ONCE"
+	DecisionAllowSession   Decision = "ALLOW_SESSION"
+	DecisionAllowWorkspace Decision = "ALLOW_WORKSPACE"
+	DecisionDeny           Decision = "DENY"
 )
 
 // RequestInput contém a autoridade da operação. SafeSummary é somente
@@ -73,7 +75,9 @@ type RequestInput struct {
 	ClientID             string
 	TokenFamilyID        string
 	WorkspaceID          string
+	ManagedWorkspaceID   string
 	SessionID            string
+	AllowedDecisions     []Decision
 	Capability           capability.Capability
 	Tool                 string
 	OperationFingerprint string
@@ -87,6 +91,7 @@ type Snapshot struct {
 	ClientID             string                `json:"client_id"`
 	TokenFamilyID        string                `json:"token_family_id,omitempty"`
 	WorkspaceID          string                `json:"workspace_id"`
+	ManagedWorkspaceID   string                `json:"managed_workspace_id,omitempty"`
 	SessionID            string                `json:"session_id"`
 	Capability           capability.Capability `json:"capability"`
 	Tool                 string                `json:"tool"`
@@ -97,6 +102,7 @@ type Snapshot struct {
 	CreatedAt            time.Time             `json:"created_at"`
 	ExpiresAt            time.Time             `json:"expires_at"`
 	DecidedAt            *time.Time            `json:"decided_at,omitempty"`
+	AllowedDecisions     []Decision            `json:"allowed_decisions"`
 }
 
 // Permit é uma referência interna de uso único. Ele não contém segredo e não
@@ -144,6 +150,7 @@ type Config struct {
 	MaxPending        int
 	MaxTerminal       int
 	MaxSafeSummary    int
+	BeforeDecision    func(Snapshot, Decision) error
 }
 
 func DefaultConfig() Config {
@@ -158,9 +165,9 @@ func DefaultConfig() Config {
 }
 
 type requestKey struct {
-	OwnerID, ClientID, TokenFamilyID, WorkspaceID, SessionID string
-	Capability                                               capability.Capability
-	Tool, Fingerprint                                        string
+	OwnerID, ClientID, TokenFamilyID, WorkspaceID, ManagedWorkspaceID, SessionID string
+	Capability                                                                   capability.Capability
+	Tool, Fingerprint                                                            string
 }
 
 type requestRecord struct {
@@ -219,6 +226,11 @@ func validateConfig(config Config) error {
 // Create cria ou deduplica um pedido pendente. O segundo retorno indica que o
 // snapshot foi reutilizado, não que uma operação foi autorizada.
 func (m *Manager) Create(input RequestInput) (Snapshot, bool, error) {
+	if len(input.AllowedDecisions) == 0 {
+		input.AllowedDecisions = defaultDecisions()
+	} else {
+		input.AllowedDecisions = append([]Decision(nil), input.AllowedDecisions...)
+	}
 	if err := validateRequestInput(input, m.config.MaxSafeSummary); err != nil {
 		return Snapshot{}, false, err
 	}
@@ -294,7 +306,7 @@ func (m *Manager) GetSnapshot(id string) (Snapshot, error) {
 // Decide realiza a transição CAS lógica e, em ALLOW_ONCE, cria um permit
 // separado. A rota administrativa usa DecideSnapshot para não expor o permit.
 func (m *Manager) Decide(id string, expectedVersion int, decision Decision) (DecisionResult, error) {
-	if expectedVersion < 1 || (decision != DecisionAllowOnce && decision != DecisionDeny) {
+	if expectedVersion < 1 || !validDecision(decision) {
 		return DecisionResult{}, ErrInvalidDecision
 	}
 	m.mu.Lock()
@@ -319,6 +331,14 @@ func (m *Manager) Decide(id string, expectedVersion int, decision Decision) (Dec
 	}
 	if record.status != StatusPending {
 		return DecisionResult{}, ErrAlreadyDecided
+	}
+	if !containsDecision(record.input.AllowedDecisions, decision) {
+		return DecisionResult{}, ErrInvalidDecision
+	}
+	if m.config.BeforeDecision != nil {
+		if err := m.config.BeforeDecision(m.snapshotLocked(record), decision); err != nil {
+			return DecisionResult{}, err
+		}
 	}
 	var permit *Permit
 	if decision == DecisionAllowOnce {
@@ -454,10 +474,12 @@ func (m *Manager) snapshotLocked(record requestRecord) Snapshot {
 	snapshot := Snapshot{
 		RequestID: record.requestID, OwnerID: record.input.OwnerID, ClientID: record.input.ClientID,
 		TokenFamilyID: record.input.TokenFamilyID, WorkspaceID: record.input.WorkspaceID,
-		SessionID: record.input.SessionID, Capability: record.input.Capability, Tool: record.input.Tool,
+		ManagedWorkspaceID: record.input.ManagedWorkspaceID,
+		SessionID:          record.input.SessionID, Capability: record.input.Capability, Tool: record.input.Tool,
 		OperationFingerprint: record.input.OperationFingerprint, SafeSummary: record.input.SafeSummary,
 		Status: record.status, Version: record.version, CreatedAt: record.createdAt.UTC(), ExpiresAt: record.expiresAt.UTC(),
 	}
+	snapshot.AllowedDecisions = append([]Decision(nil), record.input.AllowedDecisions...)
 	if !record.decidedAt.IsZero() {
 		decided := record.decidedAt.UTC()
 		snapshot.DecidedAt = &decided
@@ -467,7 +489,7 @@ func (m *Manager) snapshotLocked(record requestRecord) Snapshot {
 
 func makeRequestKey(input RequestInput) requestKey {
 	return requestKey{OwnerID: input.OwnerID, ClientID: input.ClientID, TokenFamilyID: input.TokenFamilyID,
-		WorkspaceID: input.WorkspaceID, SessionID: input.SessionID, Capability: input.Capability,
+		WorkspaceID: input.WorkspaceID, ManagedWorkspaceID: input.ManagedWorkspaceID, SessionID: input.SessionID, Capability: input.Capability,
 		Tool: input.Tool, Fingerprint: input.OperationFingerprint}
 }
 
@@ -476,6 +498,9 @@ func validateRequestInput(input RequestInput, maxSummary int) error {
 		if !validIdentifier(value, maximumIdentifierLength) {
 			return ErrInvalidInput
 		}
+	}
+	if input.ManagedWorkspaceID != "" && !validIdentifier(input.ManagedWorkspaceID, maximumIdentifierLength) {
+		return ErrInvalidInput
 	}
 	if input.TokenFamilyID != "" && !validIdentifier(input.TokenFamilyID, maximumIdentifierLength) {
 		return ErrInvalidInput
@@ -492,7 +517,35 @@ func validateRequestInput(input RequestInput, maxSummary int) error {
 	if !validSummary(input.SafeSummary, maxSummary) {
 		return ErrInvalidSummary
 	}
+	if len(input.AllowedDecisions) == 0 {
+		input.AllowedDecisions = defaultDecisions()
+	}
+	seen := make(map[Decision]struct{}, len(input.AllowedDecisions))
+	for _, decision := range input.AllowedDecisions {
+		if !validDecision(decision) {
+			return ErrInvalidDecision
+		}
+		if _, ok := seen[decision]; ok {
+			return ErrInvalidDecision
+		}
+		seen[decision] = struct{}{}
+	}
 	return nil
+}
+
+func defaultDecisions() []Decision { return []Decision{DecisionAllowOnce, DecisionDeny} }
+
+func validDecision(decision Decision) bool {
+	return decision == DecisionAllowOnce || decision == DecisionAllowSession || decision == DecisionAllowWorkspace || decision == DecisionDeny
+}
+
+func containsDecision(decisions []Decision, target Decision) bool {
+	for _, decision := range decisions {
+		if decision == target {
+			return true
+		}
+	}
+	return false
 }
 
 func validateConsumeContext(context ConsumeContext) error {

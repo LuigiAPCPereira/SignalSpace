@@ -10,6 +10,8 @@
       unavailable: byId('unavailable-section'), authenticated: byId('authenticated-section'),
       pairForm: byId('pair-form'), unlockForm: byId('unlock-form'),
       requestsStatus: byId('requests-status'), requestCount: byId('request-count'), requests: byId('requests'),
+      capabilityStatus: byId('capability-approvals-status'), capabilityCount: byId('capability-approval-count'), capabilityApprovals: byId('capability-approvals'),
+      policiesStatus: byId('capability-policies-status'), policies: byId('capability-policies'),
       detail: byId('request-detail'), detailTitle: byId('detail-title'), detailStatus: byId('detail-status'),
       detailMessage: byId('detail-message'), detailClientName: byId('detail-client-name'), detailClientNote: byId('detail-client-note'), detailClientId: byId('detail-client-id'),
       detailRedirect: byId('detail-redirect'), detailScope: byId('detail-scope'), detailGrant: byId('detail-grant'),
@@ -21,7 +23,7 @@
     };
     const state = {
       csrf: '', session: null, generation: 0, selected: null, detail: null,
-      decisionInFlight: new Set(), blockedDecisions: new Set(), requestController: null
+      decisionInFlight: new Set(), blockedDecisions: new Set(), capabilityDecisionInFlight: new Set(), blockedCapabilityDecisions: new Set(), requestController: null
     };
 
     function abortRequestLoad() {
@@ -34,6 +36,8 @@
       abortRequestLoad();
       state.decisionInFlight.clear();
       state.blockedDecisions.clear();
+      state.capabilityDecisionInFlight.clear();
+      state.blockedCapabilityDecisions.clear();
       return state.generation;
     }
 
@@ -98,6 +102,11 @@
 
     function clearPrivilegedData() {
       clearRequestDom('Nenhuma solicitação disponível enquanto a sessão não estiver autenticada.');
+      if (elements.capabilityApprovals) elements.capabilityApprovals.replaceChildren();
+      if (elements.capabilityCount) elements.capabilityCount.textContent = 'n/d';
+      if (elements.capabilityStatus) setMessage(elements.capabilityStatus, 'Nenhuma aprovação disponível enquanto a sessão não estiver autenticada.');
+      if (elements.policies) elements.policies.replaceChildren();
+      if (elements.policiesStatus) setMessage(elements.policiesStatus, 'Nenhuma política disponível enquanto a sessão não estiver autenticada.');
     }
 
     function renderSession(session) {
@@ -141,6 +150,8 @@
         WORKSPACE_GRANT_REQUIRED: 'A concessão de workspace necessária não está ativa; ela é um fluxo separado.',
         RATE_LIMITED: 'O servidor limitou novas tentativas temporariamente (429).',
         TEMPORARILY_UNAVAILABLE: 'O serviço está temporariamente indisponível (503).',
+        POLICY_NOT_FOUND: 'Política não encontrada.',
+        POLICY_STORE_UNAVAILABLE: 'O store de políticas está indisponível; nenhuma autorização persistente foi aplicada.',
         INVALID_REQUEST: 'A requisição foi rejeitada pelo servidor.',
         INVALID_JSON: 'O servidor enviou uma resposta JSON inválida.',
         NETWORK: 'A conexão com o serviço local foi perdida.'
@@ -177,7 +188,7 @@
         const session = await request('/api/admin/v1/session');
         if (probeGeneration !== state.generation) return;
         renderSession(session);
-        if (session?.state === 'AUTHENTICATED') await loadRequests();
+        if (session?.state === 'AUTHENTICATED') await loadAuthenticatedData();
       } catch (error) {
         if (probeGeneration !== state.generation) return;
         const session = error.body?.session;
@@ -243,6 +254,129 @@
         if (error.status === 401) await reconcileSessionAfterAuthError(error);
         else showError(errorMessage(error));
       }
+    }
+
+    function decisionLabel(decision) {
+      return { ALLOW_ONCE: 'Permitir uma vez', ALLOW_SESSION: 'Permitir nesta sessão', ALLOW_WORKSPACE: 'Permitir neste workspace', DENY: 'Recusar' }[decision] || decision;
+    }
+
+    function renderCapabilityRow(item) {
+      const row = documentRef.createElement('li');
+      row.className = 'request-item';
+      row.dataset.capabilityApprovalId = item.request_id;
+      const title = documentRef.createElement('strong');
+      title.textContent = item.tool || 'Capability não identificada';
+      const meta = documentRef.createElement('span');
+      meta.textContent = `${item.status || 'DESCONHECIDO'} · ${item.capability || 'capability não informada'} · versão ${item.version}`;
+      const summary = documentRef.createElement('p');
+      summary.textContent = item.safe_summary || 'Resumo não informado.';
+      row.append(title, meta, summary);
+      if (item.status === 'PENDING') {
+        const actions = documentRef.createElement('div');
+        actions.className = 'request-actions';
+        const allowed = Array.isArray(item.allowed_decisions) ? item.allowed_decisions : ['ALLOW_ONCE', 'DENY'];
+        for (const decision of allowed) {
+          const button = documentRef.createElement('button');
+          button.type = 'button'; button.className = decision === 'DENY' ? 'button' : 'button primary';
+          button.textContent = decisionLabel(decision);
+          button.disabled = state.capabilityDecisionInFlight.has(item.request_id) || state.blockedCapabilityDecisions.has(item.request_id);
+          button.addEventListener('click', () => void decideCapability(item, decision));
+          actions.append(button);
+        }
+        row.append(actions);
+      }
+      return row;
+    }
+
+    async function loadCapabilityApprovals() {
+      if (!elements.capabilityApprovals || state.session?.state !== 'AUTHENTICATED') return;
+      const generation = state.generation;
+      setMessage(elements.capabilityStatus, 'Consultando aprovações de programação…');
+      try {
+        const body = await request('/api/admin/v1/capability-approvals');
+        if (generation !== state.generation || state.session?.state !== 'AUTHENTICATED') return;
+        const items = Array.isArray(body.approvals) ? body.approvals : [];
+        elements.capabilityApprovals.replaceChildren(...items.map(renderCapabilityRow));
+        elements.capabilityCount.textContent = String(items.filter((item) => item.status === 'PENDING').length);
+        setMessage(elements.capabilityStatus, items.length ? '' : 'Nenhuma aprovação de programação pendente.');
+      } catch (error) {
+        if (generation !== state.generation) return;
+        elements.capabilityApprovals.replaceChildren(); elements.capabilityCount.textContent = 'n/d';
+        setMessage(elements.capabilityStatus, errorMessage(error), 'error');
+        if (error.status === 401) await reconcileSessionAfterAuthError(error); else showError(errorMessage(error));
+      }
+    }
+
+    async function reconcileCapability(id, cause) {
+      const generation = state.generation;
+      state.blockedCapabilityDecisions.add(id);
+      try {
+        const item = await request(`/api/admin/v1/capability-approvals/${encodeURIComponent(id)}`);
+        if (generation !== state.generation) return;
+        setMessage(elements.capabilityStatus, `Resultado não confirmado (${errorMessage(cause)}). Estado atual: ${item.status}.`, 'warning');
+        await loadCapabilityApprovals();
+      } catch (error) {
+        if (generation !== state.generation) return;
+        setMessage(elements.capabilityStatus, `Resultado desconhecido: ${errorMessage(error)}.`, 'error');
+        if (error.status === 401) await reconcileSessionAfterAuthError(error);
+      }
+    }
+
+    async function decideCapability(item, decision) {
+      if (state.session?.state !== 'AUTHENTICATED' || state.capabilityDecisionInFlight.has(item.request_id) || state.blockedCapabilityDecisions.has(item.request_id)) return;
+      state.capabilityDecisionInFlight.add(item.request_id);
+      try {
+        await request(`/api/admin/v1/capability-approvals/${encodeURIComponent(item.request_id)}/decision`, {
+          method: 'POST', body: JSON.stringify({ decision, expected_version: item.version })
+        });
+        await loadCapabilityApprovals();
+      } catch (error) {
+        if (error.status === 401) await reconcileSessionAfterAuthError(error); else await reconcileCapability(item.request_id, error);
+      } finally {
+        state.capabilityDecisionInFlight.delete(item.request_id);
+      }
+    }
+
+    function renderPolicyRow(item) {
+      const row = documentRef.createElement('li');
+      row.className = 'request-item';
+      const text = documentRef.createElement('span');
+      text.textContent = `${item.capability} · cliente ${item.client_id} · workspace ${item.workspace_id}`;
+      const revoke = documentRef.createElement('button');
+      revoke.type = 'button'; revoke.className = 'button danger-outline'; revoke.textContent = 'Revogar';
+      revoke.addEventListener('click', () => void revokePolicy(item.id, revoke));
+      row.append(text, revoke);
+      return row;
+    }
+
+    async function loadPolicies() {
+      if (!elements.policies || state.session?.state !== 'AUTHENTICATED') return;
+      const generation = state.generation;
+      try {
+        const body = await request('/api/admin/v1/capability-policies');
+        if (generation !== state.generation || state.session?.state !== 'AUTHENTICATED') return;
+        const items = Array.isArray(body.policies) ? body.policies : [];
+        elements.policies.replaceChildren(...items.map(renderPolicyRow));
+        setMessage(elements.policiesStatus, items.length ? '' : 'Nenhuma política de workspace persistida.');
+      } catch (error) {
+        elements.policies.replaceChildren();
+        setMessage(elements.policiesStatus, errorMessage(error), 'error');
+        if (error.status === 401) await reconcileSessionAfterAuthError(error); else showError(errorMessage(error));
+      }
+    }
+
+    async function revokePolicy(id, button) {
+      if (!id || button.disabled) return;
+      button.disabled = true;
+      try { await request(`/api/admin/v1/capability-policies/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadPolicies(); }
+      catch (error) { button.disabled = false; if (error.status === 401) await reconcileSessionAfterAuthError(error); else showError(errorMessage(error)); }
+    }
+
+    async function loadAuthenticatedData() {
+      const tasks = [loadRequests()];
+      if (elements.capabilityApprovals) tasks.push(loadCapabilityApprovals());
+      if (elements.policies) tasks.push(loadPolicies());
+      await Promise.all(tasks);
     }
 
     function renderDetail(item, message = '') {
@@ -360,7 +494,7 @@
         const session = await request(path, { method: 'POST', body: JSON.stringify(data) }, csrf);
         if (generation !== state.generation) return;
         renderSession(session);
-        if (session?.state === 'AUTHENTICATED') await loadRequests();
+        if (session?.state === 'AUTHENTICATED') await loadAuthenticatedData();
       } catch (error) {
         if (generation !== state.generation) return;
         if (inconclusive(error)) {
@@ -387,7 +521,7 @@
       try {
         const session = await request('/api/admin/v1/session/refresh', { method: 'POST', body: '{}' }, csrf);
         if (generation !== state.generation) return;
-        renderSession(session); await loadRequests();
+        renderSession(session); await loadAuthenticatedData();
       } catch (error) {
         if (generation !== state.generation) return;
         if (error.status === 401) await reconcileSessionAfterAuthError(error); else showError(errorMessage(error));
@@ -428,7 +562,7 @@
       void loadSession();
     }
 
-    return { start, loadSession, loadRequests, loadRequestDetail, decide, renderSession, state };
+    return { start, loadSession, loadRequests, loadCapabilityApprovals, loadPolicies, loadRequestDetail, decide, decideCapability, revokePolicy, renderSession, state };
   };
 
   if (typeof module === 'object' && module.exports) {

@@ -35,9 +35,10 @@ const (
 )
 
 var (
-	ErrInvalidPolicyContext = errors.New("invalid policy context")
-	ErrInvalidPolicyRule    = errors.New("invalid policy rule")
-	ErrUnsupportedEffect    = errors.New("unsupported policy effect")
+	ErrInvalidPolicyContext        = errors.New("invalid policy context")
+	ErrInvalidPolicyRule           = errors.New("invalid policy rule")
+	ErrUnsupportedEffect           = errors.New("unsupported policy effect")
+	ErrManagedWorkspaceUnavailable = errors.New("managed workspace is unavailable")
 )
 
 // Context contém os vínculos que uma decisão precisa revalidar. Campos
@@ -47,6 +48,7 @@ type Context struct {
 	ClientID            string
 	TokenFamilyID       string
 	WorkspaceID         string
+	ManagedWorkspaceID  string
 	SessionID           string
 	Capability          capability.Capability
 	Tool                string
@@ -72,9 +74,11 @@ type Rule struct {
 }
 
 type Engine struct {
-	mu    sync.RWMutex
-	now   func() time.Time
-	rules []Rule
+	mu              sync.RWMutex
+	now             func() time.Time
+	rules           []Rule
+	store           *Store
+	workspaceStable func(string) bool
 }
 
 func NewEngine() *Engine {
@@ -86,6 +90,33 @@ func NewEngineWithClock(now func() time.Time) *Engine {
 		now = time.Now
 	}
 	return &Engine{now: now}
+}
+
+// NewEngineWithStore carrega somente políticas ALLOW_WORKSPACE válidas. Um
+// store inválido impede a composição: continuar com regras parcialmente
+// carregadas transformaria corrupção em autorização implícita.
+func NewEngineWithStore(now func() time.Time, store *Store, workspaceStable func(string) bool) (*Engine, error) {
+	if store == nil || workspaceStable == nil {
+		return nil, ErrInvalidPolicyRule
+	}
+	if now == nil {
+		now = time.Now
+	}
+	items, err := store.List()
+	if err != nil {
+		return nil, err
+	}
+	engine := &Engine{now: now, store: store, workspaceStable: workspaceStable}
+	for _, item := range items {
+		if !workspaceStable(item.WorkspaceID) {
+			continue
+		}
+		engine.rules = append(engine.rules, Rule{
+			OwnerID: item.OwnerID, ClientID: item.ClientID, WorkspaceID: item.WorkspaceID,
+			Capability: item.Capability, Effect: EffectAllowWorkspace,
+		})
+	}
+	return engine, nil
 }
 
 // SetRule substitui uma regra com os mesmos seletores e capability. A regra
@@ -155,6 +186,9 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 		if !matches(rule, ctx) {
 			continue
 		}
+		if rule.Effect == EffectAllowWorkspace && e.workspaceStable != nil && !e.workspaceStable(rule.WorkspaceID) {
+			continue
+		}
 		specificity := specificity(rule)
 		if specificity > bestSpecificity ||
 			(specificity == bestSpecificity && bestIndex >= 0 && rule.Effect == EffectDeny && e.rules[bestIndex].Effect != EffectDeny) ||
@@ -184,6 +218,81 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 	return Deny
 }
 
+// ApplyApproval traduz uma decisão administrativa em uma política local. O
+// chamador deve manter o lifecycle da fila; este método não executa operação.
+func (e *Engine) ApplyApproval(snapshot approval.Snapshot, decision approval.Decision) error {
+	if e == nil {
+		return ErrInvalidPolicyRule
+	}
+	switch decision {
+	case approval.DecisionDeny, approval.DecisionAllowOnce:
+		return nil
+	case approval.DecisionAllowSession:
+		return e.SetRule(Rule{OwnerID: snapshot.OwnerID, ClientID: snapshot.ClientID, WorkspaceID: snapshot.WorkspaceID, SessionID: snapshot.SessionID, Capability: snapshot.Capability, Effect: EffectAllowSession})
+	case approval.DecisionAllowWorkspace:
+		if e.store == nil || snapshot.ManagedWorkspaceID == "" || e.workspaceStable == nil || !e.workspaceStable(snapshot.ManagedWorkspaceID) {
+			return ErrManagedWorkspaceUnavailable
+		}
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		item := StoredPolicy{OwnerID: snapshot.OwnerID, ClientID: snapshot.ClientID, WorkspaceID: snapshot.ManagedWorkspaceID, Capability: snapshot.Capability, Effect: EffectAllowWorkspace}
+		stored, err := e.store.Upsert(item)
+		if err != nil {
+			return err
+		}
+		rule := Rule{OwnerID: stored.OwnerID, ClientID: stored.ClientID, WorkspaceID: stored.WorkspaceID, Capability: stored.Capability, Effect: EffectAllowWorkspace}
+		for index, existing := range e.rules {
+			if sameSelectors(existing, rule) {
+				e.rules[index] = rule
+				return nil
+			}
+		}
+		e.rules = append(e.rules, rule)
+		return nil
+	default:
+		return ErrUnsupportedEffect
+	}
+}
+
+func (e *Engine) ListPolicies() ([]StoredPolicy, error) {
+	if e == nil || e.store == nil {
+		return nil, ErrStoreUnavailable
+	}
+	return e.store.List()
+}
+
+func (e *Engine) RevokePolicy(id string) error {
+	if e == nil || e.store == nil {
+		return ErrStoreUnavailable
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	items, err := e.store.List()
+	if err != nil {
+		return err
+	}
+	var target StoredPolicy
+	for _, item := range items {
+		if item.ID == id {
+			target = item
+			break
+		}
+	}
+	if target.ID == "" {
+		return ErrPolicyNotFound
+	}
+	if err := e.store.Delete(id); err != nil {
+		return err
+	}
+	for index := range e.rules {
+		if e.rules[index].OwnerID == target.OwnerID && e.rules[index].ClientID == target.ClientID && e.rules[index].WorkspaceID == target.WorkspaceID && e.rules[index].Capability == target.Capability && e.rules[index].Effect == EffectAllowWorkspace {
+			e.rules = append(e.rules[:index], e.rules[index+1:]...)
+			break
+		}
+	}
+	return nil
+}
+
 // ApprovalRequester é a única ponte interna deste gate. Ela não é utilizada
 // pelo handler MCP público e não executa a operação original.
 type ApprovalRequester interface {
@@ -201,10 +310,14 @@ func (e *Engine) EvaluateAndRequest(ctx Context, requester ApprovalRequester, sa
 	if requester == nil {
 		return decision, approval.Snapshot{}, false, errors.New("approval requester unavailable")
 	}
+	allowed := []approval.Decision{approval.DecisionAllowOnce, approval.DecisionAllowSession, approval.DecisionDeny}
+	if ctx.ManagedWorkspaceID != "" && e.workspaceStable != nil && e.workspaceStable(ctx.ManagedWorkspaceID) {
+		allowed = append(allowed, approval.DecisionAllowWorkspace)
+	}
 	snapshot, reused, err := requester.Create(approval.RequestInput{
 		OwnerID: ctx.OwnerID, ClientID: ctx.ClientID, TokenFamilyID: ctx.TokenFamilyID,
-		WorkspaceID: ctx.WorkspaceID, SessionID: ctx.SessionID, Capability: ctx.Capability,
-		Tool: ctx.Tool, OperationFingerprint: ctx.Fingerprint, SafeSummary: safeSummary,
+		WorkspaceID: ctx.WorkspaceID, ManagedWorkspaceID: ctx.ManagedWorkspaceID, SessionID: ctx.SessionID, Capability: ctx.Capability,
+		Tool: ctx.Tool, OperationFingerprint: ctx.Fingerprint, SafeSummary: safeSummary, AllowedDecisions: allowed,
 	})
 	if err != nil {
 		return decision, approval.Snapshot{}, false, err

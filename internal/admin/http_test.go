@@ -11,7 +11,7 @@ import (
 func adminRequest(handler http.Handler, method, path, body, csrf string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	r.Host = "localhost:7677"
-	if method == http.MethodPost {
+	if method == http.MethodPost || method == http.MethodDelete {
 		r.Header.Set("Origin", AdminOrigin)
 		r.Header.Set("Content-Type", "application/json")
 	}

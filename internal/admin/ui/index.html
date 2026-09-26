@@ -109,6 +109,31 @@
               </div>
               <p id="decision-note" class="field-help">Uma decisão confirmada pelo servidor não implica emissão de token, conexão MCP ou concessão automática de workspace.</p>
             </section>
+
+            <section class="request-detail" aria-labelledby="capability-approvals-title">
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Programação local</p>
+                  <h2 id="capability-approvals-title">Aprovações de capability</h2>
+                </div>
+                <span id="capability-approval-count" class="count-badge">n/d</span>
+              </div>
+              <p class="section-intro">Estas decisões controlam apenas a política local; não executam a operação e não concedem grant OAuth.</p>
+              <p id="capability-approvals-status" class="message" role="status" aria-live="polite">Consultando aprovações…</p>
+              <ol id="capability-approvals" class="request-list" aria-label="Aprovações de capability"></ol>
+            </section>
+
+            <section class="request-detail" aria-labelledby="capability-policies-title">
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Permissões persistentes</p>
+                  <h2 id="capability-policies-title">Políticas de workspace</h2>
+                </div>
+              </div>
+              <p class="section-intro">Somente managed worktrees possuem identidade estável para este tipo de política. Revogar remove a regra persistida.</p>
+              <p id="capability-policies-status" class="message" role="status" aria-live="polite">Consultando políticas…</p>
+              <ol id="capability-policies" class="request-list" aria-label="Políticas de workspace"></ol>
+            </section>
           </section>
         </section>
       </main>
