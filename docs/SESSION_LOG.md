@@ -2,6 +2,14 @@
 
 Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), Git/CI. Comportamento: [produto](PRODUCT.md), [workspace](WORKSPACE_SECURITY.md), [contrato admin](LOCAL_ADMIN_AUTHORIZATION.md). Autoridade de IDs/estado: [TASKLIST](../TASKLIST.md), checkpoint derivado [PROJECT_STATE](PROJECT_STATE.md). Não inventar eventos.
 
+## 25/09/2026 — OAuth tool step-up — `SS-MVP-002-OAUTH-TOOL-STEPUP-001`
+
+- A ref foi reconciliada na branch `codex/mvp-vertical-programming`: HEAD/remoto live `de8ff7e3d253f4dedbfbba1135bdf53e682cd335` antes da missão, patches protegidos recalculados e runtime Quick Tunnel anterior encerrado ordenadamente.
+- O defeito confirmado era a mistura entre discovery e autorização: `internal/mcp/oauth.go` marcava a tool como anunciável somente quando o bearer já tinha o scope específico, e `server.go` filtrava `tools/list` por essa marca. `c2dcdbd` separa `discoverable` de `verify()`, ativa discovery por composição somente em `NewOAuthProgrammingHandler` e mantém autorização/revalidação por chamada.
+- Todos os descriptors protegidos agora declaram `signalspace:diagnostic` mais o scope específico; os challenges usam a mesma ordem cumulativa. O teste público programming cobre lista exata, ausência de test.run/shell/branch/remote/lifecycle, initialize, security schemes, insufficient scope com zero efeito em bytes/índice/HEAD e regressões grant/revoke.
+- Passaram suíte Go serial, race de `internal/mcp`, `internal/auth` e `cmd/signalspace`, `go vet ./...`, `go build ./...`, `node --test internal/auth/consent_js_test.mjs`, `gofmt` e `git diff --check`. CI, túnel/OAuth Web do novo HEAD, workspace real, merge e deploy não foram usados.
+- Estado: gate **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**; `SS-MVP-002` **PARCIAL/em andamento**; aceite externo anterior permanece parcial e precisa de nova URL/OAuth após publicação. Próxima ação: push fast-forward normal, verificar remote live e entregar handoff ao ChatGPT Web com `<continuidade_codex>`.
+
 ## 25/09/2026 — aceite operacional externo programming — SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001
 
 - A ref foi revalidada em `codex/mvp-vertical-programming`; a correção publicada `a0fada0141c314037ec09037b4fb7214d3f3bded` alinhou as mensagens do entrypoint programming e foi confirmada no remoto live. Os dois patches protegidos permaneceram não rastreados, não aplicados e intocados.

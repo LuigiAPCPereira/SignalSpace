@@ -2,11 +2,23 @@
 
 **Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é a reconciliação publicada abaixo. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
-## Checkpoint vigente — `SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001` — 25/09/2026
+## Checkpoint vigente — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
+
+**Estado:** `IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE`. A causa raiz foi corrigida em `c2dcdbd`: `tools/list` da composição `programming` não depende mais do scope específico do bearer; a execução continua fechada por `verify()` e pelo grant local. `SS-MVP-002` permanece **PARCIAL/em andamento** e o aceite externo permanece pendente.
+
+**Ref:** branch `codex/mvp-vertical-programming`; base local/remota reconciliada em `de8ff7e3d253f4dedbfbba1135bdf53e682cd335` antes da edição; commit local `c2dcdbd`. Não houve merge, rebase ou force-push.
+
+**Contrato validado:** bearer diagnostic-only descobre a superfície Programming completa, com os descriptors cumulativos `diagnostic + capability`; READ, WRITE, Git review, Git index e Git commit retornam challenge MCP `insufficient_scope` sem executar backend quando falta o scope. `diagnostic` e `read` preservam seus limites e `test.run` continua ausente do entrypoint.
+
+**Evidência:** suíte Go serial, race de `internal/mcp`, `internal/auth` e `cmd/signalspace`, vet, build, Node consent, gofmt e diff-check passaram. Patches protegidos preservados com SHA-256 registrados na TASKLIST. CI, Quick Tunnel/OAuth Web no HEAD novo, workspace real, merge e deploy permanecem desconhecidos/não validados.
+
+**Próxima ação vinculada:** publicar por fast-forward normal, verificar `git ls-remote` no SHA final e então recriar Quick Tunnel/OAuth descartável para aceite externo; parar no handoff Web se o cliente exigir nova aprovação.
+
+## Checkpoint histórico — `SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001` — 25/09/2026
 
 **Estado:** `SS-MVP-002` permanece **PARCIAL** e o aceite operacional externo está **BLOQUEADO** antes da emissão de token programming. O aplicativo MCP foi criado e a aprovação local do primeiro pedido OAuth foi registrada, mas a página ficou em `Concluindo autorização…`; `workspace clients` confirmou que não havia cliente com token emitido. Não há evidência de grant, sessão MCP ou chamada externa de ferramenta.
 
-**Ref/publicação:** branch `codex/mvp-vertical-programming`; correção publicada em `a0fada0141c314037ec09037b4fb7214d3f3bded`, com remoto live confirmado diretamente por `git ls-remote`. A documentação foi reconciliada sem alterar código, contrato ou patches protegidos.
+**Ref/publicação:** branch `codex/mvp-vertical-programming`; este é o registro histórico anterior ao step-up, cuja correção publicada era `a0fada0141c314037ec09037b4fb7214d3f3bded`. O HEAD desta missão é `c2dcdbd`, ainda pendente de publicação; a documentação foi reaberta para refletir essa divergência.
 
 **Limites:** Quick Tunnel HTTPS e cadastro do aplicativo foram observados; READ/WRITE/filesystem, Git review/index/commit, managed worktree, revogação e negação não foram validados no Web. A conta observada era Plus e o aplicativo não ficou disponível na composição da conversa; a orientação exibida apontou suporte beta de escrita/modificação MCP em planos superiores.
 
@@ -16,7 +28,7 @@
 
 **Ref observada:** `codex/mvp-vertical-programming`; remoto live final `0420c9ae14768e099fbb51452ee71e7dc5af7916`. A cadeia publicada real é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`. O commit `ccc4d17a9ed8b8c744d432edd9da3db5687ac853` é exclusivamente documental e registra o gate já autorizado.
 
-**Estado:** `SS-MVP-002-GIT-COMMIT-GATE-001` está **APROVADO / IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE**. `SS-MVP-002-GIT-COMMIT-PUBLISH-001` está **CONCLUÍDO COM DESVIO PROCEDURAL DE PRÉ-CHECAGEM**: o push foi fast-forward normal, mas a checagem de exatamente três commits revelou posteriormente o commit documental intermediário. Não há motivo técnico para reescrever histórico válido. `SS-MVP-002` permanece **PARCIAL/em andamento** quanto ao aceite operacional externo; `SS-BE-007` permanece **PARCIAL**; CI permanece **DESCONHECIDA**.
+**Estado histórico:** `SS-MVP-002-GIT-COMMIT-GATE-001` está **APROVADO / IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE**. `SS-MVP-002-GIT-COMMIT-PUBLISH-001` está **CONCLUÍDO COM DESVIO PROCEDURAL DE PRÉ-CHECAGEM**: o push foi fast-forward normal, mas a checagem de exatamente três commits revelou posteriormente o commit documental intermediário. Não há motivo técnico para reescrever histórico válido. O checkpoint vigente acima substitui este estado para a missão de step-up.
 
 **Preservação e limites:** os dois patches protegidos permanecem não rastreados, não aplicados e intocados; PR #1, `feat/m1-local-mcp-diagnostic` e `feat/frontend-oauth-consent` não foram alvo. Não houve force-push, merge, rebase, CI ou deploy. HTTPS, túnel, navegador, grant ChatGPT Web, workspace real e aceite operacional externo continuam não validados.
 

@@ -1,5 +1,9 @@
 # SignalSpace — roadmap recuperável dos marcos
 
+## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
+
+Esta fatia corrige a interoperabilidade local da composição `programming`: discovery deixa de depender do scope específico do bearer e os descriptors/challenges passam a representar `diagnostic + capability`. O commit `c2dcdbd` está **IMPLEMENTADO / VALIDADO LOCALMENTE**; a base/remoto observado antes da missão foi `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`, portanto publicação e aceite externo continuam pendentes. Não há nova tool, scope ou capability.
+
 **Status:** plano de execução documental da frente de backend do [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), não compromisso de datas ou autorização de ampliar o MVP. Fontes do escopo: [produto](PRODUCT.md), [MVP](MVP.md), [contrato administrativo](LOCAL_ADMIN_AUTHORIZATION.md) e pedido do proprietário para continuar o backend mantendo o PR draft. Detalhes executáveis/estado por ID: [`../TASKLIST.md`](../TASKLIST.md). Revalidar branch e HEAD na retomada.
 
 ## Aceite operacional externo — `SS-MVP-002-EXTERNAL-PROGRAMMING-ACCEPTANCE-001` — 25/09/2026
@@ -8,7 +12,7 @@ O aceite autorizado usou somente fixture descartável e Quick Tunnel HTTPS real.
 
 Resultado: **BLOQUEADO / PARCIAL**. Nenhuma tool programming externa foi chamada, nenhum grant ou managed worktree externo foi criado e não se validou revogação/negação. O processo, túnel e fixture foram limpos. O próximo passo depende de ambiente Web com suporte efetivo a escrita/modificação MCP; a URL Quick Tunnel deverá ser recriada na retomada.
 
-**Estado reconciliado nesta retomada (25/09/2026):** a correção posterior ao Git commit v1 está publicada no remoto live `a0fada0141c314037ec09037b4fb7214d3f3bded` na branch `codex/mvp-vertical-programming`. A cadeia anterior é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`; `ccc4d17` é somente documental. As publicações foram fast-forward normais, sem merge, rebase ou force-push. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell, branch ou Git remoto como capability.
+**Estado histórico anterior ao step-up:** a correção posterior ao Git commit v1 estava registrada no remoto live `a0fada0141c314037ec09037b4fb7214d3f3bded`. Esta missão reabriu a ref em `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`, produziu `c2dcdbd` localmente e aguarda publicação fast-forward normal. Isso não é aceite operacional externo/HTTPS/ChatGPT Web e não promove `test.run`, shell, branch ou Git remoto como capability.
 
 | Marco | Resultado verificável | Dependências | Tarefas | Estado observado | Evidência/limitação |
 | --- | --- | --- | --- | --- | --- |

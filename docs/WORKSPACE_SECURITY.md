@@ -1,6 +1,12 @@
 # Fronteira de workspace — leitura e filesystem tipado opt-in
 
-**Estado de validação (25/09/2026):** `programming` é a composição opt-in publicada para onze tools de workspace tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`, revisão Git, Git index e Git commit. O slice estrutural foi publicado em `3628d2f`, o Git commit v1 em `0420c9a` e a correção corrente em `a0fada0`; o aceite externo desta composição foi tentado em workspace descartável e ficou bloqueado antes do token. Isso ainda não é aceite de produção nem valida workspace real do proprietário, CI, merge ou deploy. `diagnostic` e `read` continuam sem write ou Git mutável.
+## Discovery e autorização por ferramenta — 25/09/2026
+
+Na composição opt-in `programming`, a lista de tools é estável por composição: bearer com somente `signalspace:diagnostic` descobre as capabilities já configuradas, mas não as autoriza. Cada chamada revalida bearer, issuer/audience, owner, client, scope específico, grant/session e managed worktree quando exigida. A ausência de scope produz `insufficient_scope` e challenge cumulativo; não há leitura, escrita, Git ou alteração de índice antes dessa verificação.
+
+O estado está **IMPLEMENTADO E VALIDADO LOCALMENTE** no commit `c2dcdbd`; o aceite Web no HEAD corrigido e a publicação remota desta correção permanecem pendentes. Diagnostic/read não foram ampliados, não há scope/tool novo e os patches protegidos permanecem preservados.
+
+**Estado de validação (25/09/2026):** `programming` é a composição opt-in para as tools de workspace tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`, revisão Git, Git index e Git commit. O slice estrutural e o Git commit v1 permanecem publicados em seus SHAs históricos; o step-up corrente está em `c2dcdbd` e aguarda publicação. O aceite externo desta composição foi tentado no HEAD anterior e ficou bloqueado antes do token; isso ainda não é aceite de produção nem valida workspace real, CI, merge ou deploy. `diagnostic` e `read` continuam sem write ou Git mutável.
 
 ## Aceite operacional externo programming — 25/09/2026
 

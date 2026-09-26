@@ -1,6 +1,10 @@
 # Quick Tunnel: conexão experimental guiada
 
-**Estado vigente (25/09/2026):** `connect quick programming` é uma composição opt-in publicada que pode anunciar READ, WRITE, Git review, Git index e Git commit somente após OAuth e aprovação owner-side explícita de uma managed worktree descartável. `connect quick` permanece diagnóstico e `connect quick read` permanece leitura. Nenhum modo habilita shell, branch, Git remoto ou `test.run` público; a aceitação operacional externa desta composição ainda é o bloco corrente, não um aceite de produção.
+**Estado vigente (25/09/2026):** `connect quick programming` é uma composição opt-in cuja correção de discovery/step-up está implementada localmente em `c2dcdbd`, com publicação remota pendente nesta retomada. Bearer diagnostic-only pode descobrir READ, WRITE, Git review, Git index e Git commit; OAuth específico, aprovação owner-side e managed worktree descartável continuam obrigatórios para executar. `connect quick` permanece diagnóstico e `connect quick read` permanece leitura. Nenhum modo habilita shell, branch, Git remoto ou `test.run` público; a aceitação operacional externa do HEAD corrigido ainda está pendente.
+
+## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
+
+O defeito anterior filtrava `tools/list` pelo scope específico do bearer e impedia o ChatGPT de descobrir o descriptor/challenge. O HEAD corrigido separa discovery da autorização: `initialize`/`tools/list` da composição programming anunciam a superfície configurada mesmo com bearer diagnostic-only, enquanto cada `tools/call` desafia o conjunto cumulativo de scopes e falha fechado antes de qualquer efeito. A correção foi validada localmente; nenhum túnel ou OAuth Web novo foi iniciado antes da publicação.
 
 ## Resultado do aceite externo programming — 25/09/2026
 

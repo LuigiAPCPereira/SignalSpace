@@ -1,5 +1,15 @@
 # SignalSpace — contrato inicial de programação local
 
+## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** no commit `c2dcdbd`; base/remoto observado antes da missão `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`. O aceite externo no ChatGPT Web ainda não foi repetido no HEAD corrigido.
+
+Na composição `programming`, discovery é derivado das portas configuradas, não do bearer atual. Assim, `initialize` e `tools/list` com somente `signalspace:diagnostic` expõem a superfície Programming existente para que o cliente descubra os mecanismos de step-up. Isso não concede capacidade, grant, sessão ou acesso a filesystem/Git.
+
+Os descriptors e challenges de READ, WRITE, Git review, Git index e Git commit declaram o conjunto cumulativo `signalspace:diagnostic` mais o scope específico. Uma chamada sem o scope específico retorna erro MCP com `_meta["mcp/www_authenticate"]`, `error="insufficient_scope"` e o resource metadata correto antes de consultar ou mutar qualquer backend. Grant local, owner/client/session, managed worktree e precondições continuam obrigatórios e são revalidados na chamada.
+
+A correção renomeia a semântica de anúncio para `discoverable` e mantém `verify()` somente no caminho de execução. `connect quick`/diagnostic, `connect quick read` e suas listas preservam os contratos próprios; `run_workspace_tests`, shell, branch, Git remoto, lifecycle MCP de worktree e novas tools continuam ausentes. Testes verificam lista exata, scopes, zero efeitos, grant/revoke e não dependência de estado global mutable.
+
 **Estado vigente (25/09/2026):** o gate `SS-MVP-002-GIT-COMMIT-GATE-001` está **APROVADO / IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `0420c9ae14768e099fbb51452ee71e7dc5af7916`. A cadeia real é `60c290a` → `b3f2add` → `ccc4d17` → `247ad3d` → `0420c9a`; `ccc4d17` é somente documental e não adiciona código ou capability. A publicação foi fast-forward normal; a checagem de exatamente três commits ocorreu depois do push e fica registrada como desvio procedural. `test.run`, shell, comandos arbitrários, branch, Git remoto como capability e lifecycle MCP de worktree continuam fora. Isso não é aceite de túnel, HTTPS, navegador, grant real ao ChatGPT Web, workspace real, CI, merge ou deploy.
 
 O estado do MVP continua **PARCIAL**: a decisão do gate é distinta da conclusão de `SS-MVP-002`, e a evidência atual é local/automatizada. O modo público exige seleção explícita `connect quick programming`, OAuth com escopo exato e concessão terminal-local ativa; a presença de JWT, `client_id`, metadata ou configuração não cria concessão.
