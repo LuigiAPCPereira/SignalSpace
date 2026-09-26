@@ -1,6 +1,6 @@
 # Quick Tunnel: conexão experimental guiada
 
-**Estado vigente (25/09/2026):** `connect quick programming` é uma composição opt-in cuja correção de discovery/step-up está implementada localmente em `c2dcdbd`, com publicação remota pendente nesta retomada. Bearer diagnostic-only pode descobrir READ, WRITE, Git review, Git index e Git commit; OAuth específico, aprovação owner-side e managed worktree descartável continuam obrigatórios para executar. `connect quick` permanece diagnóstico e `connect quick read` permanece leitura. Nenhum modo habilita shell, branch, Git remoto ou `test.run` público; a aceitação operacional externa do HEAD corrigido ainda está pendente.
+**Estado vigente (25/09/2026):** `connect quick programming` é uma composição opt-in cuja correção de discovery/step-up está implementada em `c2dcdbd` e publicada remotamente em `14821b4`. Bearer diagnostic-only pode descobrir READ, WRITE, Git review, Git index e Git commit; OAuth específico, aprovação owner-side e managed worktree descartável continuam obrigatórios para executar. `connect quick` permanece diagnóstico e `connect quick read` permanece leitura. Nenhum modo habilita shell, branch, Git remoto ou `test.run` público; a aceitação operacional externa do HEAD corrigido ainda está pendente.
 
 ## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 

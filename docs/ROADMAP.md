@@ -2,7 +2,7 @@
 
 ## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
-Esta fatia corrige a interoperabilidade local da composição `programming`: discovery deixa de depender do scope específico do bearer e os descriptors/challenges passam a representar `diagnostic + capability`. O commit `c2dcdbd` está **IMPLEMENTADO / VALIDADO LOCALMENTE**; a base/remoto observado antes da missão foi `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`, portanto publicação e aceite externo continuam pendentes. Não há nova tool, scope ou capability.
+Esta fatia corrige a interoperabilidade local da composição `programming`: discovery deixa de depender do scope específico do bearer e os descriptors/challenges passam a representar `diagnostic + capability`. O código em `c2dcdbd` está **IMPLEMENTADO / VALIDADO LOCALMENTE** e foi publicado com a reconciliação documental em `14821b4`; a base/remoto observado antes da missão foi `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`. O aceite externo continua pendente. Não há nova tool, scope ou capability.
 
 **Status:** plano de execução documental da frente de backend do [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), não compromisso de datas ou autorização de ampliar o MVP. Fontes do escopo: [produto](PRODUCT.md), [MVP](MVP.md), [contrato administrativo](LOCAL_ADMIN_AUTHORIZATION.md) e pedido do proprietário para continuar o backend mantendo o PR draft. Detalhes executáveis/estado por ID: [`../TASKLIST.md`](../TASKLIST.md). Revalidar branch e HEAD na retomada.
 

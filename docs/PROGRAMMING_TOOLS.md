@@ -2,7 +2,7 @@
 
 ## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
-**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** no commit `c2dcdbd`; base/remoto observado antes da missão `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`. O aceite externo no ChatGPT Web ainda não foi repetido no HEAD corrigido.
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `14821b4`; a implementação está no commit `c2dcdbd` e a base/remoto observado antes da missão era `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`. O aceite externo no ChatGPT Web ainda não foi repetido no HEAD corrigido.
 
 Na composição `programming`, discovery é derivado das portas configuradas, não do bearer atual. Assim, `initialize` e `tools/list` com somente `signalspace:diagnostic` expõem a superfície Programming existente para que o cliente descubra os mecanismos de step-up. Isso não concede capacidade, grant, sessão ou acesso a filesystem/Git.
 

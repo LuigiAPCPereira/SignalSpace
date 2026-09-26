@@ -4,9 +4,9 @@
 
 Na composição opt-in `programming`, a lista de tools é estável por composição: bearer com somente `signalspace:diagnostic` descobre as capabilities já configuradas, mas não as autoriza. Cada chamada revalida bearer, issuer/audience, owner, client, scope específico, grant/session e managed worktree quando exigida. A ausência de scope produz `insufficient_scope` e challenge cumulativo; não há leitura, escrita, Git ou alteração de índice antes dessa verificação.
 
-O estado está **IMPLEMENTADO E VALIDADO LOCALMENTE** no commit `c2dcdbd`; o aceite Web no HEAD corrigido e a publicação remota desta correção permanecem pendentes. Diagnostic/read não foram ampliados, não há scope/tool novo e os patches protegidos permanecem preservados.
+O estado está **IMPLEMENTADO E VALIDADO LOCALMENTE** no commit `c2dcdbd`, publicado remotamente em `14821b4`; o aceite Web no HEAD corrigido permanece pendente. Diagnostic/read não foram ampliados, não há scope/tool novo e os patches protegidos permanecem preservados.
 
-**Estado de validação (25/09/2026):** `programming` é a composição opt-in para as tools de workspace tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`, revisão Git, Git index e Git commit. O slice estrutural e o Git commit v1 permanecem publicados em seus SHAs históricos; o step-up corrente está em `c2dcdbd` e aguarda publicação. O aceite externo desta composição foi tentado no HEAD anterior e ficou bloqueado antes do token; isso ainda não é aceite de produção nem valida workspace real, CI, merge ou deploy. `diagnostic` e `read` continuam sem write ou Git mutável.
+**Estado de validação (25/09/2026):** `programming` é a composição opt-in para as tools de workspace tipadas sob os escopos independentes `signalspace:workspace.read` e `signalspace:workspace.write`, revisão Git, Git index e Git commit. O slice estrutural e o Git commit v1 permanecem publicados em seus SHAs históricos; o step-up corrente está em `c2dcdbd` e foi publicado no remoto em `14821b4`. O aceite externo desta composição foi tentado no HEAD anterior e ficou bloqueado antes do token; isso ainda não é aceite de produção nem valida workspace real, CI, merge ou deploy. `diagnostic` e `read` continuam sem write ou Git mutável.
 
 ## Aceite operacional externo programming — 25/09/2026
 
