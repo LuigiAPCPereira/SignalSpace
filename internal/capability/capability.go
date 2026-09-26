@@ -94,3 +94,15 @@ func OAuthScope(value Capability) (string, bool) {
 func LegacyCapabilities() []Capability {
 	return []Capability{WorkspaceRead, WorkspaceWrite, GitReview, GitIndex, GitCommit, TestRun}
 }
+
+// Catalog returns every capability known to the local domain in stable order.
+// Future entries are catalogued for fail-closed policy reasoning only; they do
+// not imply a tool, executor, OAuth scope or public grant.
+func Catalog() []Capability {
+	return []Capability{
+		WorkspaceRead, WorkspaceWrite, WorkspaceDelete,
+		GitReview, GitIndex, GitCommit, GitBranch,
+		GitRemoteFetch, GitRemotePush, GitDestructive,
+		TestRun, ShellExec,
+	}
+}

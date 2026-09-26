@@ -155,7 +155,7 @@ O desenho futuro considera access token de 60 minutos e refresh token de 30 dias
 
 1. **A — documental:** esta ADR e reconciliação dos contratos, sem código. **Concluída.**
 2. **B — ciclo OAuth:** token families, rotação, revogação e vínculo resource/client. **Implementada no auth harness opt-in por `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001`; a migração pública permanece pendente.**
-3. **C — capabilities internas:** **Implementada** em `internal/capability`; `workspace.Grants` usa capabilities como autoridade interna e preserva scopes somente nas bordas compatíveis. A superfície pública não mudou.
+3. **C — capabilities internas:** **Implementada** em `internal/capability`; `workspace.Grants` usa capabilities como autoridade interna, expõe portas tipadas e preserva scopes somente nas bordas compatíveis. O adapter legado expande `workspace.write` para `workspace.write` + `workspace.delete` porque delete ainda pertence ao WRITE público; grants tipados mantêm delete independente. A superfície pública não mudou.
 4. **D — Policy Engine:** **Implementado no núcleo interno** em `internal/policy` com `ALLOW`/`DENY`/`REQUIRE_APPROVAL`, regras em memória, fail-closed, precedência e expiração. Grants/persistência/permits e integração pública permanecem posteriores.
 5. **E — approvals/painel:** persistência, deduplicação, expiração e auditoria segura.
 6. **F — Programming:** composição, tools e anotações contra o novo contrato.

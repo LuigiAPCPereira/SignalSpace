@@ -40,14 +40,16 @@ var (
 // Context contém os vínculos que uma decisão precisa revalidar. Campos
 // ausentes não são tratados como curingas: Evaluate falha fechado.
 type Context struct {
-	OwnerID       string
-	ClientID      string
-	TokenFamilyID string
-	WorkspaceID   string
-	SessionID     string
-	Capability    capability.Capability
-	Tool          string
-	Fingerprint   string
+	OwnerID             string
+	ClientID            string
+	TokenFamilyID       string
+	WorkspaceID         string
+	SessionID           string
+	Capability          capability.Capability
+	Tool                string
+	Fingerprint         string
+	GrantActive         bool
+	GrantedCapabilities []capability.Capability
 }
 
 // Rule usa campos não vazios como seletores exatos. OwnerID e Capability são
@@ -124,10 +126,15 @@ func (e *Engine) RemoveRule(rule Rule) error {
 	return nil
 }
 
-// Evaluate retorna sempre uma decisão tipada. Contexto inválido, capability
-// desconhecida, ausência de regra e regra expirada resultam em DENY.
+// Evaluate retorna sempre uma decisão tipada. Contexto inválido, grant
+// inativo, capability desconhecida, ausência de regra e regra expirada
+// resultam em DENY. Um contexto válido com capability ainda não concedida
+// retorna REQUIRE_APPROVAL, sem criar fila ou efeito externo.
 func (e *Engine) Evaluate(ctx Context) Decision {
 	if e == nil || !validContext(ctx) {
+		return Deny
+	}
+	if !ctx.GrantActive {
 		return Deny
 	}
 	now := time.Now()
@@ -153,19 +160,25 @@ func (e *Engine) Evaluate(ctx Context) Decision {
 			bestSpecificity = specificity
 		}
 	}
-	if bestIndex < 0 {
-		return Deny
+	if bestIndex >= 0 {
+		switch e.rules[bestIndex].Effect {
+		case EffectDeny:
+			return Deny
+		case EffectAsk:
+			return RequireApproval
+		case EffectAllowSession, EffectAllowWorkspace:
+			if !hasGrantedCapability(ctx) {
+				return RequireApproval
+			}
+			return Allow
+		default:
+			return Deny
+		}
 	}
-	switch e.rules[bestIndex].Effect {
-	case EffectDeny:
-		return Deny
-	case EffectAsk:
+	if !hasGrantedCapability(ctx) {
 		return RequireApproval
-	case EffectAllowSession, EffectAllowWorkspace:
-		return Allow
-	default:
-		return Deny
 	}
+	return Deny
 }
 
 func validateRule(rule Rule) error {
@@ -190,9 +203,26 @@ func validateRule(rule Rule) error {
 }
 
 func validContext(ctx Context) bool {
-	return ctx.OwnerID != "" && ctx.ClientID != "" && ctx.TokenFamilyID != "" &&
-		ctx.WorkspaceID != "" && ctx.SessionID != "" && capability.IsKnown(ctx.Capability) &&
-		ctx.Tool != "" && ctx.Fingerprint != ""
+	if ctx.OwnerID == "" || ctx.ClientID == "" || ctx.TokenFamilyID == "" ||
+		ctx.WorkspaceID == "" || ctx.SessionID == "" || !capability.IsKnown(ctx.Capability) ||
+		ctx.Tool == "" || ctx.Fingerprint == "" {
+		return false
+	}
+	for _, granted := range ctx.GrantedCapabilities {
+		if !capability.IsKnown(granted) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasGrantedCapability(ctx Context) bool {
+	for _, granted := range ctx.GrantedCapabilities {
+		if granted == ctx.Capability {
+			return true
+		}
+	}
+	return false
 }
 
 func sameSelectors(left, right Rule) bool {

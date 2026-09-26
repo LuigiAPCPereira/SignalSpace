@@ -13,6 +13,7 @@ func testContext() Context {
 		OwnerID: "owner", ClientID: "client", TokenFamilyID: "family",
 		WorkspaceID: "workspace", SessionID: "session", Capability: capability.WorkspaceWrite,
 		Tool: "write_text_file", Fingerprint: "sha256:fingerprint",
+		GrantActive: true, GrantedCapabilities: []capability.Capability{capability.WorkspaceWrite},
 	}
 }
 
@@ -38,6 +39,19 @@ func TestZeroValueEngineFailsClosedWithoutPanicking(t *testing.T) {
 	var engine Engine
 	if got := engine.Evaluate(testContext()); got != Deny {
 		t.Fatalf("zero-value engine decision = %q, want %q", got, Deny)
+	}
+}
+
+func TestEngineRequiresApprovalForMissingCapabilityAndDeniesRevokedGrant(t *testing.T) {
+	engine := NewEngine()
+	ctx := testContext()
+	ctx.GrantedCapabilities = nil
+	if got := engine.Evaluate(ctx); got != RequireApproval {
+		t.Fatalf("missing capability decision = %q, want %q", got, RequireApproval)
+	}
+	ctx.GrantActive = false
+	if got := engine.Evaluate(ctx); got != Deny {
+		t.Fatalf("revoked grant decision = %q, want %q", got, Deny)
 	}
 }
 

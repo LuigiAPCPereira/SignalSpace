@@ -25,6 +25,7 @@ type GrantSnapshot struct {
 	Active             bool
 	SessionID          string
 	ClientID           string
+	Capabilities       []capability.Capability
 	Scopes             []string
 	Mode               string
 	ManagedWorkspaceID string
@@ -85,7 +86,17 @@ func (g *Grants) Grant(root, clientID string) (string, error) {
 // que já possui a decisão do proprietário. Escopos desconhecidos falham
 // fechado para impedir que uma string futura seja aceita por acidente.
 func (g *Grants) GrantWithScopes(root, clientID string, scopes ...string) (string, error) {
-	return g.grantWithMetadata(root, clientID, WorkspaceMetadata{Mode: WorkspaceModeCheckout}, scopes...)
+	allowedCapabilities, ok := capabilitiesForLegacyScopes(scopes...)
+	if !ok {
+		return "", ErrNotAuthorized
+	}
+	return g.GrantWithCapabilities(root, clientID, allowedCapabilities...)
+}
+
+// GrantWithCapabilities is the internal core grant API. It accepts typed
+// capabilities only; OAuth scope strings are adapted by GrantWithScopes.
+func (g *Grants) GrantWithCapabilities(root, clientID string, capabilities ...capability.Capability) (string, error) {
+	return g.grantWithCapabilities(root, clientID, WorkspaceMetadata{Mode: WorkspaceModeCheckout}, capabilities...)
 }
 
 // GrantManagedWithScopes registra uma sessão cuja raiz foi criada pelo
@@ -95,17 +106,30 @@ func (g *Grants) GrantManagedWithScopes(root, clientID string, metadata Workspac
 	if metadata.Mode != WorkspaceModeWorktree || metadata.ManagedWorkspaceID == "" {
 		return "", ErrNotAuthorized
 	}
-	return g.grantWithMetadata(root, clientID, metadata, scopes...)
+	allowedCapabilities, ok := capabilitiesForLegacyScopes(scopes...)
+	if !ok {
+		return "", ErrNotAuthorized
+	}
+	return g.GrantManagedWithCapabilities(root, clientID, metadata, allowedCapabilities...)
 }
 
-func (g *Grants) grantWithMetadata(root, clientID string, metadata WorkspaceMetadata, scopes ...string) (string, error) {
+// GrantManagedWithCapabilities is the typed core for owner-side managed
+// worktree grants. Git index/commit still require the managed metadata at the
+// operation boundary; a capability alone is never sufficient.
+func (g *Grants) GrantManagedWithCapabilities(root, clientID string, metadata WorkspaceMetadata, capabilities ...capability.Capability) (string, error) {
+	if metadata.Mode != WorkspaceModeWorktree || metadata.ManagedWorkspaceID == "" {
+		return "", ErrNotAuthorized
+	}
+	return g.grantWithCapabilities(root, clientID, metadata, capabilities...)
+}
+
+func (g *Grants) grantWithCapabilities(root, clientID string, metadata WorkspaceMetadata, capabilities ...capability.Capability) (string, error) {
 	if !validClientID(clientID) {
 		return "", ErrNotAuthorized
 	}
-	allowedCapabilities := make(map[capability.Capability]struct{}, len(scopes))
-	for _, scope := range scopes {
-		internalCapability, ok := capability.FromOAuthScope(scope)
-		if !ok {
+	allowedCapabilities := make(map[capability.Capability]struct{}, len(capabilities))
+	for _, internalCapability := range capabilities {
+		if !capability.IsKnown(internalCapability) {
 			return "", ErrNotAuthorized
 		}
 		allowedCapabilities[internalCapability] = struct{}{}
@@ -142,6 +166,34 @@ func (g *Grants) grantWithMetadata(root, clientID string, metadata WorkspaceMeta
 	g.clientID = clientID
 	g.capabilities = allowedCapabilities
 	return opened.ID(), nil
+}
+
+// capabilitiesForLegacyScopes is the only compatibility expansion. Legacy
+// WRITE historically authorizes delete tools, so it temporarily grants both
+// workspace.write and workspace.delete. This is not the desired v2 policy:
+// typed grants keep those capabilities independent.
+func capabilitiesForLegacyScopes(scopes ...string) ([]capability.Capability, bool) {
+	if len(scopes) == 0 {
+		return nil, false
+	}
+	seen := make(map[capability.Capability]struct{}, len(scopes)+1)
+	for _, scope := range scopes {
+		internalCapability, ok := capability.FromOAuthScope(scope)
+		if !ok {
+			return nil, false
+		}
+		seen[internalCapability] = struct{}{}
+		if internalCapability == capability.WorkspaceWrite {
+			seen[capability.WorkspaceDelete] = struct{}{}
+		}
+	}
+	result := make([]capability.Capability, 0, len(seen))
+	for _, internalCapability := range capability.Catalog() {
+		if _, ok := seen[internalCapability]; ok {
+			result = append(result, internalCapability)
+		}
+	}
+	return result, len(result) > 0
 }
 
 // WithAuthorizedGitProcessDir autoriza uma observação Git somente com a
@@ -232,6 +284,14 @@ func (g *Grants) AllowsClientScope(clientID, scope string) bool {
 	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && ok && g.hasCapabilityLocked(internalCapability)
 }
 
+// AllowsClientCapability is the typed core query. Unknown capabilities fail
+// closed and cannot be smuggled through the legacy scope adapter.
+func (g *Grants) AllowsClientCapability(clientID string, required capability.Capability) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return !g.closed && g.current != nil && validClientID(clientID) && clientID == g.clientID && capability.IsKnown(required) && g.hasCapabilityLocked(required)
+}
+
 // Snapshot retorna uma cópia independente dos metadados da concessão atual.
 // Ausência é um estado válido; instância encerrada permanece distinguível por
 // ErrClosed. A ordem dos escopos é canônica e nenhuma operação é autorizada ou
@@ -246,9 +306,11 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 		return GrantSnapshot{}, nil
 	}
 
+	grantedCapabilities := make([]capability.Capability, 0, len(g.capabilities))
 	scopes := make([]string, 0, len(g.capabilities))
-	for _, internalCapability := range capability.LegacyCapabilities() {
+	for _, internalCapability := range capability.Catalog() {
 		if g.hasCapabilityLocked(internalCapability) {
+			grantedCapabilities = append(grantedCapabilities, internalCapability)
 			if scope, ok := capability.OAuthScope(internalCapability); ok {
 				scopes = append(scopes, scope)
 			}
@@ -258,6 +320,7 @@ func (g *Grants) Snapshot() (GrantSnapshot, error) {
 		Active:             true,
 		SessionID:          g.current.ID(),
 		ClientID:           g.clientID,
+		Capabilities:       grantedCapabilities,
 		Scopes:             scopes,
 		Mode:               g.current.metadata.Mode,
 		ManagedWorkspaceID: g.current.metadata.ManagedWorkspaceID,
@@ -425,7 +488,7 @@ func (g *Grants) DeleteFile(owner, clientID, id, relative string) (DeleteResult,
 	if g.closed {
 		return DeleteResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceDelete) {
 		return DeleteResult{}, ErrNotAuthorized
 	}
 	return g.current.DeleteFile(relative)
@@ -437,7 +500,7 @@ func (g *Grants) DeleteDirectory(owner, clientID, id, relative string) (DeleteRe
 	if g.closed {
 		return DeleteResult{}, ErrClosed
 	}
-	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceWrite) {
+	if !g.authorizedLocked(owner, clientID, id, capability.WorkspaceDelete) {
 		return DeleteResult{}, ErrNotAuthorized
 	}
 	return g.current.DeleteDirectory(relative)
