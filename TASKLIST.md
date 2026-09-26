@@ -415,3 +415,11 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 - Aceite: `docs/ADR_LOCAL_AUTHORIZATION_V2.md` com estado explícito; reconciliação de produto, MVP, autorização, segurança, Programming, painel, transporte, roadmap, checkpoint e histórico; nenhum código, workflow, capability, escopo runtime, grant, push ou permissão alterado.
 - Evidência: ADR e links nos documentos canônicos; checkpoint correspondente em `docs/PROJECT_STATE.md`; histórico em `docs/SESSION_LOG.md`. A confirmação final de ref, diff e commit pertence ao relatório desta missão.
 - Fora do escopo: implementação do Policy Engine, OAuth/token family, painel funcional, nova tool/scope, shell, `test.run`, Git remoto, lifecycle MCP de worktree, workspace real, CI, deploy, merge, rebase e push.
+
+## Tarefa `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001` — 26/09/2026
+
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**.
+- Implementação: decisions `ALLOW_ONCE`, `ALLOW_SESSION`, `ALLOW_WORKSPACE` e `DENY`; callback transacional antes do terminal; store privado versionado/atômico com lock e fail-closed; policies persistentes limitadas a owner/client/managed-workspace/capability; rotas administrativas de listagem/revogação; painel separado para OAuth, approvals e policies.
+- Limites: `ALLOW_SESSION` é memória da instância; `ALLOW_WORKSPACE` exige managed worktree estável; policy não substitui grant ativo, não executa operação e não altera MCP público. Common checkout não é elegível. Quick usa diretório privado descartável da instância atual.
+- Evidência: testes de decisão concorrente, persistência/reload, corrupção/unknown fields, revoke/evaluate concorrente, HTTP CSRF/Host/Origin e 23 testes Node do painel. `go test ./...` passou; CI, navegador/ChatGPT Web, HTTPS, túnel e workspace real continuam desconhecidos.
+- Próxima ação: commit focado, gates finais, push normal fast-forward autorizado nesta missão e relatório ao ChatGPT Web. Não iniciar `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001` automaticamente.

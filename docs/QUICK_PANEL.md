@@ -71,3 +71,9 @@ O relatório operacional deve separar `IMPLEMENTADO`, `VALIDADO`, `NÃO VALIDADO
 Como direção aceita em [`ADR_LOCAL_AUTHORIZATION_V2.md`](ADR_LOCAL_AUTHORIZATION_V2.md), o painel local é a autoridade owner-side para Connections, Workspaces, Pending approvals e Audit quando a policy retornar `REQUIRE_APPROVAL`. As opções conceituais são `Allow once`, `Allow session`, `Allow workspace` e `Deny`; a escolha não executa a chamada original. OAuth válido, permissões do host ChatGPT e notificações não substituem essa autoridade.
 
 Esta seção não implementa fila, notification, persistência ou nova rota. O painel v1, o terminal e os limites de `127.0.0.1:7677` continuam regidos pelo contrato vigente até uma tarefa de implementação posterior.
+
+## Estado implementado — approvals e policies locais
+
+`SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001` adiciona ao painel existente uma seção separada para approvals de programação e outra para policies de managed workspace. O backend é a autoridade: a UI renderiza `allowed_decisions`, não inventa `ALLOW_WORKSPACE`, usa texto seguro e, após perda de resposta, consulta o estado antes de permitir nova decisão. O painel não faz polling agressivo, não executa a operação aprovada e não publica a porta administrativa.
+
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE**. A composição Quick cria o store dentro do estado privado descartável da instância; persistência entre reinícios exige um state directory durável em missão própria. MCP público, túnel, navegador e ChatGPT Web permanecem fora desta validação.

@@ -242,3 +242,11 @@ O fluxo usa somente `git write-tree`, `git commit-tree` por stdin e uma transaç
 No alvo, OAuth solicita a composição (`signalspace:diagnostic`, `signalspace:read` ou `signalspace:programming`) e o SignalSpace decide internamente `workspace.read`, `workspace.write`, `workspace.delete`, `git.review`, `git.index`, `git.commit`, `test.run` e `shell.exec`. A policy deve considerar owner/client/workspace/session/tool/context e responder `ALLOW`, `DENY` ou `REQUIRE_APPROVAL`. Shell, Git remoto, branches e ações destrutivas permanecem capabilities e gates separados.
 
 O aceite desta ADR não adiciona tool, scope, grant, UI ou lifecycle MCP. A implementação futura deve migrar a composição de modo controlado, preservar anotações/resultados estruturados e comprovar novamente discovery, OAuth, aprovação local, revogação, precondições e cleanup em fixture descartável.
+
+## Approvals e policies locais — `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001`
+
+O slice implementa o contrato local sem alterar discovery ou o catálogo MCP. A fila de approvals aceita `ALLOW_ONCE`, `ALLOW_SESSION`, `ALLOW_WORKSPACE` e `DENY`; `ALLOW_ONCE` mantém permit interno de uso único, `ALLOW_SESSION` instala regra somente na memória da instância e `ALLOW_WORKSPACE` persiste somente para managed worktree estável. `DENY` terminaliza o pedido atual; nenhuma decisão executa ou repete a operação original.
+
+O painel administrativo separa `/api/admin/v1/requests`, `/api/admin/v1/capability-approvals` e `/api/admin/v1/capability-policies`. As rotas de policy exigem sessão, CSRF e Host/Origin local; a UI respeita `allowed_decisions`, reconcilia perda de resposta e não trata erro como fila vazia. A policy mantém a exigência de grant ativo: autorização local não é grant OAuth nem escopo.
+
+Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** nesta missão. Não houve MCP bridge, nova tool/scope, Quick Tunnel, OAuth externo, navegador real, workspace real, CI, merge ou deploy.

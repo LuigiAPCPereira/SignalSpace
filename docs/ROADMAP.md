@@ -93,3 +93,9 @@ O estado documental original era **ACEITA / NÃO IMPLEMENTADA**. A tarefa seguin
 O slice implementa `internal/capability` como catálogo fechado e adaptador explícito dos scopes legados, refatora `workspace.Grants` para armazenar capabilities tipadas e adiciona `internal/policy` com decisões `ALLOW`, `DENY` e `REQUIRE_APPROVAL`. O Policy Engine é em memória, fail-closed e não é chamado pelo transporte MCP nesta etapa; não há nova tool, scope público, grant automático, approval, permit, persistência, painel, shell ou Git remoto.
 
 O estado é **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `3b9fefe398b67cf0752f0a8034d22a829b808c38`. A suíte Go, race proporcional, vet, build, formato e diff-check passaram; o aceite externo ChatGPT Web, CI, HTTPS, túnel e workspace real permanecem desconhecidos.
+
+## SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001 — autorização local e painel
+
+Esta etapa implementa o primeiro slice operacional da arquitetura v2 sem migrar o bridge MCP: approvals carregam decisões permitidas, `ALLOW_SESSION` fica em memória e `ALLOW_WORKSPACE` grava somente identidade owner/client/managed-workspace/capability em store privado versionado. O painel local separa solicitações OAuth, approvals de programação e policies persistentes, com revoke protegido por sessão, CSRF e same-origin.
+
+Estado: **IMPLEMENTADO E VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. A etapa seguinte recomendada é `SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`, que não foi iniciada nesta missão.

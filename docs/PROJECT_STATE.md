@@ -714,3 +714,15 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 **Limites:** o Policy Engine não está conectado ao MCP e não expõe `REQUIRE_APPROVAL`; não há approvals, permits, persistência, painel, nova tool/scope, shell, Git remoto, branch, workspace real, CI, HTTPS, túnel, navegador, merge ou deploy. Os dois patches protegidos permanecem untracked, não aplicados e intocados com SHA-256 preservados.
 
 **Próxima ação vinculada:** enviar o relatório ao ChatGPT Web com `<continuidade_codex>` e aguardar nova missão; não ampliar a superfície pública por conta própria.
+
+## Checkpoint `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001` — 26/09/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE**. `SS-MVP-002` permanece **PARCIAL/em andamento**; CI, HTTPS, túnel, navegador, grant externo e workspace real permanecem **DESCONHECIDOS/NÃO VALIDADOS**.
+
+**Ref e preservação:** branch `codex/mvp-vertical-programming`, base verificada em `741692300e17c3f3a4f915a3c4c62069c1c55b47`. Os patches não rastreados permanecem fora do Git, não aplicados e intocados: `signalspace-oauth-read-scope.patch` SHA-256 `02e9de3193f8e85389406fda3f843aa5837739746091ac575b86e3f1e0d4cd9b`; `signalspace-workspace-client-binding.patch` SHA-256 `0fddedf6ad7ea61751a1aeda2417d956b780dda6cdd670ebf8a444df1a4e48f2`.
+
+**Implementação:** approval manager com quatro decisões e callback antes da transição; `internal/policy/store.go` privado/versionado/JSON estrito/atômico/locked/fail-closed; `ALLOW_SESSION` em memória; `ALLOW_WORKSPACE` somente para managed workspace estável; list/revoke administrativos; UI separada para OAuth, capability approvals e policies. A policy não substitui grant ativo, não executa operação e não altera MCP público.
+
+**Validação:** `go test ./...` PASS; Node `internal/admin/ui/admin_js_test.mjs` PASS (23/23); testes adicionais de decisão concorrente, store/reload/corrupção, revoke/evaluate concorrente e HTTP CSRF/Host/Origin PASS; `git diff --check` PASS. Não houve Quick Tunnel, OAuth ChatGPT Web, bridge MCP público ou teste de workspace real.
+
+**Próxima ação:** executar gates finais, commits focados e push normal fast-forward; depois enviar relatório com `<continuidade_codex>` ao ChatGPT Web. A missão seguinte recomendada (`SS-MVP-002-MCP-PROGRAMMING-V2-BRIDGE-001`) permanece apenas recomendação e não foi iniciada.
