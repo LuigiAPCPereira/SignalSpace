@@ -2,6 +2,16 @@
 
 **Natureza:** snapshot derivado da [TASKLIST](../TASKLIST.md), contratos, Git e CI; não é autorização nem lock. O baseline histórico de 20/09/2026 em [`3deefc1`](https://github.com/LuigiAPCPereira/SignalSpace/commit/3deefc1) permanece documentado abaixo; o checkpoint vigente desta ref é a reconciliação publicada abaixo. PR #1 continua aberto/draft/não mesclado e CI permanece desconhecida quando não explicitamente observada.
 
+## Checkpoint `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` — 26/09/2026
+
+- **Estado:** IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE.
+- **Base:** `codex/mvp-vertical-programming`, HEAD/remoto live inicial `a177f6ca714839d06186fa4df36f62d8e2c0269b`; os patches protegidos permanecem fora do Git e com os SHA aprovados.
+- **Commit local:** `30c6570` (`feat(approval): add local one-shot capability permits`); a publicação remota ainda não foi executada neste checkpoint.
+- **Implementado:** `internal/approval`, ponte interna `policy.EvaluateAndRequest`, API owner-side separada de OAuth em `/api/admin/v1/capability-approvals`, lifecycle `PENDING -> APPROVED|DENIED|EXPIRED`, permit interno `ALLOW_ONCE`, consumo atômico, limites e descarte no restart.
+- **Validado:** testes focados de approval/policy/admin e regressão `cmd/signalspace`; gates gerais ainda pendentes neste checkpoint.
+- **Não iniciado/não autorizado:** bridge MCP, `LOCAL_APPROVAL_REQUIRED`, retry, UI, notifications, `ALLOW_SESSION`, `ALLOW_WORKSPACE`, policy persistente, Quick Tunnel, aceite externo, workspace real, CI, merge e deploy.
+- **Próxima ação:** executar gates locais, publicar somente por fast-forward normal se todos passarem e enviar o relatório ao ChatGPT Web; próximo gate recomendado é `SS-MVP-002-LOCAL-APPROVAL-POLICIES-UI-V2-001`, sem iniciar automaticamente.
+
 ## Checkpoint vigente — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
 **Estado:** `IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE` por fast-forward normal. A causa raiz foi corrigida em `c2dcdbd`: `tools/list` da composição `programming` não depende mais do scope específico do bearer; a execução continua fechada por `verify()` e pelo grant local. `SS-MVP-002` permanece **PARCIAL/em andamento** e o aceite externo permanece pendente.

@@ -1,5 +1,11 @@
 # Fronteira de workspace — leitura e filesystem tipado opt-in
 
+## Capability approval e permit local — 26/09/2026
+
+`ApprovalRequest` e `OperationPermit` não são grants de workspace. O approval efêmero registra a operação concreta e só autoriza uma revalidação interna; não executa filesystem, Git ou teste, não altera `GrantWithCapabilities` e não revive workspace/session revogado. O consumo exige `GrantActive` e correspondência exata do contexto e fingerprint, com atômica de uso único; replay, expiração, mudança de operação/sessão e restart falham fechado.
+
+O resumo administrativo é limitado e não é autoridade. Permits não têm segredo persistido nem aparecem em HTTP/UI. A política pública MCP não foi conectada ao approval bridge nesta fatia; qualquer promoção futura deve manter a separação entre OAuth, grant de workspace e decisão owner-side.
+
 ## Discovery e autorização por ferramenta — 25/09/2026
 
 Na composição opt-in `programming`, a lista de tools é estável por composição: bearer com somente `signalspace:diagnostic` descobre as capabilities já configuradas, mas não as autoriza. Cada chamada revalida bearer, issuer/audience, owner, client, scope específico, grant/session e managed worktree quando exigida. A ausência de scope produz `insufficient_scope` e challenge cumulativo; não há leitura, escrita, Git ou alteração de índice antes dessa verificação.

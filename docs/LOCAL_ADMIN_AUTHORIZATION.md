@@ -4,6 +4,18 @@
 
 **Base examinada:** `feat/m1-local-mcp-diagnostic` em `f7c27d0`, `internal/auth/server.go`, `cmd/signalspace/main.go`, `internal/tunnel/quick.go`, `docs/WORKSPACE_SECURITY.md`, `AGENTS.md`, e revisão da frente de interface em [`docs/FRONTEND_ADMIN_CONTRACT_REVIEW.md`](https://github.com/LuigiAPCPereira/SignalSpace/blob/feat/frontend-oauth-consent/docs/FRONTEND_ADMIN_CONTRACT_REVIEW.md). A revisão do frontend identifica pendências, não descreve APIs existentes. O backend atual aprova pelo stdin; nenhuma rota administrativa, sessão de proprietário, pareamento ou consulta pública de estado descrita aqui foi implementada. Não alterar a branch do frontend para executar este contrato.
 
+## Atualização do gate de capability approvals — 26/09/2026
+
+Capability approval não é pedido OAuth. O backend local agora possui o domínio efêmero `internal/approval` e uma API administrativa separada, disponível somente no listener `127.0.0.1:7677`:
+
+- `GET /api/admin/v1/capability-approvals`
+- `GET /api/admin/v1/capability-approvals/{id}`
+- `POST /api/admin/v1/capability-approvals/{id}/decision`
+
+Essas rotas preservam Host, sessão, CSRF, Origin, JSON estrito e `Cache-Control: no-store`. O payload de decisão aceita somente `expected_version` e `ALLOW_ONCE` ou `DENY`. A resposta contém snapshot seguro do pedido e nunca permit, token, bearer, refresh token, raiz ou conteúdo bruto. `/api/admin/v1/requests` mantém exclusivamente o lifecycle OAuth.
+
+O request é `PENDING -> APPROVED | DENIED | EXPIRED`; `ALLOW_ONCE` cria um `OperationPermit` interno, efêmero, sem segredo e não retornado à UI. O consumo revalida owner, client, token family quando aplicável, workspace, session, capability, tool, fingerprint e grant ativo, permitindo exatamente uma tentativa. Restart descarta requests e permits. `REQUIRE_APPROVAL` pode criar/reusar request apenas por ponte interna de harness/policy; o MCP público, a UI, o OAuth e a execução da operação permanecem inalterados nesta fatia.
+
 ## 1. Decisões finais e invariantes
 
 1. **Pareamento:** no primeiro acesso após iniciar o modo Quick, o proprietário informa segredo aleatório mostrado somente no terminal e define frase-senha. `POST /pair` consome o segredo e **cria imediatamente uma sessão administrativa autenticada**, com cookie e CSRF novos; não exige desbloqueio duplicado. Desbloqueios posteriores exigem frase-senha. No Quick, a credencial e as sessões vivem somente na memória: cada reinício exige novo pareamento. Recuperação explícita via terminal invalida credencial e todas as sessões.

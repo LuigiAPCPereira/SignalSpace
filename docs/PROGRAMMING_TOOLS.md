@@ -1,5 +1,11 @@
 # SignalSpace — contrato inicial de programação local
 
+## Capability approvals de uso único — estado vigente em 26/09/2026
+
+O domínio `internal/approval` prepara a autorização local de uma operação concreta sem ampliar grants permanentes. O fingerprint SHA-256 canônico e o contexto owner/client/token-family/workspace/session/capability/tool são a autoridade; `safe_summary` é apenas apresentação limitada. `ALLOW_ONCE` produz permit interno por referência, e não scope OAuth, bearer, capability nova ou execução automática. `ALLOW_SESSION` e `ALLOW_WORKSPACE` permanecem no próximo gate.
+
+Nenhuma tool MCP pública cria ou consome approvals nesta missão. A ponte `internal/policy` só cria/reusa request em `REQUIRE_APPROVAL`; `DENY` não cria fila. A API owner-side é a rota administrativa separada `/api/admin/v1/capability-approvals`; a fila OAuth `/api/admin/v1/requests` não foi reutilizada. Estado após restart é descartado de modo fail-closed.
+
 ## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
 **Estado:** **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `14821b4`; a implementação está no commit `c2dcdbd` e a base/remoto observado antes da missão era `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`. O aceite externo no ChatGPT Web ainda não foi repetido no HEAD corrigido.

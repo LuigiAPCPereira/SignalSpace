@@ -2,6 +2,13 @@
 
 Registro **seletivo**, não transcrição de conversas. Progresso: [PR #1](https://github.com/LuigiAPCPereira/SignalSpace/pull/1), Git/CI. Comportamento: [produto](PRODUCT.md), [workspace](WORKSPACE_SECURITY.md), [contrato admin](LOCAL_ADMIN_AUTHORIZATION.md). Autoridade de IDs/estado: [TASKLIST](../TASKLIST.md), checkpoint derivado [PROJECT_STATE](PROJECT_STATE.md). Não inventar eventos.
 
+## 26/09/2026 — `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001`
+
+- Pré-flight: branch `codex/mvp-vertical-programming`; HEAD e remoto live inicial `a177f6ca714839d06186fa4df36f62d8e2c0269b`; o tracking ref local estava atrasado, portanto não foi usado como autoridade. Patches protegidos confirmados pelos SHA aprovados, untracked e intactos.
+- Implementação: pacote `internal/approval` efêmero, `ALLOW_ONCE`/`DENY`, dedup por contexto/fingerprint, fingerprint SHA-256 canônico, limites, expiração, terminal retention, CAS lógico, permits por referência sem segredo, consumo atômico e restart fail-closed. `internal/policy` ganhou somente a ponte `REQUIRE_APPROVAL`.
+- Administração: rota separada `/api/admin/v1/capability-approvals`; a fila OAuth `/api/admin/v1/requests` não foi alterada. O Quick panel cria o serviço efêmero apenas quando o painel local é selecionado.
+- Commit de implementação: `30c6570` (`feat(approval): add local one-shot capability permits`). Testes focados, suíte Go serial, race afetado, vet, build, gofmt e diff check passaram; publicação remota ainda será registrada após o pre-check final.
+
 ## 25/09/2026 — OAuth tool step-up — `SS-MVP-002-OAUTH-TOOL-STEPUP-001`
 
 - A ref foi reconciliada na branch `codex/mvp-vertical-programming`: HEAD/remoto live `de8ff7e3d253f4dedbfbba1135bdf53e682cd335` antes da missão, patches protegidos recalculados e runtime Quick Tunnel anterior encerrado ordenadamente.

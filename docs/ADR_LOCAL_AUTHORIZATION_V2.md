@@ -5,6 +5,12 @@
 **Data da decisão:** 25/09/2026
 **Escopo:** arquitetura, contratos, modelo de domínio, migração e critérios de aceite. O slice `SS-MVP-002-LOCAL-CAPABILITIES-POLICY-V2-001` implementa somente o núcleo interno descrito nesta ADR; não autoriza migração pública, push, merge ou deploy por consequência.
 
+## Implementação do gate de approvals de uso único — 26/09/2026
+
+O gate `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` materializa apenas a parte de uso único da decisão aceita nesta ADR. `ApprovalRequest` e `OperationPermit` vivem em `internal/approval`, separado de `internal/auth`, com estado efêmero por instância, limites explícitos e descarte no restart. `ALLOW_ONCE` cria um permit interno por referência, sem segredo bearer; o consumo exige o contexto completo e `GrantActive`, e a mutação é atômica. `ALLOW_SESSION`, `ALLOW_WORKSPACE`, persistência de policies, UI de approvals e bridge MCP continuam fora do gate.
+
+O Policy Engine só pode chamar a porta de criação quando retorna `REQUIRE_APPROVAL`; `DENY` não cria pedido e nenhuma decisão executa a operação original. A API owner-side usa `/api/admin/v1/capability-approvals`, sem reutilizar `/api/admin/v1/requests`, que continua representando OAuth. Esta seção registra a decisão material de permit por referência e restart fail-closed; não altera o contrato público MCP/OAuth.
+
 ## Contexto
 
 O SignalSpace conecta o ChatGPT Web a ferramentas locais por MCP/OAuth e precisa manter separadas as duas perguntas que hoje estão acopladas em alguns fluxos:

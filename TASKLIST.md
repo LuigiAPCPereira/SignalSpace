@@ -4,6 +4,15 @@
 
 **Reconciliação de ref mais recente em 26/09/2026:** a ref corrente desta frente é `codex/mvp-vertical-programming`; a última implementação publicada nesta fatia é `3b9fefe398b67cf0752f0a8034d22a829b808c38`. O ciclo OAuth v2 e o núcleo interno de capabilities/policy foram publicados por fast-forward normal; não houve merge, rebase ou force-push. O PR #1 continua draft e sua HEAD/branch de origem continua `feat/m1-local-mcp-diagnostic`; ela não é a branch atual e não foi integrada nesta frente.
 
+## Atualização vigente — `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` — 26/09/2026
+
+- Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICAÇÃO REMOTA PENDENTE** no commit local `30c6570`; base/remoto live inicial `a177f6ca714839d06186fa4df36f62d8e2c0269b`; aceite externo, Quick Tunnel, workspace real, CI, merge e deploy permanecem fora desta missão.
+- `internal/approval` implementa `ApprovalRequest` efêmero e `OperationPermit` interno por referência, com `ALLOW_ONCE`/`DENY`, fingerprint SHA-256 canônico, deduplicação, limites, expiração, terminal retention, versionamento/CAS lógico, consumo atômico e restart fail-closed. O permit não contém segredo e não é devolvido pela API administrativa.
+- `internal/policy` ganhou somente a ponte `REQUIRE_APPROVAL -> create/reuse`; `DENY` não cria pedido e nenhuma operação filesystem/Git/test é executada. O handler MCP público, tools, scopes granulares, metadata OAuth e UI não foram alterados funcionalmente.
+- A API administrativa está separada da fila OAuth: `/api/admin/v1/capability-approvals`, `/.../{id}` e `/.../{id}/decision`; mantém sessão, CSRF, Origin, Host, JSON estrito e `Cache-Control: no-store`. `/api/admin/v1/requests` permanece OAuth.
+- Regressões locais cobrem lifecycle, dedup, fingerprint/contexto, limites, expiração, stale decision, deny, concorrência de decisão/consumo, revogação, restart e HTTP administrativo. Patches protegidos permanecem untracked, não aplicados e intocados.
+- Commit de implementação: `30c6570` (`feat(approval): add local one-shot capability permits`). Documentação será publicada em commit focado separado após a reconciliação final dos gates.
+
 ## Atualização vigente — `SS-MVP-002-OAUTH-CONNECTION-LIFECYCLE-V2-001` — 26/09/2026
 
 - Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `18873819f2dceaa525285df22f1dc6edf9d63ba2`. A tarefa implementa o ciclo OAuth v2 somente no auth harness opt-in; a composição pública Programming e as tools granulares não foram migradas.

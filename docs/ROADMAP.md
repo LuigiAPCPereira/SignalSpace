@@ -1,5 +1,9 @@
 # SignalSpace — roadmap recuperável dos marcos
 
+## Marco vigente — approvals de capability de uso único — 26/09/2026
+
+O slice `SS-MVP-002-LOCAL-APPROVAL-PERMITS-V2-001` implementa a fundação efêmera owner-side para `REQUIRE_APPROVAL`: request separado da fila OAuth, `ALLOW_ONCE`/`DENY`, permit interno de consumo único, concorrência, expiração e restart fail-closed. Ele não altera a superfície MCP nem a UI. A sequência permanece: policies/painel (`ALLOW_SESSION`/`ALLOW_WORKSPACE`) → bridge MCP → migração pública para `signalspace:programming`.
+
 ## Step-up OAuth por ferramenta — `SS-MVP-002-OAUTH-TOOL-STEPUP-001` — 25/09/2026
 
 Esta fatia corrige a interoperabilidade local da composição `programming`: discovery deixa de depender do scope específico do bearer e os descriptors/challenges passam a representar `diagnostic + capability`. O código em `c2dcdbd` está **IMPLEMENTADO / VALIDADO LOCALMENTE** e foi publicado com a reconciliação documental em `14821b4`; a base/remoto observado antes da missão foi `de8ff7e3d253f4dedbfbba1135bdf53e682cd335`. O aceite externo continua pendente. Não há nova tool, scope ou capability.
