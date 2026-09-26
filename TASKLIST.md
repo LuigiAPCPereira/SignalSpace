@@ -459,10 +459,11 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 
 ## Tarefa `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001` — 26/09/2026
 
-- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / PUBLICADA REMOTAMENTE** em `bc37020` na branch `codex/mvp-vertical-programming`.
+- Estado: **IMPLEMENTADA / VALIDADA LOCALMENTE / REVISÃO ADVERSARIAL PASS** na branch `codex/mvp-vertical-programming`.
 - Preflight HTTPS do Quick Tunnel tornado composition-aware: `CheckEmbeddedTransportForScope` valida contra o escopo fechado esperado; `CheckEmbeddedTransport` preserva `signalspace:diagnostic`.
 - `connect quick programming` deriva o escopo esperado `signalspace:programming` exclusivamente do plano local fechado (`plan.expectedCompositionScope`); `connect quick diagnostic` e `connect quick read` utilizam `signalspace:diagnostic`.
 - O preflight valida: Protected-Resource Metadata (`scopes_supported`), Authorization Server Metadata (`scopes_supported`), desafio HTTP `WWW-Authenticate` sem bearer e desafio MCP `tools/call` de `connection_diagnostic` não autenticado.
-- Evidência: matriz unitária completa de validação em `internal/mcp/transport_preflight_test.go`, verificação de `scopes_supported` em `internal/mcp/oauth_preflight_test.go` e testes de preflight/wiring em `cmd/signalspace/programming_v2_test.go`. Suíte Go completa serial, race em pacotes afetados, `go vet ./...`, `go build ./...`, 23 testes Node do painel, 8 testes Node de consentimento, `gofmt` e `git diff --check` passaram.
-- Repetição externa executada com sucesso: o preflight HTTPS passou no runtime Quick real e a URL pública foi anunciada (`https://says-helping-days-invitations.trycloudflare.com/mcp`).
+- Revisão adversarial e endurecimento de testes: adicionados testes explícitos para desafios HTTP e de ferramenta trocados entre diagnostic e programming (`swapped_http_challenge_scope`, `swapped_tool_challenge_scope`), escopo extra no authorization server metadata (`auth_server_extra_scope`), rejeição de URLs inválidas em todos os escopos e teste de adulteração em `plan.expectedCompositionScope` falhando fechado.
+- Evidência: suíte Go completa serial (`go test ./...` 10/10 pacotes PASS sem conflitos de portas), race em pacotes afetados (`internal/mcp` e `cmd/signalspace` PASS), `go vet ./...`, `go build ./...`, 23 testes Node do painel, 8 testes Node de consentimento, `gofmt` e `git diff --check` passaram limpos.
+- Repetição externa executada com sucesso: o preflight HTTPS passou no runtime Quick real com nova fixture Git (`.agents/reviewer_1/disposable_fixture`) e a URL pública foi anunciada (`https://election-deferred-operator-compromise.trycloudflare.com/mcp`).
 - `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` permanece **BLOQUEADO / PENDENTE DE REPETIÇÃO EXTERNA (SESSÃO ATIVA — AGUARDANDO CHATGPT WEB)**.
