@@ -138,6 +138,31 @@ func testPublicEmbeddedMode(t *testing.T, scope string) (string, *http.Client, *
 					return
 				}
 			}
+		case "tool_challenge_http_500":
+			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+				if r.ContentLength > 56 {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+		case "tool_challenge_empty_challenges":
+			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+				if r.ContentLength > 56 {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":2,"result":{"isError":true,"_meta":{"mcp/www_authenticate":[]}}}`))
+					return
+				}
+			}
+		case "tool_challenge_multiple_challenges":
+			if r.URL.Path == "/mcp" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+				if r.ContentLength > 56 {
+					w.Header().Set("Content-Type", "application/json")
+					challenge1 := fmt.Sprintf(`Bearer resource_metadata="%s%s", scope="%s", error="invalid_token", error_description="Authentication required to use this tool"`, origin, metadataPath, scope)
+					challenge2 := fmt.Sprintf(`Bearer resource_metadata="%s%s", scope="other", error="invalid_token", error_description="Authentication required to use this tool"`, origin, metadataPath)
+					_, _ = w.Write([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"result":{"isError":true,"_meta":{"mcp/www_authenticate":[%q,%q]}}}`, challenge1, challenge2)))
+					return
+				}
+			}
 		}
 		handler.ServeHTTP(w, r)
 	}))
@@ -225,6 +250,13 @@ func TestEmbeddedTransportCompositionMatrix(t *testing.T) {
 		t.Fatal("diagnostic metadata + programming expected should have failed")
 	}
 
+	// Context cancellation fails closed
+	cancCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := CheckEmbeddedTransportForScope(cancCtx, progResource, ScopeProgramming, progClient); err == nil {
+		t.Fatal("canceled context should fail preflight")
+	}
+
 	// Unsupported composition scope: FAIL
 	for _, invalidScope := range []string{"", "unsupported", "signalspace:workspace.read", "signalspace:programming-fake", "signalspace:diagnostic ", " signalspace:programming"} {
 		if _, err := CheckEmbeddedTransportForScope(context.Background(), diagResource, invalidScope, diagClient); err == nil {
@@ -274,6 +306,9 @@ func TestEmbeddedTransportCompositionMatrix(t *testing.T) {
 			"swapped_http_challenge_scope",
 			"wrong_tool_challenge_scope",
 			"swapped_tool_challenge_scope",
+			"tool_challenge_http_500",
+			"tool_challenge_empty_challenges",
+			"tool_challenge_multiple_challenges",
 		} {
 			t.Run(m.name+"_"+failureFault, func(t *testing.T) {
 				*m.fault = failureFault

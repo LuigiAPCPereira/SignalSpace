@@ -191,4 +191,13 @@ func TestQuickProgrammingPanelPublishesProgrammingDescription(t *testing.T) {
 	if !strings.Contains(output.String(), "READ + WRITE + GIT") || !strings.Contains(output.String(), "PUBLICAR PROGRAMAÇÃO PAINEL") {
 		t.Fatalf("unexpected prompt: %s", output.String())
 	}
+
+	var outputNoPanel strings.Builder
+	err = runQuickWithOptions(context.Background(), strings.NewReader("CANCELAR\n"), &outputNoPanel, nil, nil, compositionProgramming, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(outputNoPanel.String(), "READ + WRITE + GIT") || !strings.Contains(outputNoPanel.String(), "Digite PUBLICAR PROGRAMAÇÃO para iniciar o túnel.") || strings.Contains(outputNoPanel.String(), "PAINEL") {
+		t.Fatalf("unexpected prompt without panel: %s", outputNoPanel.String())
+	}
 }
