@@ -680,14 +680,20 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
   4. Limpeza e reexecução da suíte seriada: o processo ativo na porta 7676 foi encerrado, a suíte completa serial `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s` e race `go test -count=1 -race ./internal/mcp ./cmd/signalspace` foram executados e aprovados sem qualquer erro ou race.
 - Melhorias aplicadas em `cmd/signalspace/programming_v2_test.go`, `cmd/signalspace/composition_policy_test.go` e `internal/mcp/transport_preflight_test.go`.
 - Patches protegidos verificados: `signalspace-oauth-read-scope.patch` e `signalspace-workspace-client-binding.patch` mantêm os hashes SHA-256 intactos.
-- Nova repetição externa ao vivo iniciada em `.agents/reviewer_2/disposable_fixture`:
-  - Runtime executado via `/home/luigiapcp/Documentos/Projetos/SignalSpace/.agents/reviewer_2/run_quick.sh` com `go run ./cmd/signalspace connect quick programming panel`.
-  - Preflight HTTPS passou e anunciou a URL pública: `https://stick-allowing-sauce-investigation.trycloudflare.com/mcp`.
-  - Painel administrativo local ativo em `http://localhost:7677/` com código de pareamento `SrtWHTC_SEbM95xkhlQR-c8KfpQwuOIE`.
-  - Verificação ao vivo via `curl`:
-    - `/.well-known/oauth-protected-resource` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
-    - `/.well-known/oauth-authorization-server` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
-    - POST `/mcp` sem bearer → 401 Unauthorized com `WWW-Authenticate: Bearer resource_metadata="https://color-arguments-youth-them.trycloudflare.com/.well-known/oauth-protected-resource", scope="signalspace:programming"`.
-    - POST `/mcp` `connection_diagnostic` sem bearer → 200 OK com `isError: true` e `_meta.mcp/www_authenticate` contendo o desafio com `scope="signalspace:programming"`.
-- A sessão permanece ativa aguardando o conector do ChatGPT Web sem dispará-lo antecipadamente.
 
+- Auditoria adversarial Round 3 (Revisão Final):
+  1. Identificadas lacunas adicionais na matriz de falhas do preflight: ausência de testes para falhas do desafio de ferramenta (HTTP 500, array vazio `mcp/www_authenticate: []`, array múltiplo `mcp/www_authenticate: [..., ...]`) e ausência de teste para cancelamento prévio de contexto (`context.Canceled`).
+  2. Identificada ausência de asserção para o prompt de confirmação de `connect quick programming` quando executado sem painel (`panel = false`).
+  3. Adicionados testes em `internal/mcp/transport_preflight_test.go` para `tool_challenge_http_500`, `tool_challenge_empty_challenges`, `tool_challenge_multiple_challenges` e cancelamento de contexto, bem como asserção em `cmd/signalspace/programming_v2_test.go` para prompt de programação sem painel.
+  4. Executados com sucesso: `go test ./... -p=1 -parallel=1 -count=1 -timeout=300s` (10/10 pacotes PASS), `go test -race -p=1 -parallel=1 -count=1 ./internal/mcp ./cmd/signalspace` (PASS, zero races), `go vet ./...`, `go build ./...`, 23 testes Node do painel, 8 testes Node de consentimento, `gofmt` e `git diff --check`.
+  5. Repetição externa ao vivo Round 3 iniciada em `.agents/reviewer_3/disposable_fixture`:
+     - Runtime executado via `.agents/reviewer_3/run_quick.sh` com `go run ./cmd/signalspace connect quick programming panel`.
+     - Preflight HTTPS passou e anunciou a URL pública: `https://taylor-hugh-accessories-echo.trycloudflare.com/mcp`.
+     - Painel administrativo local ativo em `http://localhost:7677/` com código de pareamento `1JG6lepzY-8EKRoL79gNjZA4OCjjRMlQ`.
+     - Verificação ao vivo via `curl` confirmada nos 5 endpoints:
+       - `/.well-known/oauth-protected-resource` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
+       - `/.well-known/oauth-authorization-server` → 200 OK com `scopes_supported: ["signalspace:programming"]`.
+       - POST `/mcp` sem bearer → 401 Unauthorized com `WWW-Authenticate: Bearer resource_metadata="https://taylor-hugh-accessories-echo.trycloudflare.com/.well-known/oauth-protected-resource", scope="signalspace:programming"`.
+       - POST `/mcp` `connection_diagnostic` sem bearer → 200 OK com `isError: true` e `_meta.mcp/www_authenticate` contendo o desafio com `scope="signalspace:programming"`.
+       - `http://localhost:7677/` → 200 OK servindo HTML do painel administrativo.
+  6. A sessão permanece ativa aguardando o conector do ChatGPT Web sem dispará-lo antecipadamente.
