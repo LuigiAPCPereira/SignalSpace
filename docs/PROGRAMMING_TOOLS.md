@@ -284,3 +284,14 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a
 ## Preflight HTTPS composition-aware — `SS-MVP-002-QUICK-PREFLIGHT-COMPOSITION-V2-001`
 
 A divergência entre a metadata pública de Programming v2 (`signalspace:programming`) e o preflight de transporte foi eliminada com `CheckEmbeddedTransportForScope`. `connect quick programming` fornece `signalspace:programming` derivado exclusivamente do composition plan fechado; `connect quick diagnostic` preserva `signalspace:diagnostic`. Validação unitária e de matriz cobre correspondência, incompatibilidades, escopos extras e desafios não autenticados.
+
+
+## Transporte Programming via OpenAI Secure MCP Tunnel — 06/10/2026
+
+`connect tunnel programming` expõe o **mesmo catálogo fechado de 20 tools** da composição Programming v2 e não adiciona capability. Como a conexão Tunnel não usa o OAuth do MCP, os descriptors desse modo não anunciam `securitySchemes` OAuth. A autenticação do último hop usa `X-SignalSpace-Tunnel-Token` injetado localmente pelo `tunnel-client`; ausência, valor incorreto ou duplicidade falham fechado.
+
+Depois da autenticação da conexão, a chamada entra no mesmo `ProgrammingAuthorizer`: owner/principal local, session, grant envelope, capability, policy, fingerprint e approval continuam obrigatórios. O Standard Profile não muda: checkout permite session-scoped read/write/Git review e pergunta delete; managed acrescenta Git index e pergunta delete/commit. Shell, `test.run` público, branch, Git remoto/destrutivo e lifecycle MCP de worktree continuam ausentes.
+
+O principal Tunnel é estável para a credencial/runtime dedicado e não representa identidade individual do usuário remoto. Rotacionar a credencial muda o principal e, portanto, exige novo grant. `7677` continua exclusivamente owner-side.
+
+Validação automatizada no SHA `880637ccd6614d9a4bfbba67794977804d7878bd`: 20 tools exatas, ausência de OAuth schemes no Tunnel, diagnostic `tunnel_programming`, principal estático entregue ao authorizer, negação sem authorizer e matriz missing/wrong/duplicate token/Host. CI #37517878621 passou format, suíte Go completa, Node, race, vet e build. Aceite remoto pelo `tunnel-client`/ChatGPT ainda não executado.

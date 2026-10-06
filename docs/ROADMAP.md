@@ -121,3 +121,11 @@ Estado: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a
 ## Aceite externo Programming v2 — `SS-MVP-002-EXTERNAL-PROGRAMMING-V2-ACCEPTANCE-001` — 26/09/2026
 
 Resultado: **BLOQUEADO / PARCIAL no preflight**. O Quick Tunnel real iniciou e registrou conexão, mas a verificação HTTPS rejeitou a metadata do protected resource por divergência com resource/issuer/scope configurado. Não houve OAuth, connector, discovery, workspace ou tool externa. O próximo passo requer gate próprio de diagnóstico/correção do runtime; não é evidência de falha do bridge MCP.
+
+
+## Atualização de transporte privado — 06/10/2026
+
+- **Programming persistente sem domínio:** Secure MCP Tunnel implementado como adapter separado de conexão; CI validado. O transporte reutiliza a autorização local v2 e não adiciona capability.
+- **Quick Tunnel:** permanece caminho dev/smoke/compatibilidade OAuth, não a direção persistente preferida.
+- **Gate operacional seguinte:** validar `tunnel-client` real dedicado ao SignalSpace, health/readiness e ChatGPT Connection=Tunnel antes de considerar a frente externa concluída.
+- **Fora por continuidade:** shell, `test.run` público, Git remoto/destrutivo, lifecycle MCP de worktree, merge e deploy.

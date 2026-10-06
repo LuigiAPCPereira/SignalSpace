@@ -45,7 +45,15 @@ A documentação da Cloudflare descreve `cloudflared tunnel login`, criação do
 
 Com o transporte e a conta do usuário disponíveis, verificar no ChatGPT Web: descoberta MCP, DCR do cliente correto, consentimento na página HTTPS, aprovação **no terminal local**, retorno `iss`/`state`, troca com PKCE e token `aud` correto e, finalmente, chamada à ferramenta `connection_diagnostic` autenticada. Registrar apenas o resultado, sem tokens ou códigos. O auth harness v2 agora cobre refresh/rotação/revogação de token family localmente; isso não substitui o aceite externo nem prova proteção contra abuso público ou uma experiência de instalação confiável.
 
-O [Túnel MCP Seguro da OpenAI](https://developers.openai.com/pt-BR/api/docs/guides/secure-mcp-tunnels) é outra possibilidade: pode manter o MCP privado, mas o servidor de autorização OAuth precisa ser acessível pelo navegador, pois o túnel não o publica automaticamente. É necessária configuração separada na Plataforma e autorização do workspace.
+## OpenAI Secure MCP Tunnel — transporte privado preferido para Programming
+
+O [Secure MCP Tunnel da OpenAI](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) passa a ser o transporte privado persistente preferido para a composição Programming. Ele mantém o MCP local sem regra de entrada pública: o `tunnel-client` abre a conexão HTTPS de saída e encaminha o canal principal para `http://127.0.0.1:7676/mcp`. O painel `localhost:7677` nunca é configurado como target.
+
+O modo SignalSpace é explícito: `connect tunnel programming`. Ele não reutiliza o OAuth browser-facing do Quick; no app privado do ChatGPT o contrato alvo é Connection=Tunnel e Authentication=No authentication. O último hop é autenticado por uma credencial local separada, entregue ao `tunnel-client` como `X-SignalSpace-Tunnel-Token: file:<caminho>`. Esse mecanismo não é capability authorization: depois dele, toda tool continua passando por grant, Standard Profile, Policy Engine e approvals locais.
+
+A credencial gera um principal estável para **um runtime/tunnel dedicado ao SignalSpace**. Esse principal é compartilhado por quem puder usar esse Tunnel; não é uma identidade individual atestada de usuário. Por isso não reutilizar o runtime/principal de outro MCP e não inferir permissões por display name. Connector-forwarded headers podem substituir static extra headers; qualquer substituição incorreta da credencial resulta em negação, nunca fallback.
+
+O SignalSpace não cria, registra, inicia nem supervisiona `tunnel-client`: esse lifecycle continua operator-owned. Quick Tunnel permanece disponível como dev/smoke/compatibilidade OAuth, não como requisito da conexão persistente. O modo Tunnel não é uma “origem pública estável”; é um caminho privado hospedado pela OpenAI até um MCP que continua local.
 
 ## Relação com autorização local v2
 
@@ -66,3 +74,16 @@ O preflight HTTPS público é composition-aware:
   2. Authorization Server Metadata (`/.well-known/oauth-authorization-server`): `issuer`, endpoints OAuth canônicos, JWKS, DCR e confirmação de que `scopes_supported` anuncia o escopo esperado da composição.
   3. Desafio HTTP não autenticado: requisição MCP sem bearer recebe `401 Unauthorized` com cabeçalho `WWW-Authenticate` apontando `resource_metadata` e o `scope` exato da composição.
   4. Desafio MCP não autenticado: chamada a `connection_diagnostic` sem token recebe `isError: true` com desafio `_meta.mcp/www_authenticate` contendo `resource_metadata`, `scope` exato da composição e `error="invalid_token"`.
+
+
+### Configuração operacional esperada
+
+1. iniciar `signalspace connect tunnel programming` e confirmar a frase owner-side;
+2. usar um Tunnel/runtime OpenAI **dedicado** ao SignalSpace;
+3. configurar o main MCP para `http://127.0.0.1:7676/mcp`;
+4. configurar o extra header `X-SignalSpace-Tunnel-Token` usando a referência `file:` exibida pelo SignalSpace, sem copiar o valor para config versionada;
+5. selecionar esse Tunnel no app ChatGPT com autenticação do MCP desativada;
+6. manter `localhost:7677` somente para o proprietário;
+7. criar o grant Programming por `workspace request-programming` ou `workspace request-worktree`.
+
+A implementação foi validada em CI no SHA `880637ccd6614d9a4bfbba67794977804d7878bd` (run #37517878621). O runtime `tunnel-client` real e o ChatGPT Tunnel ainda exigem aceite operacional no host do proprietário.

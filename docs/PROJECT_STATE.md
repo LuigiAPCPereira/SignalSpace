@@ -784,3 +784,20 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 **Próxima ação:** handoff ao ChatGPT Web com `<continuidade_codex>` mantendo a sessão ativa na porta 7676/7677 aguardando conexão.
 
+
+
+## Checkpoint vigente — `SS-MVP-002-SECURE-MCP-TUNNEL-TRANSPORT-001` — 06/10/2026
+
+**Estado:** **IMPLEMENTADO / VALIDADO EM CI / ACEITE OPERACIONAL DO TUNNEL PENDENTE**.
+
+**Base recuperada:** `codex/mvp-vertical-programming` em `b99965b16e2365f0fea20b5e188b6893c6c7444b`. O slice foi isolado em `chatgpt/secure-mcp-tunnel`; PR draft #2 existe apenas como superfície de CI, sem merge.
+
+**Implementação:** `connect tunnel programming` inicia o MCP Programming em loopback e o painel local, cria/reusa uma credencial privada de último hop e um principal local estável, e reutiliza integralmente grants, Standard Profile, Policy Engine, approvals e Git local tipado. O adapter Tunnel não publica OAuth nem `securitySchemes`; as composições Quick/OAuth existentes não foram removidas.
+
+**Segurança:** o Tunnel dedicado não é identidade por pessoa. A credencial do hop `tunnel-client -> SignalSpace` autentica somente a conexão. Workspace e capabilities continuam dependentes de grant/policy owner-side. `7677` nunca é alvo do Tunnel. Header ausente/incorreto/duplicado falha fechado; o segredo não é devolvido por MCP nem impresso pelo runtime.
+
+**Validação:** SHA funcional `880637ccd6614d9a4bfbba67794977804d7878bd`, workflow Go #37517878621 PASS em format, suíte Go completa, Node, race, vet e build. O fix de `internal/admin/http_response_loss_test.go` é somente de harness para usar a origem canônica de cookie `localhost:7677` enquanto diala deterministicamente `127.0.0.1:7677`.
+
+**Não validado:** instalação real de `tunnel-client`, tunnel ID/runtime dedicado, health/readiness local do cliente, app ChatGPT Connection=Tunnel e tráfego remoto ponta a ponta. Os patches locais protegidos não são observáveis pelo GitHub e não são reivindicados como revalidados nesta sessão.
+
+**Próxima ação:** no host do proprietário, configurar um Tunnel/runtime exclusivo do SignalSpace apontando somente para `http://127.0.0.1:7676/mcp`, injetar `X-SignalSpace-Tunnel-Token` via referência `file:` indicada pelo runtime e executar o aceite externo antes de promover Secure Tunnel como transporte operacional comprovado.

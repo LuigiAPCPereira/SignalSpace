@@ -697,3 +697,14 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
        - POST `/mcp` `connection_diagnostic` sem bearer → 200 OK com `isError: true` e `_meta.mcp/www_authenticate` contendo o desafio com `scope="signalspace:programming"`.
        - `http://localhost:7677/` → 200 OK servindo HTML do painel administrativo.
   6. A sessão permanece ativa aguardando o conector do ChatGPT Web sem dispará-lo antecipadamente.
+
+
+## 06/10/2026 — Secure MCP Tunnel Programming — `SS-MVP-002-SECURE-MCP-TUNNEL-TRANSPORT-001`
+
+- Retomada executada segundo o Agent Protocol atual: ref canônica recuperada em `b99965b16e2365f0fea20b5e188b6893c6c7444b`, fontes de continuidade reabertas e implementação isolada em `chatgpt/secure-mcp-tunnel`; PR draft #2 foi aberto apenas para acionar CI, sem merge.
+- Pesquisa da documentação oficial `openai/tunnel-client` confirmou Streamable HTTP local, conexão outbound-only, `MCP_EXTRA_HEADERS` por `file:`/env e a limitação de que connector-forwarded headers podem sobrescrever extras estáticos. Foi escolhido segredo local de último hop + principal dedicado; nenhum header remoto é tratado como identidade de pessoa.
+- Implementado `connect tunnel programming`, adapter MCP `tunnel_programming`, credencial privada persistente, principal estável, 20 tools sem OAuth `securitySchemes` e reuso do mesmo `ProgrammingAuthorizer`/grants/policy/approval. `7676`/ `7677` permanecem loopback e o `tunnel-client` não é supervisionado pelo SignalSpace.
+- O primeiro CI revelou duas regressões próprias (texto legado OAuth e asserção do diagnostic nested JSON), ambas corrigidas. Também expôs uma falha determinística pré-existente no harness de perda de resposta admin: a URL era `127.0.0.1` enquanto o jar era consultado em `localhost`. O teste foi corrigido para URL/cookie origin canônica `localhost` com dial IPv4 explícito para `127.0.0.1:7677`; nenhum código de produção admin mudou.
+- SHA funcional `880637ccd6614d9a4bfbba67794977804d7878bd`: workflow Go #37517878621 **PASS** em gofmt, `go test ./...`, Node, race, vet e build.
+- Não foi possível operar o `tunnel-client` instalado na máquina do proprietário a partir desta sessão; portanto tunnel ID/runtime, health/readiness e ChatGPT real permanecem **NÃO VALIDADOS**. Os patches locais protegidos também não são observáveis pelo GitHub e não são declarados revalidados.
+- Próxima ação: publicar o slice na branch ativa por fast-forward após CI da reconciliação documental; depois executar smoke no host do proprietário com tunnel/runtime dedicado e app ChatGPT Connection=Tunnel.

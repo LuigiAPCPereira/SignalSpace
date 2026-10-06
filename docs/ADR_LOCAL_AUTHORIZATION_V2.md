@@ -209,3 +209,24 @@ Esta extensão aplica o profile somente depois de um grant Programming owner-sid
 `ALLOW_SESSION` contém owner, client, workspace, session e capability e não atravessa revoke, restart ou nova sessão. `ALLOW_WORKSPACE` continua limitado a managed workspace estável e ao mesmo owner/client/workspace/capability; sua prioridade supera somente o `ASK` padrão do profile, nunca um deny explícito e nunca um grant ausente. A UI existente de approvals e policies é reutilizada; não há novo scope OAuth, tool MCP ou privilégio implícito.
 
 Estado desta reconciliação: **IMPLEMENTADO / VALIDADO LOCALMENTE / PUBLICADO REMOTAMENTE** em `db06a2932874dd2f382426b2e6683cfd41edc955` por fast-forward normal. O aceite ChatGPT Web, Quick Tunnel, workspace real e CI permanecem fora da evidência.
+
+
+## Reconciliação de transporte — Secure MCP Tunnel — 06/10/2026
+
+A autenticação da **conexão** passa a admitir dois adapters que convergem na mesma autorização local:
+
+```text
+Quick/OAuth Programming ─┐
+                         ├─> ProgrammingAuthorizer -> grant -> policy -> approval -> tool
+Secure MCP Tunnel ───────┘
+```
+
+No modo `connect tunnel programming`, o SignalSpace não anuncia OAuth nem tenta publicar seu authorization server pelo Tunnel. O `tunnel-client` autentica-se perante o control plane da OpenAI com sua própria credencial operator-owned; separadamente, injeta uma credencial estática somente no hop local para `127.0.0.1:7676/mcp`. O SignalSpace valida esse segredo e produz um principal local estável. Essa camada prova “requisição chegou pelo runtime dedicado que conhece o segredo local”, não “qual pessoa remota fez a requisição”.
+
+A decisão preserva as invariantes desta ADR: conexão nunca equivale a workspace/capability; grant é o hard ceiling; policy/permit só operam dentro do envelope; approvals não autoexecutam chamadas antigas; shell e Git remoto continuam gates independentes. `7677` permanece fora de qualquer túnel.
+
+**Limitação aceita:** o principal do Tunnel é compartilhado por consumidores autorizados daquele Tunnel. Enquanto não houver identity assertion oficial confiável entregue ao MCP local, não derivar owner/client de headers enviados pelo connector nem de display names. Isolamento mais fino requer uma evolução separada.
+
+**Compatibilidade:** Quick/OAuth não foi removido. Quick fica como dev/smoke/compatibilidade; Secure MCP Tunnel é a direção preferida para conexão privada persistente sem domínio próprio.
+
+**Evidência de implementação:** SHA `880637ccd6614d9a4bfbba67794977804d7878bd`, CI #37517878621 integralmente verde. O aceite com `tunnel-client` real e ChatGPT permanece separado.
