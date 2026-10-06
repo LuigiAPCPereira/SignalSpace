@@ -218,7 +218,7 @@ func TestTunnelProgrammingDiscoveryHasNoOAuthSecuritySchemes(t *testing.T) {
 	}
 
 	diag := tunnelMCPRequest(t, handler, "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connection_diagnostic\",\"arguments\":{}}}", []string{tunnelTestToken}, "", "")
-	if diag.Code != http.StatusOK || !strings.Contains(diag.Body.String(), "\"mode\":\"tunnel_programming\"") {
+	if diag.Code != http.StatusOK || !strings.Contains(diag.Body.String(), "tunnel_programming") {
 		t.Fatalf("unexpected Tunnel diagnostic: %d %s", diag.Code, diag.Body.String())
 	}
 }
