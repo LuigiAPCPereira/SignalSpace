@@ -81,7 +81,17 @@ type responseLossClient struct {
 
 func newResponseLossClient(target string, mode responseLossMode) *responseLossClient {
 	jar, _ := cookiejar.New(nil)
-	loss := &responseLossTransport{base: http.DefaultTransport, target: target, mode: mode}
+	base := &http.Transport{
+		Proxy: nil,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if address != "localhost:7677" {
+				return nil, errors.New("unexpected response-loss test address")
+			}
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, "tcp4", AdminAddress)
+		},
+	}
+	loss := &responseLossTransport{base: base, target: target, mode: mode}
 	return &responseLossClient{
 		client: &http.Client{Jar: jar, Transport: loss, Timeout: 5 * time.Second},
 		jar:    jar,
@@ -95,7 +105,7 @@ func (c *responseLossClient) do(t *testing.T, method, path, payload, csrf string
 	if payload != "" {
 		requestBody = strings.NewReader(payload)
 	}
-	request, err := http.NewRequest(method, "http://"+AdminAddress+path, requestBody)
+	request, err := http.NewRequest(method, AdminOrigin+path, requestBody)
 	if err != nil {
 		t.Fatal(err)
 	}
