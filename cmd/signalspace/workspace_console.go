@@ -46,6 +46,7 @@ type workspaceConsole struct {
 	grants                 *workspace.Grants
 	owner                  string
 	issuedClients          func() []auth.ClientInfo
+	clientLabel            string
 	readEnabled            bool
 	pending                *pendingWorkspace
 	managedPending         *pendingManagedWorkspace
@@ -66,6 +67,13 @@ func newWorkspaceConsole(authorization *auth.Server, stateDir string) (*workspac
 		return nil, err
 	}
 	return &workspaceConsole{grants: grants, owner: authorization.OwnerSubject(), issuedClients: authorization.IssuedClients, managed: managed}, nil
+}
+
+func (c *workspaceConsole) clientLabelText() string {
+	if c != nil && c.clientLabel != "" {
+		return c.clientLabel
+	}
+	return "OAuth"
 }
 
 func (c *workspaceConsole) Close() error {
@@ -201,7 +209,7 @@ func (c *workspaceConsole) printWorkspaceStatus(output io.Writer) {
 	}
 
 	fmt.Fprintln(output, "Concessão local: ativa.")
-	fmt.Fprintf(output, "Session ID: %s\nCliente OAuth: id=%s\n", snapshot.SessionID, snapshot.ClientID)
+	fmt.Fprintf(output, "Session ID: %s\nCliente %s: id=%s\n", snapshot.SessionID, c.clientLabelText(), snapshot.ClientID)
 	if client, ok := c.issuedClient(snapshot.ClientID); ok {
 		fmt.Fprintf(output, "Nome declarado: %q (identidade do aplicativo não atestada).\n", client.Name)
 	} else {
@@ -216,7 +224,7 @@ func (c *workspaceConsole) printWorkspaceStatus(output io.Writer) {
 }
 
 func (c *workspaceConsole) printWorkspaceStatusLimits(output io.Writer, scopes []string) {
-	fmt.Fprintln(output, "Este estado descreve apenas Grants local; não comprova token OAuth válido nem conexão ou chamada MCP.")
+	fmt.Fprintln(output, "Este estado descreve apenas Grants local; não comprova autenticação de conexão válida nem chamada MCP.")
 	if !c.readEnabled && c.programmingApproval == nil {
 		fmt.Fprintln(output, "Modo diagnóstico: uma concessão interna não publica read_file; o MCP permanece limitado a connection_diagnostic.")
 	}
@@ -251,15 +259,15 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 	operation, argument, hasArgument := strings.Cut(command, " ")
 	if operation == "clients" && !hasArgument {
 		if c.issuedClients == nil {
-			fmt.Fprintln(output, "Nenhum cliente OAuth disponível.")
+			fmt.Fprintf(output, "Nenhum cliente %s disponível.\n", c.clientLabelText())
 			return true
 		}
 		clients := c.issuedClients()
 		if len(clients) == 0 {
-			fmt.Fprintln(output, "Nenhum cliente OAuth com token emitido nesta instância.")
+			fmt.Fprintf(output, "Nenhum cliente %s disponível nesta instância.\n", c.clientLabelText())
 		}
 		for _, client := range clients {
-			fmt.Fprintf(output, "Cliente OAuth: id=%s nome=%q (identidade do aplicativo não atestada)\n", client.ID, client.Name)
+			fmt.Fprintf(output, "Cliente %s: id=%s nome=%q (identidade remota individual não atestada)\n", c.clientLabelText(), client.ID, client.Name)
 		}
 		return true
 	}
@@ -536,7 +544,7 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 	case "request":
 		clientID, root, valid := strings.Cut(argument, " ")
 		if !valid || !c.isIssuedClient(clientID) {
-			fmt.Fprintln(output, "workspace client rejected: complete OAuth and select an ID shown by workspace clients")
+			fmt.Fprintln(output, "workspace client rejected: select an ID shown by workspace clients")
 			return true
 		}
 		if !localWorkspacePath(root) {
@@ -568,7 +576,7 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 		}
 		client, ok := c.issuedClient(clientID)
 		if !ok {
-			fmt.Fprintln(output, "workspace client rejected: complete OAuth and select an ID shown by workspace clients")
+			fmt.Fprintln(output, "workspace client rejected: select an ID shown by workspace clients")
 			return true
 		}
 		standard := strings.HasPrefix(rest, "/")
@@ -593,9 +601,9 @@ func (c *workspaceConsole) handleWorkspaceCommand(line string, output io.Writer)
 			return true
 		}
 		if standard {
-			fmt.Fprintf(output, "Pasta solicitada para Programming Standard: %q\nCliente OAuth selecionado: %s (%s)\nEnvelope: checkout Programming + profile STANDARD\n", root, client.Name, client.ID)
+			fmt.Fprintf(output, "Pasta solicitada para Programming Standard: %q\nCliente %s selecionado: %s (%s)\nEnvelope: checkout Programming + profile STANDARD\n", root, c.clientLabelText(), client.Name, client.ID)
 		} else {
-			fmt.Fprintf(output, "Pasta solicitada para programação: %q\nCliente OAuth selecionado: %s (%s)\nCapacidades solicitadas: %s\nEfeitos: %s\n", root, client.Name, client.ID, strings.Join(pending.Scopes, ","), capabilityDescriptions(pending.Scopes))
+			fmt.Fprintf(output, "Pasta solicitada para programação: %q\nCliente %s selecionado: %s (%s)\nCapacidades solicitadas: %s\nEfeitos: %s\n", root, c.clientLabelText(), client.Name, client.ID, strings.Join(pending.Scopes, ","), capabilityDescriptions(pending.Scopes))
 		}
 		fmt.Fprintf(output, "Confirme com workspace approve-programming %s ou cancele com workspace cancel-programming %s (expira em 2 minutos).\n", pending.ID, pending.ID)
 	case "approve-programming":
