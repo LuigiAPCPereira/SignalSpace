@@ -224,7 +224,11 @@ func (c *workspaceConsole) printWorkspaceStatus(output io.Writer) {
 }
 
 func (c *workspaceConsole) printWorkspaceStatusLimits(output io.Writer, scopes []string) {
-	fmt.Fprintln(output, "Este estado descreve apenas Grants local; não comprova autenticação de conexão válida nem chamada MCP.")
+	if c.clientLabelText() == "OAuth" {
+		fmt.Fprintln(output, "Este estado descreve apenas Grants local; não comprova token OAuth válido nem conexão ou chamada MCP.")
+	} else {
+		fmt.Fprintln(output, "Este estado descreve apenas Grants local; não comprova autenticação Secure Tunnel válida nem chamada MCP.")
+	}
 	if !c.readEnabled && c.programmingApproval == nil {
 		fmt.Fprintln(output, "Modo diagnóstico: uma concessão interna não publica read_file; o MCP permanece limitado a connection_diagnostic.")
 	}
