@@ -211,8 +211,9 @@ func isOversized(err error) bool {
 }
 
 func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode string, onMCPEvent func(string, string), readAccess *readToolAccess, writeAccess *writeToolAccess, gitAccess *gitToolAccess, gitIndexAccess *gitIndexToolAccess, gitCommitAccess *gitCommitToolAccess, testAccess *testToolAccess, programmingAuthorizer ProgrammingAuthorizer, programmingIdentity VerifiedIdentity) {
-	programmingDiscovery := mode == "oauth_programming" || mode == "oauth_programming_legacy"
-	programmingV2 := mode == "oauth_programming"
+	tunnelProgramming := mode == "tunnel_programming"
+	programmingDiscovery := mode == "oauth_programming" || mode == "oauth_programming_legacy" || tunnelProgramming
+	programmingV2 := mode == "oauth_programming" || tunnelProgramming
 	switch msg.Method {
 	case "initialize":
 		var params struct {
@@ -223,7 +224,9 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			return
 		}
 		instructions := "Diagnostic only; no development tools are available."
-		if programmingV2 {
+		if tunnelProgramming {
+			instructions = "Programming tools use a dedicated OpenAI Secure MCP Tunnel connection plus local SignalSpace authorization; local approval may be required. Git index and commit require a managed SignalSpace worktree; no shell, remote Git or test.run."
+		} else if programmingV2 {
 			instructions = "Programming tools use one OAuth Programming connection plus local SignalSpace authorization; local approval may be required. Git index and commit require a managed SignalSpace worktree; no shell, remote Git or test.run."
 		} else if programmingDiscovery {
 			instructions = "Programming tools are discoverable; each category requires a separate OAuth scope and active local grant. Git index and commit require a managed SignalSpace worktree; no shell, remote Git or test.run."
@@ -276,7 +279,7 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 			"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
 			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false},
 		}
-		if mode == "oauth_diagnostic" || programmingDiscovery {
+		if mode == "oauth_diagnostic" || (programmingDiscovery && !tunnelProgramming) {
 			scope := diagnosticScope
 			if programmingV2 {
 				scope = programmingScope
@@ -349,7 +352,11 @@ func handle(w http.ResponseWriter, r *http.Request, msg request, id any, mode st
 				if !ok {
 					continue
 				}
-				definition["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{programmingScope}}}
+				if tunnelProgramming {
+					delete(definition, "securitySchemes")
+				} else {
+					definition["securitySchemes"] = []any{map[string]any{"type": "oauth2", "scopes": []string{programmingScope}}}
+				}
 				if name, ok := definition["name"].(string); ok && name != toolName {
 					definition["description"] = programmingToolDescription(name)
 				}
