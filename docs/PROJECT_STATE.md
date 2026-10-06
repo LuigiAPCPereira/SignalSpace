@@ -792,7 +792,7 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 **Publicação:** `codex/mvp-vertical-programming` avançou por fast-forward com lease de `b99965b16e2365f0fea20b5e188b6893c6c7444b` para o checkpoint `32c9f7bc7ff8d0b91a6e92fec041efd0a4e0a898`, sem merge commit, rebase ou force-push.
 
-**Base recuperada:** `codex/mvp-vertical-programming` em `b99965b16e2365f0fea20b5e188b6893c6c7444b`. O slice foi isolado em `chatgpt/secure-mcp-tunnel`; PR draft #2 existe apenas como superfície de CI, sem merge.
+**Base recuperada:** `codex/mvp-vertical-programming` em `b99965b16e2365f0fea20b5e188b6893c6c7444b`. O slice foi isolado em `chatgpt/secure-mcp-tunnel`; o PR draft #2 serviu apenas como superfície de CI. Depois que a base foi avançada manualmente por fast-forward ao mesmo commit, o GitHub marcou o PR como `merged` automaticamente; não houve merge API nem merge commit.
 
 **Implementação:** `connect tunnel programming` inicia o MCP Programming em loopback e o painel local, cria/reusa uma credencial privada de último hop e um principal local estável, e reutiliza integralmente grants, Standard Profile, Policy Engine, approvals e Git local tipado. O adapter Tunnel não publica OAuth nem `securitySchemes`; as composições Quick/OAuth existentes não foram removidas.
 

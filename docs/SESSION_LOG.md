@@ -713,5 +713,5 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 ## 06/10/2026 — publicação do slice Secure MCP Tunnel
 
 - Após CI verde do código e da reconciliação documental, `codex/mvp-vertical-programming` avançou por fast-forward com lease de `b99965b16e2365f0fea20b5e188b6893c6c7444b` para `32c9f7bc7ff8d0b91a6e92fec041efd0a4e0a898`.
-- Não houve merge commit, rebase, force-push ou deploy. O PR draft #2 permaneceu somente como superfície de CI e deve ser fechado sem merge após este checkpoint final.
+- Não houve merge commit, rebase, force-push ou deploy. O PR draft #2 foi usado somente como superfície de CI; ao receber por fast-forward o mesmo commit na base, o GitHub o fechou/classificou automaticamente como `merged`. Essa classificação da plataforma não corresponde a uma chamada de merge nem adicionou commit de merge.
 - O estado funcional publicado continua separado do aceite operacional: a instalação real de `tunnel-client`, tunnel/runtime dedicado, health/readiness e app ChatGPT ainda precisam ser exercitados no host do proprietário.
