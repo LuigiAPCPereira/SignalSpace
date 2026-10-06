@@ -708,3 +708,10 @@ Conector GitHub mostra arquivos versionados e metadados remotos, **não worktree
 - SHA funcional `880637ccd6614d9a4bfbba67794977804d7878bd`: workflow Go #37517878621 **PASS** em gofmt, `go test ./...`, Node, race, vet e build.
 - Não foi possível operar o `tunnel-client` instalado na máquina do proprietário a partir desta sessão; portanto tunnel ID/runtime, health/readiness e ChatGPT real permanecem **NÃO VALIDADOS**. Os patches locais protegidos também não são observáveis pelo GitHub e não são declarados revalidados.
 - Próxima ação: publicar o slice na branch ativa por fast-forward após CI da reconciliação documental; depois executar smoke no host do proprietário com tunnel/runtime dedicado e app ChatGPT Connection=Tunnel.
+
+
+## 06/10/2026 — publicação do slice Secure MCP Tunnel
+
+- Após CI verde do código e da reconciliação documental, `codex/mvp-vertical-programming` avançou por fast-forward com lease de `b99965b16e2365f0fea20b5e188b6893c6c7444b` para `32c9f7bc7ff8d0b91a6e92fec041efd0a4e0a898`.
+- Não houve merge commit, rebase, force-push ou deploy. O PR draft #2 permaneceu somente como superfície de CI e deve ser fechado sem merge após este checkpoint final.
+- O estado funcional publicado continua separado do aceite operacional: a instalação real de `tunnel-client`, tunnel/runtime dedicado, health/readiness e app ChatGPT ainda precisam ser exercitados no host do proprietário.

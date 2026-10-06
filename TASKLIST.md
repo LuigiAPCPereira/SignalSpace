@@ -471,7 +471,7 @@ Foi corrigido o defeito reproduzido em que `blockedDecisions` sobrevivia à muda
 
 ## Tarefa `SS-MVP-002-SECURE-MCP-TUNNEL-TRANSPORT-001` — 06/10/2026
 
-- **Estado:** **IMPLEMENTADA / VALIDADA EM CI / ACEITE OPERACIONAL EXTERNO PENDENTE**. Base canônica recuperada: `b99965b16e2365f0fea20b5e188b6893c6c7444b`; implementação/testes candidatos validados no SHA `880637ccd6614d9a4bfbba67794977804d7878bd` pelo workflow Go #37517878621.
+- **Estado:** **IMPLEMENTADA / VALIDADA EM CI / PUBLICADA NA BRANCH ATIVA / ACEITE OPERACIONAL EXTERNO PENDENTE**. A branch `codex/mvp-vertical-programming` foi promovida por fast-forward com lease até o checkpoint `32c9f7bc7ff8d0b91a6e92fec041efd0a4e0a898`; base canônica recuperada: `b99965b16e2365f0fea20b5e188b6893c6c7444b`; implementação/testes candidatos validados no SHA `880637ccd6614d9a4bfbba67794977804d7878bd` pelo workflow Go #37517878621.
 - **Resultado:** novo modo explícito `connect tunnel programming` para OpenAI Secure MCP Tunnel. O MCP permanece em `127.0.0.1:7676/mcp`; o painel permanece exclusivamente em `localhost:7677`. O SignalSpace não cria nem supervisiona o `tunnel-client`.
 - **Trust boundary:** `tunnel-client` injeta uma credencial privada de último hop por `X-SignalSpace-Tunnel-Token`; o valor fica em arquivo privado no state dir e nunca é impresso. A credencial autentica a conexão dedicada, não concede workspace/capability. Ausência, erro, duplicidade ou override incorreto falham fechado.
 - **Identidade:** um principal local estável é derivado da credencial do Tunnel dedicado. Ele é um principal compartilhado daquele runtime, não identidade individual de cada usuário remoto; grants/policies continuam owner-side.

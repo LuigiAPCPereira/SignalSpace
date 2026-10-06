@@ -788,7 +788,9 @@ As conclusões com cookie B, cookie ausente e CSRF B foram rejeitadas sem `Locat
 
 ## Checkpoint vigente — `SS-MVP-002-SECURE-MCP-TUNNEL-TRANSPORT-001` — 06/10/2026
 
-**Estado:** **IMPLEMENTADO / VALIDADO EM CI / ACEITE OPERACIONAL DO TUNNEL PENDENTE**.
+**Estado:** **IMPLEMENTADO / VALIDADO EM CI / PUBLICADO NA BRANCH ATIVA / ACEITE OPERACIONAL DO TUNNEL PENDENTE**.
+
+**Publicação:** `codex/mvp-vertical-programming` avançou por fast-forward com lease de `b99965b16e2365f0fea20b5e188b6893c6c7444b` para o checkpoint `32c9f7bc7ff8d0b91a6e92fec041efd0a4e0a898`, sem merge commit, rebase ou force-push.
 
 **Base recuperada:** `codex/mvp-vertical-programming` em `b99965b16e2365f0fea20b5e188b6893c6c7444b`. O slice foi isolado em `chatgpt/secure-mcp-tunnel`; PR draft #2 existe apenas como superfície de CI, sem merge.
 
