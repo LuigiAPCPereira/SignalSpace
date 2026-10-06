@@ -76,7 +76,7 @@ func NewTunnelProgrammingHandler(config TunnelProgrammingConfig, ports Programmi
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !allowedHosts[r.Host] || r.Header.Get("Origin") != "" {
+		if !allowedHosts[r.Host] {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
