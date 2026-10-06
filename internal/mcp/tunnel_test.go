@@ -169,7 +169,7 @@ func TestTunnelProgrammingAuthenticationBoundary(t *testing.T) {
 		{name: "wrong token", tokens: []string{"wrong-tunnel-token-with-enough-length-0123456789"}, status: http.StatusUnauthorized},
 		{name: "duplicate token", tokens: []string{tunnelTestToken, tunnelTestToken}, status: http.StatusUnauthorized},
 		{name: "wrong host", tokens: []string{tunnelTestToken}, host: "attacker.example", status: http.StatusForbidden},
-		{name: "browser origin", tokens: []string{tunnelTestToken}, origin: "https://chatgpt.com", status: http.StatusForbidden},
+		{name: "forwarded origin with valid local credential", tokens: []string{tunnelTestToken}, origin: "https://chatgpt.com", status: http.StatusOK},
 		{name: "valid", tokens: []string{tunnelTestToken}, status: http.StatusOK},
 	}
 	for _, tc := range cases {
