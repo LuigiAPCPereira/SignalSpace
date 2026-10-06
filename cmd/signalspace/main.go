@@ -23,6 +23,14 @@ import (
 
 func main() {
 	if len(os.Args) != 1 {
+		if tunnelProgrammingArgs(os.Args[1:]) {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer stop()
+			if err := runTunnelProgramming(ctx, os.Stdin, os.Stdout); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
 		if mode, panel, ok := quickModeArgs(os.Args[1:]); ok {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer stop()
@@ -32,7 +40,7 @@ func main() {
 			return
 		}
 		if len(os.Args) != 3 || os.Args[1] != "doctor" {
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read|programming] [panel]]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read|programming] [panel]|connect tunnel programming]")
 		}
 		var err error
 		switch os.Args[2] {
@@ -41,7 +49,7 @@ func main() {
 		case "transport":
 			err = runTransportDoctor(context.Background(), os.Stdout)
 		default:
-			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read|programming] [panel]]")
+			log.Fatal("usage: signalspace [doctor oauth|transport|connect quick [read|programming] [panel]|connect tunnel programming]")
 		}
 		if err != nil {
 			log.Fatal(err)
@@ -334,6 +342,10 @@ func serveTerminalCommands(authorization *auth.Server, console *workspaceConsole
 	for scanner.Scan() {
 		line := scanner.Text()
 		if console != nil && console.handleWorkspaceCommand(line, output) {
+			continue
+		}
+		if authorization == nil {
+			fmt.Fprintln(output, "OAuth approval commands are unavailable in Secure Tunnel mode; use workspace commands.")
 			continue
 		}
 		fields := strings.Fields(line)
